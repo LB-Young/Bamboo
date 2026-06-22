@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bamboo 项目设计说明</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f5;
+      --surface: #ffffff;
+      --text: #20231f;
+      --muted: #60685d;
+      --line: #d9ded2;
+      --accent: #2f6f4e;
+      --accent-soft: #e6f0e7;
+      --warn: #8a4b16;
+      --warn-bg: #fff4df;
+      --code: #f1f3ee;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #173927;
+      color: #f8fbf5;
+      padding: 48px 24px 36px;
+    }
+
+    header .inner,
+    main {
+      width: min(1080px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 760px;
+      margin: 0;
+      color: #dce9dd;
+      font-size: 17px;
+    }
+
+    main {
+      padding: 28px 0 56px;
+    }
+
+    section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 18px 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 8px;
+      font-size: 17px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #e3e6de;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #17221b;
+      color: #eef6ef;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      color: inherit;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      color: #173927;
+      font-weight: 650;
+    }
+
+    .note {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 14px 0 0;
+    }
+
+    .warning {
+      background: var(--warn-bg);
+      border-left: 4px solid var(--warn);
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 14px 0 0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Bamboo 项目设计说明</h1>
+      <p>本文档基于当前代码状态整理，用于说明 Bamboo 的已有架构意图、模块职责、运行链路以及目前尚未闭合的设计点。</p>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>项目定位</h2>
+      <p>Bamboo 是一个 Python 实现的个人 AI Agent 助手项目。当前包元信息将其描述为 <code>AI-powered personal agent assistant</code>，命令行入口暴露为 <code>bamboo</code>。</p>
+      <p>从目录和依赖看，项目目标不是单纯聊天机器人，而是一个支持 CLI、配置化模型/工具/技能/子代理/工作流、用户空间、事件流和记忆存储的 Agent 运行框架。</p>
+      <div class="note">
+        当前实现仍处于骨架阶段：部分核心类已经有结构定义，但 CLI 会话执行链路、MemoryWatcher、gateway、LLM 调用、工具执行和工作流调度尚未完整接入。
+      </div>
+    </section>
+
+    <section>
+      <h2>技术栈</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>类别</th>
+            <th>当前选择</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>语言</td>
+            <td>Python 3.11+</td>
+            <td>主应用与 Agent 框架实现。</td>
+          </tr>
+          <tr>
+            <td>CLI</td>
+            <td>Typer, Rich</td>
+            <td>命令行命令、参数解析和终端输出。</td>
+          </tr>
+          <tr>
+            <td>异步运行</td>
+            <td>AnyIO, asyncio</td>
+            <td>启动异步会话、事件总线和后台任务。</td>
+          </tr>
+          <tr>
+            <td>LLM 客户端</td>
+            <td>OpenAI, Anthropic</td>
+            <td>预期用于多供应商模型调用。</td>
+          </tr>
+          <tr>
+            <td>服务端</td>
+            <td>FastAPI, Uvicorn</td>
+            <td>依赖已声明，目录中存在 <code>adapters/web</code>，但当前未实现 Web adapter。</td>
+          </tr>
+          <tr>
+            <td>存储与记忆</td>
+            <td>ChromaDB, sqlite-minutils</td>
+            <td>预期用于向量记忆和结构化存储。</td>
+          </tr>
+          <tr>
+            <td>配置</td>
+            <td>PyYAML</td>
+            <td>加载用户目录下的 YAML 配置。</td>
+          </tr>
+          <tr>
+            <td>日志</td>
+            <td>Loguru</td>
+            <td>结构化日志、控制台/文件 sink 和敏感信息脱敏。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>目录职责</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>路径</th>
+            <th>职责</th>
+            <th>当前状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>bamboo/run.py</code></td>
+            <td>Typer CLI 入口，提供 <code>init</code>、<code>run</code>、<code>version</code> 命令。</td>
+            <td>已实现基础命令注册。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/adapters/cli</code></td>
+            <td>CLI adapter，负责把命令行参数转换为运行参数并启动会话。</td>
+            <td>有会话启动草稿，但依赖未实现对象。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/core</code></td>
+            <td>核心 Agent 运行层和系统提示词构建。</td>
+            <td><code>run_agent</code> 当前仅输出占位文本。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/factory</code></td>
+            <td>创建 Task、Session、Message、Context，并提供事件总线。</td>
+            <td>主要架构雏形已出现，接口仍需收敛。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/helpers</code></td>
+            <td>配置加载、日志、脱敏、事件基类、常量和运行参数。</td>
+            <td>基础工具较完整，但有拼写和类型一致性问题。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/userspace</code></td>
+            <td>初始化用户本地 <code>~/.bamboo</code> 目录结构，并复制内建配置。</td>
+            <td>已实现目录创建和复制逻辑。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/configs</code></td>
+            <td>包内默认 YAML 配置来源。</td>
+            <td>文件存在，但当前内容为空。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/memory</code></td>
+            <td>记忆目录路径计算。</td>
+            <td>有函数草稿，缺少必要 import 和部分路径拼接逻辑。</td>
+          </tr>
+          <tr>
+            <td><code>bamboo/tools</code>、<code>bamboo/skills</code>、<code>bamboo/subagents</code>、<code>bamboo/workflow</code></td>
+            <td>工具、技能、子代理和工作流扩展点。</td>
+            <td>目录已规划，当前没有主要实现。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>启动与运行链路</h2>
+      <p>当前可见的启动入口主要有两条：</p>
+      <ol>
+        <li><code>bamboo init</code> 调用 <code>ensure_userspace()</code>，创建 <code>~/.bamboo</code> 下的配置、工具、技能、子代理、工作流、存储、记忆、日志和工作区目录。</li>
+        <li><code>bamboo run [task]</code> 调用 <code>bamboo.core.run_agent(task)</code>，目前只打印占位信息。</li>
+      </ol>
+
+      <h3>预期中的会话启动链路</h3>
+      <p><code>bamboo.run.main()</code> 中还定义了一套更完整的参数入口，会生成 <code>RunParams</code>，再通过 <code>anyio.run(_start_session, run_params)</code> 进入 CLI adapter。</p>
+      <pre><code>CLI 参数
+  -> RunParams
+  -> adapters.cli._start_session()
+  -> TaskFactory.create()
+  -> SessionFactory.create()
+  -> Agent processor / stream / repl
+  -> EventBus 输出事件</code></pre>
+      <div class="warning">
+        这条链路当前没有被 Typer app 注册为默认 callback；并且 <code>_start_session()</code> 中引用了 <code>get_config</code>、<code>SessionFactory</code> gateway、<code>MemoryWatcher</code>、<code>session_mode</code>、<code>project</code>、<code>model</code> 等未定义或未存在对象，因此还不能作为真实运行路径使用。
+      </div>
+    </section>
+
+    <section>
+      <h2>核心对象模型</h2>
+      <h3>RunParams</h3>
+      <p><code>RunParams</code> 是 CLI 到任务工厂之间的参数载体，包含平台、消息、项目路径、模型、供应商、权限模式、流式开关、自动确认、会话模式、任务 ID 和会话 ID。</p>
+      <p>当前类是普通类属性定义，尚未使用 <code>dataclass</code> 或 Pydantic，因此没有初始化校验、默认值隔离和类型强制。</p>
+
+      <h3>TaskFactory 与 Task</h3>
+      <p><code>TaskFactory.create()</code> 根据 <code>session_mode</code> 选择项目级或日期级记忆目录，然后创建 Session，并组装 Task。</p>
+      <p>设计意图是把一次用户请求抽象为任务对象，让任务持有运行配置、会话对象、输入和输出。</p>
+
+      <h3>SessionFactory 与 Session</h3>
+      <p><code>Session</code> 当前保存 <code>session_id</code>、<code>model</code>、<code>provider</code> 和 <code>context</code>。<code>SessionFactory</code> 负责创建 Context 并注入 Session。</p>
+      <p>该层未来应承担会话状态、上下文更新、消息历史和模型运行状态管理。</p>
+
+      <h3>Context 与 Message</h3>
+      <p><code>Context</code> 目前只有名称和 <code>build_context()</code> 占位逻辑。<code>Message</code> 支持记录 agent 名称、消息 ID、角色、内容，并能标记为已压缩消息。</p>
+      <p>这两个对象共同指向后续的上下文压缩、消息追踪和多 Agent 协作能力。</p>
+    </section>
+
+    <section>
+      <h2>事件体系</h2>
+      <p>项目已经定义了一套较完整的事件模型，所有事件基于 <code>BaseEvent</code>，包含 <code>type</code>、<code>session_id</code>、<code>timestamp</code>、<code>event_id</code>、<code>step_id</code>、<code>task_id</code> 和平台信息。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>事件类别</th>
+            <th>代表事件</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>文本输出</td>
+            <td><code>TextStartEvent</code>、<code>TextDeltaEvent</code>、<code>TextFinishEvent</code></td>
+            <td>支持流式文本渲染。</td>
+          </tr>
+          <tr>
+            <td>推理过程</td>
+            <td><code>ReasoningStartEvent</code>、<code>ReasoningDeltaEvent</code>、<code>ReasoningFinishEvent</code></td>
+            <td>表达模型推理流或中间思考内容。</td>
+          </tr>
+          <tr>
+            <td>工具调用</td>
+            <td><code>ToolCallEvent</code>、<code>ToolResultEvent</code>、<code>ToolErrorEvent</code></td>
+            <td>追踪工具输入、输出和错误。</td>
+          </tr>
+          <tr>
+            <td>执行步骤</td>
+            <td><code>StepStartEvent</code>、<code>StepFinishEvent</code></td>
+            <td>表达 Agent 分步执行和文件变更摘要。</td>
+          </tr>
+          <tr>
+            <td>系统状态</td>
+            <td><code>SessionCompactEvent</code>、<code>SessionStatusChangeEvent</code>、<code>AuditEvent</code></td>
+            <td>处理上下文压缩、状态变更和审计记录。</td>
+          </tr>
+          <tr>
+            <td>计划与工作流</td>
+            <td><code>PlanStartEvent</code>、<code>WorkflowRunStartEvent</code> 等</td>
+            <td>支持计划确认、步骤执行和工作流断点。</td>
+          </tr>
+          <tr>
+            <td>任务状态</td>
+            <td><code>TaskCreateEvent</code>、<code>TaskStatusChangeEvent</code></td>
+            <td>表达任务生命周期。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><code>EventBus</code> 使用订阅者列表和异步锁管理事件发布，支持按事件类型、过滤函数订阅，也支持按 <code>session_id</code> 流式消费事件。</p>
+    </section>
+
+    <section>
+      <h2>用户空间与配置设计</h2>
+      <p><code>ensure_userspace()</code> 会在用户主目录下创建 <code>~/.bamboo</code>，并规划如下主要目录：</p>
+      <ul>
+        <li><code>configs</code>：用户可编辑配置。</li>
+        <li><code>buildin_tools</code>、<code>buildin_skills</code>、<code>buildin_subagents</code>、<code>buildin_workflows</code>：内建扩展内容。</li>
+        <li><code>tools</code>、<code>skills</code>、<code>subagents</code>、<code>workflows</code>：用户安装或 Agent 创建的扩展。</li>
+        <li><code>storage/projects</code>、<code>storage/dates</code>：项目级和日期级结构化存储。</li>
+        <li><code>memory</code>：全局记忆目录。</li>
+        <li><code>tasks</code>、<code>logs</code>、<code>workspace</code>：任务队列、日志和默认工作区。</li>
+      </ul>
+      <p><code>BambooConfig</code> 会从 <code>~/.bamboo/configs/*.yaml</code> 加载 YAML 配置，并按文件名 stem 存入字典，例如 <code>models.yaml</code> 对应 <code>config["models"]</code>。</p>
+    </section>
+
+    <section>
+      <h2>日志与安全</h2>
+      <p>日志系统基于 Loguru，支持控制台输出、文件输出、异步队列、日志轮转和保留策略。</p>
+      <p><code>RedactingFilter</code> 会对常见敏感信息做正则脱敏，包括 OpenAI/Anthropic key、GitHub token、Slack token、AWS key、Bearer token、API key、password/secret 等。</p>
+      <div class="note">
+        这是当前项目中较明确的安全设计：把凭据泄漏风险放在日志层统一处理。
+      </div>
+    </section>
+
+    <section>
+      <h2>当前主要未完成点</h2>
+      <ul>
+        <li><code>pyproject.toml</code> 的 setuptools package 列表只包含部分包，未包含 <code>factory</code>、<code>helpers</code>、<code>userspace</code>、<code>memory</code> 等已被导入的包，打包后可能缺文件。</li>
+        <li><code>RunParams</code> 中字段名为 <code>platfrom</code>，但 <code>TaskFactory</code> 读取 <code>platform</code>；<code>TaskFactory</code> 还读取 <code>user_query</code>，但 <code>RunParams</code> 中是 <code>message</code>。</li>
+        <li><code>TaskFactory.create()</code> 是实例方法，但 <code>_start_session()</code> 使用了 <code>TaskFactory.create(...)</code> 类方法调用形式。</li>
+        <li><code>SessionFactory.create()</code> 的函数签名和调用参数不一致，并且最终 <code>return self.session()</code> 会把 Session 实例当函数调用。</li>
+        <li><code>Context()</code> 当前构造函数需要 <code>name</code>，但 <code>SessionFactory</code> 未传入。</li>
+        <li><code>memory/get_memory_path.py</code> 使用了 <code>platform</code> 和 <code>datetime</code>，但没有 import。</li>
+        <li><code>adapters/cli/main.py</code> 引用了不存在或未导入的 <code>get_config</code>、<code>gateway.SessionFactory</code>、<code>MemoryWatcher</code> 和流式执行函数。</li>
+        <li><code>bamboo/core.run_agent()</code> 仍是占位实现，尚未接入真正的 Agent loop。</li>
+        <li>包内 YAML 配置文件目前为空，用户空间初始化后也只能复制空模板。</li>
+        <li>项目名在部分文案里仍出现 <code>AutonCode</code> 或 <code>Auton Core</code>，与 Bamboo 命名不一致。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>建议的演进顺序</h2>
+      <ol>
+        <li>先统一数据模型：将 <code>RunParams</code>、<code>Task</code>、<code>Session</code>、<code>Message</code> 改为 dataclass 或 Pydantic model，并修正字段命名。</li>
+        <li>修通最小 CLI 执行链路：<code>bamboo run "task"</code> 能创建 task/session/context，并通过 EventBus 输出文本事件。</li>
+        <li>修正打包配置：使用自动发现包，或补齐 setuptools packages。</li>
+        <li>补充默认 YAML 模板：至少包括 models、tools、skills、subagents、workflows 的最小结构。</li>
+        <li>实现 LLM provider 抽象：把 OpenAI、Anthropic 等客户端接入统一接口。</li>
+        <li>实现 memory 和 storage 的边界：明确项目级、日期级、全局记忆分别保存什么。</li>
+        <li>在 CLI 稳定后再扩展 Web adapter、工作流调度、工具权限和审计能力。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>当前设计总览</h2>
+      <pre><code>用户
+  -> bamboo CLI
+    -> RunParams
+      -> TaskFactory
+        -> SessionFactory
+          -> Session + Context
+            -> Agent Core
+              -> LLM / Tools / Skills / Subagents / Workflows
+              -> EventBus
+                -> CLI stream / Web stream / Logs / Audit
+
+用户空间 ~/.bamboo
+  -> configs
+  -> tools / skills / subagents / workflows
+  -> storage / memory / tasks / logs / workspace</code></pre>
+      <p class="muted">生成日期：2026-06-09。说明范围：当前工作区代码，不包含未提交或外部设计文档。</p>
+    </section>
+  </main>
+</body>
+</html>

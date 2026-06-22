@@ -1,0 +1,2 @@
+# 主 Agent 只配置 models.yaml 中注册过的模型名。
+model: deepseek-chat

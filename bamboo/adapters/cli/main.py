@@ -1,0 +1,94 @@
+"""Bamboo CLI 适配层。
+
+该模块负责把命令行会话接入运行时：先订阅 EventBus，再启动
+TaskRuntime，最后把运行时事件渲染到终端。
+"""
+
+from __future__ import annotations
+
+from rich.console import Console
+
+from bamboo.factory.event_bus import get_event_bus
+from bamboo.helpers.constant import (
+    SessionStatusChangeEvent,
+    StepFinishEvent,
+    StepStartEvent,
+    TaskCreateEvent,
+    TaskStatusChangeEvent,
+    TextDeltaEvent,
+    TextFinishEvent,
+    TextStartEvent,
+)
+from bamboo.helpers.logging import get_logger
+from bamboo.helpers.requests_params import RunParams
+from bamboo.helpers.utils import BaseEvent
+from bamboo.runtime import TaskRuntime
+
+console = Console()
+
+
+async def _start_session(run_params: RunParams) -> object:
+    """启动一个 CLI 任务会话，并渲染当前 session 的事件流。"""
+    log = get_logger("cli")
+    event_bus = get_event_bus()
+    # 先订阅事件，再启动任务，确保 task-created 等早期事件不会丢失。
+    unsubscribe = event_bus.subscribe(
+        _render_cli_event,
+        event_types={
+            "task-create",
+            "task-status-change",
+            "session-status-change",
+            "step-start",
+            "step-finish",
+            "text-start",
+            "text-delta",
+            "text-finish",
+        },
+        filter_fn=lambda event: event.session_id == run_params.session_id,
+    )
+
+    try:
+        # CLI 层不直接运行 Agent，只把控制权交给 TaskRuntime。
+        task = await TaskRuntime(event_bus=event_bus).run(run_params)
+        log.info(
+            "task completed task_id={task_id} session_id={session_id}",
+            task_id=task.task_id,
+            session_id=task.session_id,
+        )
+        return task
+    finally:
+        # 会话结束后解除订阅，避免后续任务重复渲染旧 handler。
+        unsubscribe()
+
+
+def _render_cli_event(event: BaseEvent) -> None:
+    """把一条运行时事件渲染为终端输出。"""
+    if isinstance(event, TaskCreateEvent):
+        console.print(f"[dim]task created[/dim] {event.task_id} {event.title}")
+        return
+
+    if isinstance(event, TaskStatusChangeEvent):
+        console.print(f"[dim]task status[/dim] {event.from_status or '-'} -> {event.to_status}")
+        return
+
+    if isinstance(event, SessionStatusChangeEvent):
+        console.print(f"[dim]agent state[/dim] {event.status} [dim]{event.reason}[/dim]")
+        return
+
+    if isinstance(event, StepStartEvent):
+        console.print(f"[dim]step start[/dim] {event.step_id}")
+        return
+
+    if isinstance(event, TextStartEvent):
+        console.print("[dim]assistant[/dim]")
+        return
+
+    if isinstance(event, TextDeltaEvent):
+        console.print(event.delta)
+        return
+
+    if isinstance(event, TextFinishEvent):
+        return
+
+    if isinstance(event, StepFinishEvent):
+        console.print(f"[dim]step finish[/dim] {event.summary}")

@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bamboo TaskRuntime 流程图与时序图</title>
+  <style>
+    :root {
+      --bg: #f7f8f5;
+      --surface: #ffffff;
+      --text: #20231f;
+      --muted: #60685d;
+      --line: #d9ded2;
+      --accent: #2f6f4e;
+      --accent-soft: #e6f0e7;
+      --code: #f1f3ee;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #173927;
+      color: #f8fbf5;
+      padding: 46px 24px 34px;
+    }
+
+    header .inner,
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(29px, 5vw, 46px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 820px;
+      margin: 0;
+      color: #dce9dd;
+      font-size: 17px;
+    }
+
+    main {
+      padding: 28px 0 56px;
+    }
+
+    section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 18px 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #e3e6de;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    .diagram {
+      margin-top: 16px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcf9;
+      padding: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      color: #173927;
+      font-weight: 650;
+    }
+
+    .module-group {
+      margin-top: 22px;
+    }
+
+    .module-group h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .note {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-top: 14px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Bamboo TaskRuntime 流程图与时序图</h1>
+      <p>这份图示文档描述建议中的执行入口设计：Adapter 只负责接入，TaskFactory 只负责创建，TaskRuntime 负责任务生命周期，AgentRuntime 通过 OTA 循环执行 Agent，状态机负责管理循环状态和终态。</p>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>推荐分层</h2>
+      <p>核心原则是把“创建”和“运行”分开，把“状态源”和“事件广播”分开。这里的 OTA 指 <code>Observe</code>、<code>Think</code>、<code>Act</code>：每一轮先观察当前上下文，再由模型思考决策，最后执行动作并回到下一轮观察。</p>
+      <ul>
+        <li><code>CLI/Web Adapter</code>：解析外部请求，构造 <code>RunParams</code>，订阅事件并负责展示。</li>
+        <li><code>TaskRuntime</code>：任务执行总控，统一创建任务、启动 Agent、写进度、处理异常和收尾。</li>
+        <li><code>TaskFactory</code>：只创建 <code>Task</code>、<code>Session</code>、<code>Context</code> 等对象。</li>
+        <li><code>AgentRuntime</code>：执行 OTA loop，包括观察上下文、思考决策、行动、工具调用、上下文更新。</li>
+        <li><code>AgentStateMachine</code>：定义 OTA 循环状态和合法迁移，是状态变化的规则层。</li>
+        <li><code>EventBus</code>：只发布和分发事件，不保存状态，不决定状态迁移。</li>
+        <li><code>TaskStore/SessionStore</code>：持久化任务状态、步骤进度、消息和上下文摘要。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>整体执行流程图</h2>
+      <p>这张图展示一次请求从 CLI/Web 进入，到任务完成或失败的主流程。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TD
+    User["用户输入任务"] --> Adapter["CLI/Web Adapter"]
+    Adapter --> Subscribe["订阅 EventBus 事件流"]
+    Subscribe --> Params
+    Params --> Runtime["TaskRuntime.run(run_params)"]
+
+    Runtime --> CreateTask["TaskFactory.create(run_params)"]
+    CreateTask --> Session["创建 Session"]
+    CreateTask --> Context["创建 Context"]
+    CreateTask --> Task["组装 Task"]
+
+    Task --> SaveCreated["TaskRuntime -> TaskStore.save_created"]
+    SaveCreated --> EmitTask["EventBus.emit(TaskCreateEvent)"]
+    EmitTask --> Subscribers["CLI/Web/Log/Audit 订阅者"]
+
+    EmitTask --> InitAgent["初始化 AgentRuntime"]
+    InitAgent --> StateCreated["StateMachine: created"]
+    StateCreated --> Observe["transition: observing"]
+    Observe --> BuildObservation["Observe: 收集上下文/消息/工具结果"]
+    BuildObservation --> Think["transition: thinking"]
+    Think --> DecisionSource["Think: LLM 调用或 Mock 决策"]
+    DecisionSource --> TextEvents["emit Text/Reasoning Events"]
+    TextEvents --> Decision{"决策结果?"}
+
+    Decision -- 执行工具 --> ActingTool["transition: acting"]
+    ActingTool --> ToolCalling["transition: tool_calling"]
+    ToolCalling --> ToolCall["Act: 执行 Tool"]
+    ToolCall --> ToolEvents["emit ToolCall/ToolResult/ToolError"]
+    ToolEvents --> Observe
+
+    Decision -- 直接输出/内部动作 --> ActingOutput["transition: acting"]
+    ActingOutput --> UpdateSession["Act: 更新消息/输出缓冲"]
+    UpdateSession --> NeedCompact{"需要压缩上下文?"}
+
+    NeedCompact -- 是 --> Compacting["transition: compacting"]
+    Compacting --> SaveSummary["保存上下文摘要"]
+    SaveSummary --> Observe
+
+    NeedCompact -- 否 --> Done{"任务完成?"}
+    Done -- 否 --> Observe
+    Done -- 是 --> Completed["transition: completed"]
+
+    Completed --> AgentReturn["AgentRuntime 返回 Task"]
+    AgentReturn --> SaveResult["TaskRuntime 保存最终结果"]
+    SaveResult --> EmitFinish["emit StepFinish/TaskStatusChange"]
+    EmitFinish --> ReturnTask["返回 Task"]
+
+    Runtime -. exception path .-> OnError{"执行异常?"}
+    OnError -- 是 --> Failed["transition: failed"]
+    Failed --> SaveError["TaskStore.save_error"]
+    SaveError --> EmitError["emit ToolError/TaskStatusChange/Audit"]
+        </pre>
+      </div>
+      <div class="note">
+        图里的 <code>OnError</code> 表示 TaskRuntime 的异常兜底逻辑，不是独立于主流程并行执行。当前 mock 阶段的 <code>Think</code> 可以不调用真实 LLM，<code>Tool</code> 分支也可以先保留为未来扩展。
+      </div>
+    </section>
+
+    <section>
+      <h2>流程图模块详解</h2>
+      <p>下面按流程图中的节点逐一说明每个模块需要实现的逻辑。实现时可以先完成主路径，再补工具调用、上下文压缩、异常恢复和持久化。</p>
+
+      <div class="module-group">
+        <h3>入口与参数层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>流程图节点</th>
+              <th>作用</th>
+              <th>需要实现的逻辑</th>
+              <th>输入/输出</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>用户输入任务</code></td>
+              <td>代表用户从 CLI、Web、API 或定时任务提交的原始请求。</td>
+              <td>不建议在这里做业务处理，只保留原始输入、来源、项目路径、会话模式、权限模式等信息。</td>
+              <td>输入：自然语言任务、命令参数。输出：交给 Adapter 的原始请求。</td>
+            </tr>
+            <tr>
+              <td><code>CLI/Web Adapter</code></td>
+              <td>接入层，屏蔽不同入口之间的差异。</td>
+              <td>解析命令行参数或 HTTP 请求；先订阅 <code>EventBus</code>；生成 <code>RunParams</code>；启动 <code>TaskRuntime</code>；把事件渲染到终端、WebSocket 或日志；不要直接执行 Agent 主逻辑。</td>
+              <td>输入：用户请求。输出：<code>RunParams</code> 和最终展示结果。</td>
+            </tr>
+            <tr>
+              <td><code>构造 RunParams</code></td>
+              <td>把外部请求转换成框架内部统一参数。</td>
+              <td>生成 <code>task_id</code>、<code>session_id</code>；规范化 <code>platform</code>、<code>message</code>、<code>project</code>、<code>model</code>、<code>provider</code>、<code>permission</code>、<code>session_mode</code>；做必要的默认值填充和参数校验。</td>
+              <td>输入：Adapter 解析结果。输出：稳定的 <code>RunParams</code> 对象。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="module-group">
+        <h3>任务生命周期层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>流程图节点</th>
+              <th>作用</th>
+              <th>需要实现的逻辑</th>
+              <th>输入/输出</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>TaskRuntime.run(run_params)</code></td>
+              <td>一次任务执行的总入口和总控器。</td>
+              <td>调用 <code>TaskFactory</code> 创建任务；先写入任务创建记录，再发出任务创建事件；初始化 <code>AgentRuntime</code>；等待 Agent 返回；捕获执行异常；将完成、失败、取消等终态写入 Store 并发事件。</td>
+              <td>输入：<code>RunParams</code>。输出：执行后的 <code>Task</code> 或任务结果。</td>
+            </tr>
+            <tr>
+              <td><code>TaskFactory.create(run_params)</code></td>
+              <td>对象创建器，负责把运行参数装配成任务对象。</td>
+              <td>选择 memory 路径；创建 <code>Session</code>、<code>Context</code>、<code>Task</code>；加载配置；绑定任务 ID 和会话 ID；不要执行 Agent，不要订阅事件。</td>
+              <td>输入：<code>RunParams</code>。输出：<code>Task</code>。</td>
+            </tr>
+            <tr>
+              <td><code>创建 Session</code></td>
+              <td>建立会话边界，承载一次对话或项目任务的上下文。</td>
+              <td>保存 <code>session_id</code>、模型、供应商、会话模式、当前消息列表、token 统计、上下文摘要引用；支持从已有会话恢复。</td>
+              <td>输入：<code>RunParams</code>、配置。输出：<code>Session</code>。</td>
+            </tr>
+            <tr>
+              <td><code>创建 Context</code></td>
+              <td>为 Agent 准备可读上下文。</td>
+              <td>聚合系统提示词、项目元信息、历史消息、记忆、技能/工具说明、权限策略；提供 <code>build_context()</code> 或类似接口给 LLM 调用层使用。</td>
+              <td>输入：Session、配置、memory。输出：可传给 Agent/LLM 的上下文对象。</td>
+            </tr>
+            <tr>
+              <td><code>组装 Task</code></td>
+              <td>把一次用户请求封装成可运行实体。</td>
+              <td>保存任务标题、用户输入、session 引用、context 引用、配置引用、初始状态、输出缓冲、错误字段和创建时间。</td>
+              <td>输入：Session、Context、RunParams。输出：<code>Task</code>。</td>
+            </tr>
+            <tr>
+              <td><code>返回 Task</code></td>
+              <td>把最终任务对象返回给 Adapter 或调用方。</td>
+              <td>确保任务包含最终状态、输出、错误信息、变更摘要和必要的统计信息；不要把内部临时对象暴露给外部入口。</td>
+              <td>输入：执行完成后的 Task。输出：Adapter 可展示的结果。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="module-group">
+        <h3>事件与观察层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>流程图节点</th>
+              <th>作用</th>
+              <th>需要实现的逻辑</th>
+              <th>输入/输出</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>EventBus.emit(TaskCreateEvent)</code></td>
+              <td>通知外部系统任务已经创建。</td>
+              <td>构造标准事件，包含 <code>session_id</code>、<code>task_id</code>、标题、时间戳；调用 EventBus 广播；不要在 EventBus 里改变任务状态。</td>
+              <td>输入：Task。输出：任务创建事件。</td>
+            </tr>
+            <tr>
+              <td><code>CLI/Web/Log/Audit 订阅者</code></td>
+              <td>消费事件并做展示、日志、审计或监控。</td>
+              <td>按 <code>session_id</code> 过滤事件；CLI 渲染文本流；Web 通过 WebSocket/SSE 推送；Log 写结构化日志；Audit 保存关键操作和权限结果。</td>
+              <td>输入：EventBus 事件流。输出：用户界面、日志、审计记录。</td>
+            </tr>
+            <tr>
+              <td><code>emit Text/Reasoning Events</code></td>
+              <td>把模型输出和推理过程转成流式事件。</td>
+              <td>在 LLM 流式返回时发 <code>TextStartEvent</code>、<code>TextDeltaEvent</code>、<code>TextFinishEvent</code>；如需要展示推理流，再发 Reasoning 事件。</td>
+              <td>输入：LLM streaming delta。输出：文本/推理事件。</td>
+            </tr>
+            <tr>
+              <td><code>emit ToolCall/ToolResult/ToolError</code></td>
+              <td>把工具执行过程外显，便于 UI 展示和审计。</td>
+              <td>工具执行前发 <code>ToolCallEvent</code>；成功后发 <code>ToolResultEvent</code>；失败后发 <code>ToolErrorEvent</code>；事件里带 <code>tool_call_id</code> 方便关联。</td>
+              <td>输入：工具名、参数、结果或错误。输出：工具事件。</td>
+            </tr>
+            <tr>
+              <td><code>emit StepFinish/TaskStatusChange</code></td>
+              <td>通知步骤和任务状态变化。</td>
+              <td>任务完成或阶段结束时发步骤摘要、文件变更、token 用量、最终状态；让 UI 和日志不需要读取内部对象也能更新进度。</td>
+              <td>输入：Task/Step 结果。输出：步骤完成和状态变化事件。</td>
+            </tr>
+            <tr>
+              <td><code>emit ToolError/TaskStatusChange/Audit</code></td>
+              <td>异常路径的统一通知。</td>
+              <td>把错误转为结构化事件；记录错误类型、错误消息、可恢复性、是否需要用户处理；避免异常只停留在 traceback。</td>
+              <td>输入：异常对象、当前任务状态。输出：错误、状态、审计事件。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="module-group">
+        <h3>Agent 执行层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>流程图节点</th>
+              <th>作用</th>
+              <th>需要实现的逻辑</th>
+              <th>输入/输出</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>初始化 AgentRuntime</code></td>
+              <td>为具体 Agent 执行准备依赖。</td>
+              <td>注入 Task、EventBus、StateMachine、Store、LLM client、ToolRegistry、Memory manager、权限策略；初始化输出缓冲和循环控制参数。</td>
+              <td>输入：Task 和运行依赖。输出：可运行的 <code>AgentRuntime</code>。</td>
+            </tr>
+            <tr>
+              <td><code>StateMachine: created</code></td>
+              <td>任务刚创建后的初始状态。</td>
+              <td>只表示任务已被系统接收；通常由 TaskRuntime 创建，不应在这里做 LLM 调用或工具调用。</td>
+              <td>输入：新建 Task。输出：初始状态快照。</td>
+            </tr>
+            <tr>
+              <td><code>transition: observing</code></td>
+              <td>进入 OTA 循环的 Observe 阶段。</td>
+              <td>通过状态机校验 <code>created/tool_calling/acting/compacting/waiting -> observing</code> 是否合法；写 Store；发状态变化事件；准备读取当前世界状态。</td>
+              <td>输入：当前状态。输出：observing 状态。</td>
+            </tr>
+            <tr>
+              <td><code>Observe: 收集上下文/消息/工具结果</code></td>
+              <td>把 Agent 下一步决策所需的信息收集完整。</td>
+              <td>读取用户输入、历史消息、上轮工具结果、项目上下文、记忆、权限结果、取消信号；刷新 Context；判断是否需要等待用户或直接进入 thinking。</td>
+              <td>输入：Task、Session、Store、Memory。输出：本轮 observation。</td>
+            </tr>
+            <tr>
+              <td><code>transition: thinking</code></td>
+              <td>进入 OTA 循环的 Think 阶段。</td>
+              <td>校验 <code>observing -> thinking</code>；写入 thinking 状态；发状态事件；构造模型请求所需的 messages、tools 和上下文。</td>
+              <td>输入：observation。输出：thinking 状态和 LLM request。</td>
+            </tr>
+            <tr>
+              <td><code>Think: LLM 调用或 Mock 决策</code></td>
+              <td>让 Agent 基于 observation 做决策。</td>
+              <td>当前框架阶段可以使用 mock 决策，直接生成确定性最终回答；接入真实模型后再统一 provider 接口，注入 messages、tools、model 参数，支持 streaming、重试、限流、超时、错误归一化和 token 统计。</td>
+              <td>输入：observation 或标准 LLM request。输出：文本流、工具调用、最终回答或内部动作。</td>
+            </tr>
+            <tr>
+              <td><code>决策结果?</code></td>
+              <td>判断 Think 阶段的输出进入哪种 Act 分支。</td>
+              <td>解析模型响应；区分工具调用、直接输出、需要用户确认、上下文压缩、完成和失败；工具调用前校验工具存在性、参数合法性和权限。</td>
+              <td>输入：LLM 响应。输出：下一步 action 类型。</td>
+            </tr>
+            <tr>
+              <td><code>transition: acting</code></td>
+              <td>进入 OTA 循环的 Act 阶段。</td>
+              <td>校验 <code>thinking -> acting</code>；记录本轮 action；发状态事件；根据 action 类型进入工具执行、输出更新、等待用户或完成判断。</td>
+              <td>输入：action decision。输出：acting 状态。</td>
+            </tr>
+            <tr>
+              <td><code>transition: tool_calling</code></td>
+              <td>Act 阶段中的工具执行子状态。</td>
+              <td>校验 <code>acting -> tool_calling</code>；记录当前工具调用；发 <code>ToolCallEvent</code>；冻结当前 action 上下文，避免并发工具写入冲突。</td>
+              <td>输入：工具调用请求。输出：tool_calling 状态。</td>
+            </tr>
+            <tr>
+              <td><code>Act: 执行 Tool</code></td>
+              <td>调用具体工具实现，并把结果带回下一轮 Observe。</td>
+              <td>从 ToolRegistry 找工具；做参数校验；执行权限检查；运行工具；捕获 stdout/stderr/文件变更；把结果规范成 ToolResult；完成后回到 observing。</td>
+              <td>输入：tool name、tool input。输出：tool result 或 tool error。</td>
+            </tr>
+            <tr>
+              <td><code>Act: 更新消息/输出缓冲</code></td>
+              <td>处理不需要工具的 action。</td>
+              <td>把模型文本写入消息历史和输出缓冲；记录 reasoning/text 事件；更新 token 统计；根据输出判断是否需要 compact 或完成任务。</td>
+              <td>输入：模型文本或内部 action。输出：更新后的 Session/Task。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="module-group">
+        <h3>上下文、完成与异常层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>流程图节点</th>
+              <th>作用</th>
+              <th>需要实现的逻辑</th>
+              <th>输入/输出</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>需要压缩上下文?</code></td>
+              <td>判断是否需要 compact 消息历史或记忆。</td>
+              <td>根据 token 数、消息数量、模型上下文窗口、本轮 OTA action 判断；如果超过阈值，进入 compacting；否则继续判断任务完成。</td>
+              <td>输入：Session token 统计和消息历史。输出：是否压缩。</td>
+            </tr>
+            <tr>
+              <td><code>transition: compacting</code></td>
+              <td>进入上下文压缩状态。</td>
+              <td>校验 <code>acting -> compacting</code> 或 <code>observing -> compacting</code>；暂停 OTA loop；发状态事件；准备摘要输入，避免在压缩期间继续追加不一致的消息。</td>
+              <td>输入：acting/observing 状态和上下文。输出：compacting 状态。</td>
+            </tr>
+            <tr>
+              <td><code>保存上下文摘要</code></td>
+              <td>把长历史压缩成可恢复摘要。</td>
+              <td>调用 summarizer 或规则压缩；标记被压缩的消息；保存摘要到 SessionStore/Memory；更新 Context 引用；发 <code>SessionCompactEvent</code>。</td>
+              <td>输入：历史消息、任务上下文。输出：摘要、压缩后上下文。</td>
+            </tr>
+            <tr>
+              <td><code>任务完成?</code></td>
+              <td>判断 Agent loop 是否可以退出。</td>
+              <td>识别最终回答、没有待处理工具、没有等待用户输入、本轮 action 已稳定收敛；同时检查取消信号和失败状态。</td>
+              <td>输入：当前 Agent 状态和模型响应。输出：继续循环或进入完成。</td>
+            </tr>
+            <tr>
+              <td><code>transition: completed</code></td>
+              <td>进入成功终态。</td>
+              <td>校验 <code>acting -> completed</code>；冻结最终输出；写状态；发完成事件；终态后不允许再进入 OTA 循环。</td>
+              <td>输入：最终输出。输出：completed 状态。</td>
+            </tr>
+            <tr>
+              <td><code>TaskStore.save_result</code></td>
+              <td>持久化成功结果。</td>
+              <td>由 <code>TaskRuntime</code> 在 <code>AgentRuntime</code> 返回后调用；保存最终回答、步骤摘要、token 用量、工具调用记录、文件变更、完成时间；为后续查询、恢复和审计提供数据。</td>
+              <td>输入：Task 结果。输出：持久化记录。</td>
+            </tr>
+            <tr>
+              <td><code>执行异常?</code></td>
+              <td>TaskRuntime 的兜底异常判断。</td>
+              <td>捕获 AgentRuntime、LLM、工具、Store、EventBus handler 中未处理的异常；区分可恢复错误和不可恢复错误；避免任务卡在 observing/thinking/acting 中间态。</td>
+              <td>输入：异常。输出：失败处理流程。</td>
+            </tr>
+            <tr>
+              <td><code>transition: failed</code></td>
+              <td>进入失败终态。</td>
+              <td>校验状态迁移；记录失败原因、异常类型、堆栈摘要；根据错误类型决定是否允许重试。</td>
+              <td>输入：当前状态和异常。输出：failed 状态。</td>
+            </tr>
+            <tr>
+              <td><code>TaskStore.save_error</code></td>
+              <td>持久化失败信息。</td>
+              <td>保存错误消息、错误分类、发生阶段、当前 step、工具调用 ID、可恢复标记、时间戳；为排障和恢复执行做准备。</td>
+              <td>输入：异常和任务上下文。输出：错误记录。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>核心时序图</h2>
+      <p>这张图展示主要对象之间的调用顺序。建议让 <code>TaskRuntime</code> 成为唯一对外运行入口，避免 Adapter 直接调 Agent 或 EventBus 驱动主流程。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User as 用户
+    participant Adapter as CLI/Web Adapter
+    participant Runtime as TaskRuntime
+    participant Factory as TaskFactory
+    participant Agent as AgentRuntime
+    participant SM as AgentStateMachine
+    participant Store as TaskStore/SessionStore
+    participant Bus as EventBus
+    participant View as CLI/Web/Log 订阅者
+    participant LLM as LLM Provider
+    participant Tool as Tool Executor
+
+    User->>Adapter: 提交任务
+    Adapter->>Bus: subscribe(session events)
+    Bus-->>Adapter: unsubscribe callback
+    Adapter->>Runtime: run(run_params)
+    Runtime->>Factory: create(run_params)
+    Factory-->>Runtime: task(session, context, config)
+
+    Runtime->>Store: save_task_created(task)
+    Runtime->>Bus: emit(TaskCreateEvent)
+    Bus-->>View: 分发任务创建事件
+
+    Runtime->>Agent: run(task)
+    Agent->>Bus: emit(StepStartEvent)
+    Bus-->>View: 展示步骤开始
+
+    loop OTA 循环，直到 completed/failed/cancelled
+        Agent->>SM: transition(to observing)
+        SM-->>Agent: ok
+        Agent->>Store: save_state(observing)
+        Agent->>Bus: emit(SessionStatusChangeEvent)
+        Bus-->>View: 展示 Observe 状态
+        Agent->>Store: load_context/messages/tool_results
+        Store-->>Agent: observation
+
+        Agent->>SM: transition observing to thinking
+        SM-->>Agent: ok
+        Agent->>Store: save_state(thinking)
+        Agent->>Bus: emit(SessionStatusChangeEvent)
+        alt 当前 mock 阶段
+            Agent->>Agent: mock_think(observation)
+        else 真实 LLM 阶段
+            Agent->>LLM: think(observation, messages, tools)
+            LLM-->>Agent: stream deltas / decision
+        end
+        Agent->>Bus: emit(TextDeltaEvent / ReasoningDeltaEvent)
+        Bus-->>View: 渲染模型输出
+
+        Agent->>SM: transition thinking to acting
+        SM-->>Agent: ok
+        Agent->>Store: save_state(acting)
+
+        alt decision = tool_call
+            Agent->>SM: transition acting to tool_calling
+            SM-->>Agent: ok
+            Agent->>Bus: emit(ToolCallEvent)
+            Bus-->>View: 展示工具调用
+            Agent->>Tool: execute(tool_name, input)
+            Tool-->>Agent: result
+            Agent->>Store: save_tool_result(result)
+            Agent->>Bus: emit(ToolResultEvent)
+            Bus-->>View: 展示工具结果
+        else decision = final_answer
+            Agent->>Store: append_message(output)
+            Agent->>SM: transition acting to completed
+            SM-->>Agent: ok
+        else decision = continue
+            Agent->>Store: append_message(partial_output)
+        else decision = need_compact
+            Agent->>SM: transition acting to compacting
+            SM-->>Agent: ok
+            Agent->>Store: save_context_summary(summary)
+            Agent->>Bus: emit(SessionCompactEvent)
+        else decision = need_user_input
+            Agent->>SM: transition acting to waiting
+            SM-->>Agent: ok
+            Agent->>Bus: emit(SessionStatusChangeEvent)
+        end
+    end
+
+    Agent-->>Runtime: task result
+    Runtime->>Store: save_result(output)
+    Runtime->>Bus: emit(StepFinishEvent)
+    Runtime->>Bus: emit(TaskStatusChangeEvent)
+    Bus-->>View: 展示完成状态
+
+    Runtime-->>Adapter: task
+    Adapter-->>User: 输出最终结果
+        </pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>状态机流转图</h2>
+      <p>状态机不需要知道 EventBus 的订阅者是谁，只需要判断状态迁移是否合法。状态迁移完成后，由 Runtime 或 AgentRuntime 写 Store 并发事件。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+stateDiagram-v2
+    [*] --> created
+    created --> observing: task accepted
+
+    observing --> thinking: observation ready
+    observing --> compacting: context too large
+    observing --> waiting: need external input
+    observing --> failed: observe error
+    observing --> cancelled: cancel requested
+
+    thinking --> acting: decision ready
+    thinking --> failed: llm error not recoverable
+    thinking --> cancelled: cancel requested
+
+    acting --> tool_calling: tool requested
+    acting --> compacting: compact requested
+    acting --> waiting: permission/user input required
+    acting --> observing: continue next cycle
+    acting --> completed: final answer ready
+    acting --> failed: action error
+    acting --> cancelled: cancel requested
+
+    tool_calling --> observing: tool result received
+    tool_calling --> waiting: permission required
+    tool_calling --> failed: tool error not recoverable
+
+    compacting --> observing: summary saved
+    compacting --> failed: compact failed
+
+    waiting --> observing: user confirmed/input received
+    waiting --> failed: wait timeout/error
+    waiting --> cancelled: user cancelled
+
+    completed --> [*]
+    failed --> [*]
+    cancelled --> [*]
+        </pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>事件与状态的写入位置</h2>
+      <p>建议用下面这个规则判断代码应该写在哪里：</p>
+      <ul>
+        <li>判断能不能从 A 状态进入 B 状态：写在 <code>AgentStateMachine</code>。</li>
+        <li>Agent 内部 OTA 状态切换：写在 <code>AgentRuntime.transition()</code>。</li>
+        <li>任务生命周期状态切换：写在 <code>TaskRuntime.transition()</code> 或等价的 runtime 私有方法。</li>
+        <li>保存任务进度、步骤结果、错误信息：写在 <code>TaskStore</code>。</li>
+        <li>保存消息、上下文、压缩摘要：写在 <code>SessionStore</code>。</li>
+        <li>把变化通知 CLI/Web/日志/审计：写成 <code>EventBus.emit(...)</code>。</li>
+      </ul>
+      <div class="note">
+        关键边界：EventBus 是通知通道，不是状态机，也不是进度数据库。这样后续调试、恢复任务、重放事件都会更简单。
+      </div>
+      <p class="muted">更新日期：2026-06-12。对应建议架构：TaskRuntime + TaskFactory + mock OTA AgentRuntime + AgentStateMachine + EventBus。</p>
+    </section>
+  </main>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      themeVariables: {
+        primaryColor: "#e6f0e7",
+        primaryTextColor: "#20231f",
+        primaryBorderColor: "#2f6f4e",
+        lineColor: "#67806d",
+        secondaryColor: "#f7f8f5",
+        tertiaryColor: "#ffffff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+      }
+    });
+  </script>
+</body>
+</html>

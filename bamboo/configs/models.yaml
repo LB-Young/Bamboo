@@ -1,0 +1,40 @@
+# 默认模型必须引用下面 models 中的注册名。
+default_model: deepseek-chat
+
+# Agent 只使用模型注册名；Provider、实际模型 ID 和连接参数统一在这里维护。
+models:
+  deepseek-chat:
+    provider: deepseek
+    model: deepseek-chat
+    api_key: ""
+    base_url: https://api.deepseek.com/v1
+    timeout: 60
+    temperature: 0.2
+    max_tokens: 4096
+
+  minimax-text:
+    provider: minimax
+    model: MiniMax-Text-01
+    api_key: ""
+    base_url: https://api.minimax.io/v1
+    timeout: 60
+    temperature: 0.2
+    max_tokens: 4096
+
+  gpt-default:
+    provider: gpt
+    model: gpt-4.1-mini
+    api_key: ""
+    base_url: https://api.openai.com/v1
+    timeout: 60
+    temperature: 0.2
+    max_tokens: 4096
+
+  claude-default:
+    provider: claude
+    model: claude-sonnet-4-5
+    api_key: ""
+    base_url: https://api.anthropic.com/v1
+    timeout: 60
+    temperature: 0.2
+    max_tokens: 4096
