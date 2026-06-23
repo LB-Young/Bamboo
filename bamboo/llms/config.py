@@ -27,6 +27,7 @@ class ModelConfig:
     base_url: str = ""
     timeout: float = 60.0
     temperature: float | None = None
+    context_window: int = 128000
     max_tokens: int = 4096
     extra_headers: dict[str, str] = field(default_factory=dict)
     extra_body: dict[str, Any] = field(default_factory=dict)
@@ -89,7 +90,13 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
     api_key = _optional_string(raw_config, "api_key", name)
     base_url = _optional_string(raw_config, "base_url", name)
     timeout = _positive_number(raw_config.get("timeout", 60.0), f"models.{name}.timeout")
+    context_window = _positive_integer(
+        raw_config.get("context_window", 128000),
+        f"models.{name}.context_window",
+    )
     max_tokens = _positive_integer(raw_config.get("max_tokens", 4096), f"models.{name}.max_tokens")
+    if max_tokens >= context_window:
+        raise ModelConfigError(f"models.{name}.max_tokens must be smaller than context_window")
 
     temperature_value = raw_config.get("temperature")
     temperature = None
@@ -111,6 +118,7 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
         base_url=base_url,
         timeout=timeout,
         temperature=temperature,
+        context_window=context_window,
         max_tokens=max_tokens,
         extra_headers=extra_headers,
         extra_body=dict(extra_body),

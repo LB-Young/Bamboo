@@ -10,10 +10,12 @@ import pytest
 
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
+from bamboo.helpers.constant import SessionCompactEvent, SessionStatusChangeEvent
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms import LLMClient, LLMFactory, LLMMessage, LLMRequest, LLMResponse, ModelCatalog, ModelConfigError
 from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient
 from bamboo.runtime.agent_runtime import AgentRuntime
+from bamboo.runtime.context_compactor import ContextBudgetPolicy
 from bamboo.runtime.task_runtime import TaskRuntime
 
 
@@ -144,7 +146,9 @@ def test_agent_runtime_act_calls_registered_model() -> None:
         """执行一轮 Agent OTA 流程并检查最终模型输出。"""
         runtime = AgentRuntime(event_bus=EventBus(), llm_factory=factory, model_name="agent-model")
         assert runtime.llm_client is stub_client
+        assert runtime.compaction_llm_client is stub_client
         assert runtime.model_name == "agent-model"
+        assert runtime.compaction_model_name == "agent-model"
         completed_task = await runtime.run(task)
         assert completed_task.output == "real model response"
         assert completed_task.metadata["llm_model_name"] == "agent-model"
@@ -157,13 +161,104 @@ def test_agent_runtime_act_calls_registered_model() -> None:
 
 def test_task_runtime_initializes_llm_factory() -> None:
     """验证 TaskRuntime 构造时立即加载模型配置并保存共享工厂。"""
-    config = _StubBambooConfig(_model_document("deepseek", model_name="runtime-model"))
+    document = _model_document("deepseek", model_name="runtime-model")
+    document["models"]["summary-model"] = {
+        "provider": "gpt",
+        "model": "gpt-summary-model",
+        "api_key": "test-summary-key",
+    }
+    config = _StubBambooConfig(
+        document,
+        agent_document={"model": "runtime-model", "compaction_model": "summary-model"},
+    )
     runtime = TaskRuntime(
         task_factory=TaskFactory(config=config),  # type: ignore[arg-type]
         event_bus=EventBus(),
     )
     assert runtime.llm_factory.default_model_name == "runtime-model"
-    assert runtime.llm_factory.list_model_names() == ["runtime-model"]
+    assert runtime.llm_factory.list_model_names() == ["runtime-model", "summary-model"]
+    task = runtime.task_factory.create(RunParams(message=""))
+    agent = runtime._create_agent(task)
+    assert agent.model_name == "runtime-model"
+    assert agent.compaction_model_name == "summary-model"
+
+
+def test_agent_runtime_compacts_context_before_model_call() -> None:
+    """使用低阈值验证上下文压缩、消息替换、事件和最终模型调用效果。"""
+    document = _model_document("deepseek", model_name="compact-model")
+    document["models"]["compact-model"]["context_window"] = 1000
+    document["models"]["compact-model"]["max_tokens"] = 100
+    document["models"]["summary-model"] = {
+        "provider": "gpt",
+        "model": "gpt-summary-model",
+        "api_key": "test-summary-key",
+        "context_window": 1000,
+        "max_tokens": 100,
+    }
+    factory = LLMFactory.from_mapping(document)
+    agent_client = _RecordingLLMClient(content="final answer", provider="deepseek")
+    compaction_client = _RecordingLLMClient(content="short history summary", provider="gpt")
+    factory.register_provider("deepseek", lambda config: agent_client, replace=True)
+    factory.register_provider("gpt", lambda config: compaction_client, replace=True)
+    task = TaskFactory().create(RunParams(message="", model="compact-model"))
+    task.session.add_message("user", "old requirement " * 20)
+    task.session.add_message("assistant", "old implementation detail " * 20)
+    task.session.add_message("user", "old correction " * 20)
+    task.session.add_message("assistant", "old result " * 20)
+    task.session.add_message("user", "current question")
+    event_bus = EventBus()
+    compact_events: list[SessionCompactEvent] = []
+    states: list[str] = []
+
+    def collect_event(event: object) -> None:
+        """收集压缩事件和状态变化，验证运行时执行顺序。"""
+        if isinstance(event, SessionCompactEvent):
+            compact_events.append(event)
+        if isinstance(event, SessionStatusChangeEvent):
+            states.append(event.status)
+
+    event_bus.subscribe(collect_event)
+
+    async def run_test() -> None:
+        """执行一次低阈值 OTA 循环并检查压缩后的 Session。"""
+        runtime = AgentRuntime(
+            event_bus=event_bus,
+            llm_factory=factory,
+            model_name="compact-model",
+            compaction_model_name="summary-model",
+            compaction_policy=ContextBudgetPolicy(
+                trigger_ratio=0.1,
+                minimum_remaining_tokens=0,
+                preserve_recent_messages=1,
+                max_compaction_passes=1,
+            ),
+            token_counter=_CharacterTokenCounter(),
+        )
+        completed_task = await runtime.run(task)
+        assert completed_task.output == "final answer"
+        assert runtime.run_state.compaction_count == 1
+        assert completed_task.metadata["context_compaction_count"] == "1"
+        assert completed_task.metadata["context_compaction_model"] == "summary-model"
+
+    anyio.run(run_test)
+
+    assert len(compaction_client.requests) == 1
+    assert compaction_client.requests[0].system_prompt.startswith("Compress the conversation history")
+    assert len(agent_client.requests) == 1
+    final_request = agent_client.requests[0]
+    assert any("[conversation-summary]" in message.content for message in final_request.messages)
+    assert all("old implementation detail" not in message.content for message in final_request.messages)
+    assert sum(message.compressed for message in task.session.messages) == 4
+    assert len(compact_events) == 1
+    assert compact_events[0].after_token_count < compact_events[0].before_token_count
+    assert "compacting" in states
+
+
+def test_context_compaction_uses_production_thresholds_by_default() -> None:
+    """确认低阈值仅用于测试，生产默认保持 50% 和剩余 20k。"""
+    policy = ContextBudgetPolicy()
+    assert policy.trigger_ratio == 0.5
+    assert policy.minimum_remaining_tokens == 20000
 
 
 class _StubLLMClient(LLMClient):
@@ -187,12 +282,49 @@ class _StubLLMClient(LLMClient):
 class _StubBambooConfig:
     """为 TaskRuntime 初始化测试提供内存配置。"""
 
-    def __init__(self, models_document: dict) -> None:
+    def __init__(self, models_document: dict, *, agent_document: dict | None = None) -> None:
         """保存模拟的 models 配置文档。"""
         self.models_document = models_document
+        self.agent_document = agent_document or {}
 
     def get(self, name: str, default: object = None) -> object:
         """模拟 BambooConfig.get，只返回 models 配置。"""
         if name == "models":
             return self.models_document
+        if name == "bamboo_main_agent":
+            return self.agent_document
         return default
+
+
+class _RecordingLLMClient(LLMClient):
+    """记录请求并返回指定内容，用于区分执行模型和压缩模型。"""
+
+    def __init__(self, *, content: str, provider: str) -> None:
+        """初始化固定响应内容、平台名和请求记录。"""
+        self.content = content
+        self.provider = provider
+        self.requests: list[LLMRequest] = []
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        """记录请求并返回当前客户端的固定模型响应。"""
+        self.requests.append(request)
+        return LLMResponse(
+            content=self.content,
+            model="provider-model-id",
+            provider=self.provider,
+            finish_reason="stop",
+        )
+
+
+class _CharacterTokenCounter:
+    """使用字符数作为测试 Token，确保低阈值测试结果稳定。"""
+
+    def count_request(self, request: LLMRequest) -> int:
+        """统计测试请求的 system prompt、角色和内容字符数。"""
+        return len(request.system_prompt) + sum(
+            len(message.role) + len(message.content) for message in request.messages
+        )
+
+    def count_text(self, text: str) -> int:
+        """返回文本字符数作为测试 Token 数。"""
+        return len(text)

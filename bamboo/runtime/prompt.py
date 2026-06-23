@@ -54,7 +54,7 @@ class AgentPromptBuilder:
 
     def build(self, session: Session, *, error_history: list[str] | None = None) -> AgentPrompt:
         """构建一轮 Agent 循环的 prompt 快照。"""
-        messages = [LLMMessage(role=message.role, content=message.content) for message in session.messages]
+        messages = [LLMMessage(role=message.role, content=message.content) for message in session.active_messages()]
         return AgentPrompt(
             system_prompt=session.context.system_prompt,
             messages=messages,

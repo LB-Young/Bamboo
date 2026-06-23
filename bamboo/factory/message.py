@@ -6,7 +6,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 
-
 MessageRole = Literal["system", "user", "assistant", "tool"]
 
 
@@ -22,6 +21,6 @@ class Message:
     origin_message_ids: list[str] = field(default_factory=list)
 
     def mark_as_compressed(self, origin_message_ids: list[str] | None = None) -> None:
-        """标记该消息为历史消息压缩摘要。"""
+        """标记该历史消息已被摘要替代，并记录可选来源消息。"""
         self.compressed = True
         self.origin_message_ids = origin_message_ids or []

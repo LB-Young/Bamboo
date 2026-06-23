@@ -57,6 +57,15 @@ class LLMFactory:
         """判断模型名是否已经在 models.yaml 中注册。"""
         return model_name in self._models
 
+    def get_model_config(self, model_name: str | None = None) -> ModelConfig:
+        """返回模型注册配置，供 Runtime 读取上下文窗口等非敏感元数据。"""
+        selected_name = model_name or self._default_model
+        config = self._models.get(selected_name)
+        if config is None:
+            available = ", ".join(self.list_model_names()) or "(none)"
+            raise ModelConfigError(f"Model '{selected_name}' is not registered; available models: {available}")
+        return config
+
     def register_model(self, config: ModelConfig, *, replace: bool = False) -> None:
         """注册一个模型名，默认拒绝覆盖已有注册以防止权限配置被静默替换。"""
         if config.name in self._models and not replace:
@@ -76,10 +85,7 @@ class LLMFactory:
     def get_client(self, model_name: str | None = None) -> LLMClient:
         """按 Agent 配置的模型名返回缓存客户端，并在首次使用时解析密钥。"""
         selected_name = model_name or self._default_model
-        config = self._models.get(selected_name)
-        if config is None:
-            available = ", ".join(self.list_model_names()) or "(none)"
-            raise ModelConfigError(f"Model '{selected_name}' is not registered; available models: {available}")
+        config = self.get_model_config(selected_name)
 
         cached_client = self._clients.get(selected_name)
         if cached_client is not None:

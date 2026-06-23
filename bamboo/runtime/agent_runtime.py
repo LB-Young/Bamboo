@@ -12,12 +12,14 @@ from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
     AuditEvent,
+    SessionCompactEvent,
     SessionStatusChangeEvent,
     TextDeltaEvent,
     TextFinishEvent,
     TextStartEvent,
 )
-from bamboo.llms import LLMFactory
+from bamboo.llms import LLMFactory, LLMResponse
+from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
 from bamboo.runtime.prompt import AgentPrompt, AgentPromptBuilder
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
 
@@ -36,6 +38,7 @@ class AgentRunState:
     """记录一次 Agent 运行中的循环次数和可恢复错误。"""
 
     iteration: int = 0
+    compaction_count: int = 0
     recoverable_errors: list[str] = field(default_factory=list)
 
 
@@ -52,9 +55,13 @@ class AgentRuntime:
         event_bus: EventBus,
         llm_factory: LLMFactory,
         model_name: str,
+        compaction_model_name: str | None = None,
         state_machine: AgentStateMachine | None = None,
         prompt_builder: AgentPromptBuilder | None = None,
         recovery_policy: AgentRecoveryPolicy | None = None,
+        compaction_policy: ContextBudgetPolicy | None = None,
+        token_counter: TokenCounter | None = None,
+        context_compactor: ContextCompactor | None = None,
     ) -> None:
         """初始化 Agent 运行依赖，并固定当前 Agent 使用的模型客户端。"""
         self.event_bus = event_bus
@@ -63,7 +70,17 @@ class AgentRuntime:
         self.recovery_policy = recovery_policy or AgentRecoveryPolicy()
         self.llm_factory = llm_factory
         self.model_name = model_name
+        self.compaction_model_name = compaction_model_name or model_name
+        self.model_config = self.llm_factory.get_model_config(self.model_name)
         self.llm_client = self.llm_factory.get_client(self.model_name)
+        self.compaction_llm_client = self.llm_factory.get_client(self.compaction_model_name)
+        self.context_compactor = context_compactor or ContextCompactor(
+            llm_client=self.compaction_llm_client,
+            # 是否压缩仍按主 Agent 模型的上下文窗口判断。
+            model_config=self.model_config,
+            token_counter=token_counter,
+            policy=compaction_policy,
+        )
         self.run_state = AgentRunState()
 
     async def run(self, task: Task) -> Task:
@@ -85,11 +102,12 @@ class AgentRuntime:
         """执行一轮 Observe -> Think -> Act。"""
         await self._transition(task, AgentState.OBSERVING, "collect context")
         observation = self._observe(task)
+        observation = await self._compact_context_if_needed(task, observation)
 
-        await self._transition(task, AgentState.THINKING, "prepare model request")
-        thought = self._think(task, observation)
+        await self._transition(task, AgentState.THINKING, "call model and produce decision")
+        thought = await self._think(task, observation)
 
-        await self._transition(task, AgentState.ACTING, "call model and write answer")
+        await self._transition(task, AgentState.ACTING, "apply model decision")
         await self._act(task, thought)
 
         await self._transition(task, AgentState.COMPLETED, "agent completed")
@@ -102,19 +120,59 @@ class AgentRuntime:
             error_history=self.run_state.recoverable_errors,
         )
 
-    def _think(self, task: Task, observation: AgentPrompt) -> AgentPrompt:
-        """检查本轮 prompt，并把结构化请求材料交给 Act 阶段。"""
+    async def _think(self, task: Task, observation: AgentPrompt) -> LLMResponse:
+        """调用主模型分析当前观察结果，并返回可供 Act 执行的模型决策。"""
         if task.metadata.pop("inject_agent_error_once", "") == "thinking":
             raise RuntimeError("Injected mock thinking error")
-        return observation
+        return await self.llm_client.complete(observation.to_llm_request())
 
-    async def _act(self, task: Task, prompt: AgentPrompt) -> None:
-        """通过统一 LLMFactory 调用模型，并发布返回文本事件。"""
+    async def _compact_context_if_needed(self, task: Task, prompt: AgentPrompt) -> AgentPrompt:
+        """在模型调用前按上下文预算压缩 Session，并返回重建后的 Prompt。"""
+        current_prompt = prompt
+        for _ in range(self.context_compactor.policy.max_compaction_passes):
+            budget = self.context_compactor.evaluate(current_prompt)
+            if not budget.should_compact:
+                break
+            if not self.context_compactor.has_compactable_messages(task.session):
+                break
+
+            await self._transition(
+                task,
+                AgentState.COMPACTING,
+                (
+                    f"compact context input_tokens={budget.input_tokens} "
+                    f"remaining_tokens={budget.remaining_tokens}"
+                ),
+            )
+            compacted = await self.context_compactor.compact(task.session)
+            await self._transition(task, AgentState.OBSERVING, "rebuild context after compaction")
+            if not compacted:
+                break
+
+            rebuilt_prompt = self._observe(task)
+            rebuilt_budget = self.context_compactor.evaluate(rebuilt_prompt)
+            self.run_state.compaction_count += 1
+            task.metadata["context_compaction_count"] = str(self.run_state.compaction_count)
+            task.metadata["context_compaction_model"] = self.compaction_model_name
+            await self.event_bus.emit(
+                SessionCompactEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    before_token_count=budget.input_tokens,
+                    after_token_count=rebuilt_budget.input_tokens,
+                )
+            )
+            current_prompt = rebuilt_prompt
+            if rebuilt_budget.input_tokens >= budget.input_tokens:
+                break
+        return current_prompt
+
+    async def _act(self, task: Task, decision: LLMResponse) -> None:
+        """应用 Think 阶段产生的模型决策，并发布文本结果事件。"""
         if task.metadata.pop("inject_agent_error_once", "") == "acting":
             raise RuntimeError("Injected mock acting error")
 
-        response = await self.llm_client.complete(prompt.to_llm_request())
-        content = response.content
+        content = decision.content
 
         message = task.session.add_message("assistant", content, agent_name=f"llm:{self.model_name}")
         await self.event_bus.emit(
@@ -141,8 +199,8 @@ class AgentRuntime:
         )
         task.output = content
         task.metadata["llm_model_name"] = self.model_name
-        task.metadata["llm_model"] = response.model
-        task.metadata["llm_provider"] = response.provider
+        task.metadata["llm_model"] = decision.model
+        task.metadata["llm_provider"] = decision.provider
 
     async def _recover(self, task: Task, exc: Exception) -> bool:
         """记录 Agent 可恢复错误，并在策略允许时继续循环。"""

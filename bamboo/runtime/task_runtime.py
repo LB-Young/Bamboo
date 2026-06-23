@@ -204,11 +204,14 @@ class TaskRuntime:
             return self.agent_factory(self.event_bus)
         # Agent 只选择模型注册名，不读取 Provider、API Key 或 Base URL。
         model_name = self._resolve_agent_model_name(task, self.llm_factory)
+        # 压缩模型可以单独配置；未配置时复用当前 Agent 的执行模型。
+        compaction_model_name = self._resolve_compaction_model_name(task, model_name)
         # 默认 Agent 在初始化阶段固定模型客户端，Act 阶段只执行调用。
         return AgentRuntime(
             event_bus=self.event_bus,
             llm_factory=self.llm_factory,
             model_name=model_name,
+            compaction_model_name=compaction_model_name,
         )
 
     @staticmethod
@@ -221,6 +224,17 @@ class TaskRuntime:
         if isinstance(configured_name, str) and configured_name:
             return configured_name
         return llm_factory.default_model_name
+
+    @staticmethod
+    def _resolve_compaction_model_name(task: Task, agent_model_name: str) -> str:
+        """读取主 Agent 的可选压缩模型名，缺失或为空时复用执行模型。"""
+        main_agent_config = task.config.get("bamboo_main_agent", {})
+        configured_name = (
+            main_agent_config.get("compaction_model") if isinstance(main_agent_config, dict) else None
+        )
+        if isinstance(configured_name, str) and configured_name:
+            return configured_name
+        return agent_model_name
 
     async def _transition_task(self, task: Task, from_status: str, to_status: str) -> None:
         """更新任务状态、持久化快照并发布状态事件。"""

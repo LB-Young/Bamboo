@@ -84,6 +84,7 @@ models:
     base_url: https://api.deepseek.com/v1
     timeout: 60
     temperature: 0.2
+    context_window: 128000
     max_tokens: 4096
 ```
 
@@ -98,9 +99,10 @@ Agent 只配置 `models.yaml` 中的模型注册名，例如：
 
 ```yaml
 model: deepseek-chat
+compaction_model: ""
 ```
 
-主 Agent 的模型名配置在 `~/.bamboo/configs/bamboo_main_agent.yaml`。`TaskRuntime` 初始化时会一次性加载用户配置并创建本次执行共享的 `LLMFactory`，Agent 执行时只按模型名路由已经注册的 Provider Client。
+主 Agent 的模型名配置在 `~/.bamboo/configs/bamboo_main_agent.yaml`。`compaction_model` 可以配置独立的上下文摘要模型；为空或缺失时复用 `model`。`TaskRuntime` 初始化时会一次性加载用户配置并创建本次执行共享的 `LLMFactory`，Agent 执行时只按模型名路由已经注册的 Provider Client。
 
 Provider、实际模型 ID、API Key、Base URL 和生成参数都由 `models.yaml` 管理。模板中的 API Key 为空，可以填写实际值，也可以使用 `${ENV_NAME}` 引用；不要把真实 Key 提交到仓库。
 

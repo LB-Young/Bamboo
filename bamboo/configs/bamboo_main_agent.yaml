@@ -1,2 +1,5 @@
 # 主 Agent 只配置 models.yaml 中注册过的模型名。
 model: deepseek-chat
+
+# 可选。留空时复用 model；填写时必须引用 models.yaml 中的注册名。
+compaction_model: ""

@@ -26,6 +26,41 @@ class Session:
         self.messages.append(message)
         return message
 
+    def active_messages(self) -> list[Message]:
+        """返回尚未被压缩替代、需要继续发送给模型的消息。"""
+        return [message for message in self.messages if not message.compressed]
+
+    def replace_messages_with_summary(
+        self,
+        messages: list[Message],
+        summary: str,
+        *,
+        agent_name: str,
+    ) -> Message:
+        """将指定活跃消息标记为已压缩，并在原位置插入摘要消息。"""
+        if not messages:
+            raise ValueError("At least one message is required for compaction")
+        selected_ids = {message.message_id for message in messages}
+        selected_indexes = [
+            index for index, message in enumerate(self.messages) if message.message_id in selected_ids
+        ]
+        if len(selected_indexes) != len(selected_ids):
+            raise ValueError("Compaction messages must belong to the current session")
+
+        for message in messages:
+            if message.compressed:
+                raise ValueError("Cannot compact a message that is already compressed")
+            message.mark_as_compressed()
+
+        summary_message = Message(
+            role="system",
+            content=f"[conversation-summary]\n{summary}",
+            agent_name=agent_name,
+            origin_message_ids=[message.message_id for message in messages],
+        )
+        self.messages.insert(min(selected_indexes), summary_message)
+        return summary_message
+
     def build_context(self) -> str:
         """渲染当前会话上下文，供 Agent 执行使用。"""
         return self.context.build_context()
