@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
 
-from bamboo.llms.base import LLMClient, LLMRequest, LLMRequestError, LLMResponse, LLMResponseError
+from bamboo.llms.base import (
+    LLMClient,
+    LLMRequest,
+    LLMRequestError,
+    LLMResponse,
+    LLMResponseError,
+    LLMToolCall,
+)
 from bamboo.llms.config import ModelConfig, ModelConfigError
 
 
@@ -58,12 +66,29 @@ class OpenAICompatibleClient(LLMClient):
 
     def _build_payload(self, request: LLMRequest) -> dict[str, Any]:
         """把统一请求转换为 OpenAI Chat Completions 请求体。"""
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
         if request.system_prompt:
             messages.append({"role": "system", "content": request.system_prompt})
         for message in request.messages:
-            role = "user" if message.role == "tool" else message.role
-            messages.append({"role": role, "content": message.content})
+            if message.role == "assistant" and message.tool_calls:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": message.content or None,
+                        "tool_calls": [_serialize_tool_call(tool_call) for tool_call in message.tool_calls],
+                    }
+                )
+                continue
+            if message.role == "tool":
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": message.content,
+                        "tool_call_id": message.tool_call_id,
+                    }
+                )
+                continue
+            messages.append({"role": message.role, "content": message.content})
 
         payload: dict[str, Any] = {
             "model": self.config.model,
@@ -73,6 +98,18 @@ class OpenAICompatibleClient(LLMClient):
         }
         if self.config.temperature is not None:
             payload["temperature"] = self.config.temperature
+        if request.tools:
+            payload["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool.get("input_schema", {"type": "object", "properties": {}}),
+                    },
+                }
+                for tool in request.tools
+            ]
         return payload
 
     def _parse_response(self, response: httpx.Response) -> LLMResponse:
@@ -80,11 +117,13 @@ class OpenAICompatibleClient(LLMClient):
         try:
             data = response.json()
             choice = data["choices"][0]
-            content = _normalize_content(choice["message"]["content"])
+            response_message = choice["message"]
+            content = _normalize_content(response_message.get("content"))
+            tool_calls = _parse_tool_calls(response_message.get("tool_calls", []))
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMResponseError(f"{self.config.provider} returned an invalid chat completion response") from exc
 
-        if not content:
+        if not content and not tool_calls:
             raise LLMResponseError(f"{self.config.provider} returned an empty response")
 
         usage = data.get("usage", {})
@@ -96,9 +135,55 @@ class OpenAICompatibleClient(LLMClient):
             model=str(data.get("model") or self.config.model),
             provider=self.config.provider,
             finish_reason=str(choice.get("finish_reason") or ""),
+            tool_calls=tool_calls,
             usage=normalized_usage,
             raw_response=data,
         )
+
+
+def _serialize_tool_call(tool_call: LLMToolCall) -> dict[str, Any]:
+    """把统一 Tool Call 转换为 OpenAI assistant tool_call。"""
+    return {
+        "id": tool_call.id,
+        "type": "function",
+        "function": {
+            "name": tool_call.name,
+            "arguments": json.dumps(tool_call.arguments, ensure_ascii=False),
+        },
+    }
+
+
+def _parse_tool_calls(raw_tool_calls: Any) -> list[LLMToolCall]:
+    """解析 OpenAI-compatible 响应中的 function tool_calls。"""
+    if raw_tool_calls is None:
+        return []
+    if not isinstance(raw_tool_calls, list):
+        raise LLMResponseError("tool_calls must be a list")
+
+    parsed_calls: list[LLMToolCall] = []
+    for index, raw_call in enumerate(raw_tool_calls):
+        if not isinstance(raw_call, dict) or not isinstance(raw_call.get("function"), dict):
+            raise LLMResponseError("tool_call.function must be an object")
+        function = raw_call["function"]
+        name = function.get("name")
+        if not isinstance(name, str) or not name:
+            raise LLMResponseError("tool_call.function.name must be a non-empty string")
+        raw_arguments = function.get("arguments", "{}")
+        if isinstance(raw_arguments, str):
+            arguments = json.loads(raw_arguments or "{}")
+        else:
+            arguments = raw_arguments
+        if not isinstance(arguments, dict):
+            raise LLMResponseError("tool_call.function.arguments must decode to an object")
+        call_id = raw_call.get("id")
+        parsed_calls.append(
+            LLMToolCall(
+                id=call_id if isinstance(call_id, str) and call_id else f"tool_call_{index}",
+                name=name,
+                arguments=arguments,
+            )
+        )
+    return parsed_calls
 
 
 def _normalize_content(content: Any) -> str:

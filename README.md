@@ -176,4 +176,4 @@ task status running -> completed
 - 内置 skill：`skill-creator`
 - Agent 和 Task 的基础错误恢复机制
 
-后续需要继续接入真实工具调用决策、流式模型输出、持久化 SessionStore 和 Web 入口。
+后续需要继续接入工具权限确认、流式模型输出、持久化 SessionStore 和 Web 入口。

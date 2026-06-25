@@ -15,6 +15,7 @@ from loguru import logger
 
 dirs: list[str] = [
     "configs",                  # 配置目录
+    "prompts",                  # 可编辑系统提示词模板
     "buildin_tools",            # 内建 Tool（安装时从包内复制）
     "tools",                    # 用户安装的 Tool / Agent 创建的 Skill
     "buildin_skills",           # 内建 Skill（安装时从包内复制）
@@ -58,7 +59,7 @@ def ensure_userspace() -> UserspaceLayout:
         target = bamboo_root_dir / subdir
         target.mkdir(parents=True, exist_ok=True)
 
-        if subdir in ["configs", "buildin_tools", "buildin_skills", "buildin_subagents", "buildin_workflows"]:
+        if subdir in ["configs", "prompts", "buildin_tools", "buildin_skills", "buildin_subagents", "buildin_workflows"]:
             copy_builtin_info(subdir, target)
         else:
             logger.info(f"Ensured directory: {target}")
@@ -70,6 +71,8 @@ def copy_builtin_info(subdir: str, target_dir: Path) -> None:
     src_dir = Path(__file__).resolve().parent.parent / subdir
     if src_dir.exists():
         for source_path in src_dir.rglob("*"):
+            if subdir == "prompts" and source_path.is_file() and source_path.suffix != ".md":
+                continue
             relative_path = source_path.relative_to(src_dir)
             destination_path = target_dir / relative_path
             if source_path.is_dir():

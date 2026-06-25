@@ -1,6 +1,6 @@
 """Bamboo 统一大模型调用层。"""
 
-from bamboo.llms.base import LLMClient, LLMError, LLMMessage, LLMRequest, LLMResponse
+from bamboo.llms.base import LLMClient, LLMError, LLMMessage, LLMRequest, LLMResponse, LLMToolCall
 from bamboo.llms.config import ModelCatalog, ModelConfig, ModelConfigError
 from bamboo.llms.factory import LLMFactory
 
@@ -11,6 +11,7 @@ __all__ = [
     "LLMMessage",
     "LLMRequest",
     "LLMResponse",
+    "LLMToolCall",
     "ModelCatalog",
     "ModelConfig",
     "ModelConfigError",

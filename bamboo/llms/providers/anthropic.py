@@ -6,7 +6,14 @@ from typing import Any
 
 import httpx
 
-from bamboo.llms.base import LLMClient, LLMRequest, LLMRequestError, LLMResponse, LLMResponseError
+from bamboo.llms.base import (
+    LLMClient,
+    LLMRequest,
+    LLMRequestError,
+    LLMResponse,
+    LLMResponseError,
+    LLMToolCall,
+)
 from bamboo.llms.config import ModelConfig
 
 ANTHROPIC_VERSION = "2023-06-01"
@@ -48,16 +55,41 @@ class AnthropicMessagesClient(LLMClient):
     def _build_payload(self, request: LLMRequest) -> dict[str, Any]:
         """把统一请求转换为 Anthropic Messages 请求体。"""
         system_parts = [request.system_prompt] if request.system_prompt else []
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
         for message in request.messages:
             if message.role == "system":
                 system_parts.append(message.content)
                 continue
+            if message.role == "assistant" and message.tool_calls:
+                content_blocks: list[dict[str, Any]] = []
+                if message.content:
+                    content_blocks.append({"type": "text", "text": message.content})
+                content_blocks.extend(
+                    {
+                        "type": "tool_use",
+                        "id": tool_call.id,
+                        "name": tool_call.name,
+                        "input": tool_call.arguments,
+                    }
+                    for tool_call in message.tool_calls
+                )
+                _append_message(messages, "assistant", content_blocks)
+                continue
+            if message.role == "tool":
+                _append_message(
+                    messages,
+                    "user",
+                    [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": message.tool_call_id,
+                            "content": message.content,
+                        }
+                    ],
+                )
+                continue
             role = "assistant" if message.role == "assistant" else "user"
-            if messages and messages[-1]["role"] == role:
-                messages[-1]["content"] += f"\n\n{message.content}"
-            else:
-                messages.append({"role": role, "content": message.content})
+            _append_message(messages, role, [{"type": "text", "text": message.content}])
 
         payload: dict[str, Any] = {
             "model": self.config.model,
@@ -70,6 +102,8 @@ class AnthropicMessagesClient(LLMClient):
             payload["system"] = system_prompt
         if self.config.temperature is not None:
             payload["temperature"] = self.config.temperature
+        if request.tools:
+            payload["tools"] = list(request.tools)
         return payload
 
     def _parse_response(self, response: httpx.Response) -> LLMResponse:
@@ -82,10 +116,23 @@ class AnthropicMessagesClient(LLMClient):
                 for block in content_blocks
                 if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)
             )
+            tool_calls = [
+                LLMToolCall(
+                    id=block["id"],
+                    name=block["name"],
+                    arguments=block.get("input", {}),
+                )
+                for block in content_blocks
+                if isinstance(block, dict)
+                and block.get("type") == "tool_use"
+                and isinstance(block.get("id"), str)
+                and isinstance(block.get("name"), str)
+                and isinstance(block.get("input", {}), dict)
+            ]
         except (KeyError, TypeError, ValueError) as exc:
             raise LLMResponseError("claude returned an invalid Messages API response") from exc
 
-        if not content:
+        if not content and not tool_calls:
             raise LLMResponseError("claude returned an empty response")
 
         usage = data.get("usage", {})
@@ -97,9 +144,18 @@ class AnthropicMessagesClient(LLMClient):
             model=str(data.get("model") or self.config.model),
             provider=self.config.provider,
             finish_reason=str(data.get("stop_reason") or ""),
+            tool_calls=tool_calls,
             usage=normalized_usage,
             raw_response=data,
         )
+
+
+def _append_message(messages: list[dict[str, Any]], role: str, blocks: list[dict[str, Any]]) -> None:
+    """追加 Anthropic 消息，并合并连续的同角色 content blocks。"""
+    if messages and messages[-1]["role"] == role:
+        messages[-1]["content"].extend(blocks)
+        return
+    messages.append({"role": role, "content": list(blocks)})
 
 
 def _response_error_detail(response: httpx.Response) -> str:

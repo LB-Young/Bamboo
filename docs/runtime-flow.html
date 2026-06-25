@@ -231,13 +231,13 @@ flowchart TD
         </pre>
       </div>
       <div class="note">
-        图里的 <code>OnError</code> 表示 TaskRuntime 的异常兜底逻辑，不是独立于主流程并行执行。当前 mock 阶段的 <code>Think</code> 可以不调用真实 LLM，<code>Tool</code> 分支也可以先保留为未来扩展。
+        图里的 <code>OnError</code> 表示 TaskRuntime 的异常兜底逻辑，不是独立于主流程并行执行。当前 <code>Think</code> 会调用真实 LLM；模型返回 Tool Call 时进入工具分支，否则把文本作为最终结论。
       </div>
     </section>
 
     <section>
       <h2>流程图模块详解</h2>
-      <p>下面按流程图中的节点逐一说明每个模块需要实现的逻辑。实现时可以先完成主路径，再补工具调用、上下文压缩、异常恢复和持久化。</p>
+      <p>下面按流程图中的节点逐一说明每个模块的职责。当前已接入真实模型调用、工具循环、上下文压缩和基础异常恢复，持久化仍需继续完善。</p>
 
       <div class="module-group">
         <h3>入口与参数层</h3>
@@ -422,7 +422,7 @@ flowchart TD
             <tr>
               <td><code>Think: LLM 调用或 Mock 决策</code></td>
               <td>让 Agent 基于 observation 做决策。</td>
-              <td>当前框架阶段可以使用 mock 决策，直接生成确定性最终回答；接入真实模型后再统一 provider 接口，注入 messages、tools、model 参数，支持 streaming、重试、限流、超时、错误归一化和 token 统计。</td>
+              <td>通过统一 Provider 接口调用真实模型，注入 messages、tools 和 model 参数；模型响应被归一化为最终文本或结构化 Tool Call。后续仍需完善 streaming、限流和精确 token 统计。</td>
               <td>输入：observation 或标准 LLM request。输出：文本流、工具调用、最终回答或内部动作。</td>
             </tr>
             <tr>

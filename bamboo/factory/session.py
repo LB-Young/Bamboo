@@ -8,6 +8,8 @@ from pathlib import Path
 from bamboo.factory.context import Context
 from bamboo.factory.message import Message, MessageRole
 from bamboo.helpers.requests_params import RunParams
+from bamboo.llms.base import LLMToolCall
+from bamboo.prompts import build_system_prompt, resolve_prompt_mode
 
 
 @dataclass(slots=True)
@@ -20,9 +22,25 @@ class Session:
     context: Context
     messages: list[Message] = field(default_factory=list)
 
-    def add_message(self, role: MessageRole, content: str, *, agent_name: str = "") -> Message:
+    def add_message(
+        self,
+        role: MessageRole,
+        content: str,
+        *,
+        agent_name: str = "",
+        tool_calls: list[LLMToolCall] | None = None,
+        tool_call_id: str = "",
+        tool_name: str = "",
+    ) -> Message:
         """向会话追加一条消息并返回。"""
-        message = Message(role=role, content=content, agent_name=agent_name)
+        message = Message(
+            role=role,
+            content=content,
+            agent_name=agent_name,
+            tool_calls=tool_calls or [],
+            tool_call_id=tool_call_id,
+            tool_name=tool_name,
+        )
         self.messages.append(message)
         return message
 
@@ -71,12 +89,22 @@ class SessionFactory:
 
     def create(self, *, memory_dir_path: Path, run_params: RunParams) -> Session:
         """创建 Session，并写入用户初始消息。"""
+        project_root = Path(run_params.project)
+        prompt_mode = resolve_prompt_mode(run_params.session_mode, project_root)
+        system_prompt = build_system_prompt(
+            session_mode=run_params.session_mode,
+            project_root=project_root,
+            memory_dir=memory_dir_path,
+            model=run_params.model,
+            provider=run_params.provider,
+        )
         # context保存上下文信息
         context = Context(
             session_id=run_params.session_id,
-            project_root=Path(run_params.project),
+            project_root=project_root,
             memory_dir=memory_dir_path,
-            system_prompt="You are Bamboo, an AI-powered personal agent assistant.",
+            system_prompt=system_prompt,
+            metadata={"prompt_mode": prompt_mode},
         )
         # session保存上下文信息和执行的模型参数
         session = Session(

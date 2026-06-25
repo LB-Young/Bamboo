@@ -10,13 +10,29 @@ import pytest
 
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
-from bamboo.helpers.constant import SessionCompactEvent, SessionStatusChangeEvent
+from bamboo.helpers.constant import (
+    SessionCompactEvent,
+    SessionStatusChangeEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from bamboo.helpers.requests_params import RunParams
-from bamboo.llms import LLMClient, LLMFactory, LLMMessage, LLMRequest, LLMResponse, ModelCatalog, ModelConfigError
+from bamboo.llms import (
+    LLMClient,
+    LLMFactory,
+    LLMMessage,
+    LLMRequest,
+    LLMResponse,
+    LLMToolCall,
+    ModelCatalog,
+    ModelConfigError,
+)
 from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient
 from bamboo.runtime.agent_runtime import AgentRuntime
 from bamboo.runtime.context_compactor import ContextBudgetPolicy
 from bamboo.runtime.task_runtime import TaskRuntime
+from bamboo.tools.buildin.base import Tool, ToolResult
+from bamboo.tools.registry import ToolRegistry
 
 
 def _model_document(provider: str, *, model_name: str = "test-model") -> dict:
@@ -85,7 +101,9 @@ def test_anthropic_client_builds_and_parses_request() -> None:
             assert request.headers["x-api-key"] == "test-api-key"
             assert request.headers["anthropic-version"] == "2023-06-01"
             assert payload["system"] == "system prompt"
-            assert payload["messages"] == [{"role": "user", "content": "hello"}]
+            assert payload["messages"] == [
+                {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+            ]
             return httpx.Response(
                 200,
                 json={
@@ -103,6 +121,207 @@ def test_anthropic_client_builds_and_parses_request() -> None:
         assert response.content == "claude answer"
         assert response.provider == "claude"
         assert response.finish_reason == "end_turn"
+
+    anyio.run(run_test)
+
+
+def test_openai_compatible_client_parses_tool_call() -> None:
+    """验证 OpenAI-compatible Provider 发送工具 Schema 并解析 function tool_call。"""
+    config = ModelCatalog.from_mapping(_model_document("deepseek")).models["test-model"]
+
+    async def run_test() -> None:
+        """执行一次 mock function calling 请求。"""
+        def handler(request: httpx.Request) -> httpx.Response:
+            """检查工具 Schema 并返回结构化 Tool Call。"""
+            payload = json.loads(request.content)
+            assert payload["tools"][0]["function"]["name"] == "echo"
+            assert payload["tools"][0]["function"]["parameters"]["required"] == ["value"]
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [
+                        {
+                            "message": {
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "echo",
+                                            "arguments": '{"value":"hello"}',
+                                        },
+                                    }
+                                ],
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ],
+                },
+            )
+
+        client = DeepSeekClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(
+                messages=[LLMMessage(role="user", content="echo hello")],
+                tools=[
+                    {
+                        "name": "echo",
+                        "description": "Echo a value.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {"value": {"type": "string"}},
+                            "required": ["value"],
+                        },
+                    }
+                ],
+            )
+        )
+        assert response.content == ""
+        assert response.tool_calls == [LLMToolCall(id="call-1", name="echo", arguments={"value": "hello"})]
+
+    anyio.run(run_test)
+
+
+def test_anthropic_client_parses_tool_use() -> None:
+    """验证 Claude Provider 发送工具 Schema 并解析 tool_use block。"""
+    config = ModelCatalog.from_mapping(_model_document("claude")).models["test-model"]
+
+    async def run_test() -> None:
+        """执行一次 mock Claude tool_use 请求。"""
+        def handler(request: httpx.Request) -> httpx.Response:
+            """检查 Claude tools 并返回 tool_use block。"""
+            payload = json.loads(request.content)
+            assert payload["tools"][0]["name"] == "echo"
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu-1",
+                            "name": "echo",
+                            "input": {"value": "hello"},
+                        }
+                    ],
+                    "stop_reason": "tool_use",
+                },
+            )
+
+        client = ClaudeClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(
+                messages=[LLMMessage(role="user", content="echo hello")],
+                tools=[{"name": "echo", "description": "Echo.", "input_schema": {"type": "object"}}],
+            )
+        )
+        assert response.tool_calls == [
+            LLMToolCall(id="toolu-1", name="echo", arguments={"value": "hello"})
+        ]
+
+    anyio.run(run_test)
+
+
+def test_openai_compatible_client_serializes_tool_result_history() -> None:
+    """验证 OpenAI-compatible 下一轮请求保留 assistant Tool Call 和 tool result。"""
+    config = ModelCatalog.from_mapping(_model_document("deepseek")).models["test-model"]
+    tool_call = LLMToolCall(id="call-1", name="echo", arguments={"value": "hello"})
+
+    async def run_test() -> None:
+        """发送包含工具历史的 mock 请求。"""
+        def handler(request: httpx.Request) -> httpx.Response:
+            """检查 OpenAI 工具历史消息格式。"""
+            messages = json.loads(request.content)["messages"]
+            assert messages[1]["role"] == "assistant"
+            assert messages[1]["tool_calls"][0]["function"]["name"] == "echo"
+            assert json.loads(messages[1]["tool_calls"][0]["function"]["arguments"]) == {"value": "hello"}
+            assert messages[2] == {
+                "role": "tool",
+                "content": "echoed: hello",
+                "tool_call_id": "call-1",
+            }
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [{"message": {"content": "done"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = DeepSeekClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(
+                system_prompt="system",
+                messages=[
+                    LLMMessage(role="assistant", tool_calls=[tool_call]),
+                    LLMMessage(
+                        role="tool",
+                        content="echoed: hello",
+                        tool_call_id="call-1",
+                        tool_name="echo",
+                    ),
+                ],
+            )
+        )
+        assert response.content == "done"
+
+    anyio.run(run_test)
+
+
+def test_anthropic_client_serializes_tool_result_history() -> None:
+    """验证 Claude 下一轮请求保留 tool_use 和对应 tool_result blocks。"""
+    config = ModelCatalog.from_mapping(_model_document("claude")).models["test-model"]
+    tool_call = LLMToolCall(id="toolu-1", name="echo", arguments={"value": "hello"})
+
+    async def run_test() -> None:
+        """发送包含 Claude 工具历史的 mock 请求。"""
+        def handler(request: httpx.Request) -> httpx.Response:
+            """检查 Claude 工具历史 content blocks。"""
+            messages = json.loads(request.content)["messages"]
+            assert messages == [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu-1",
+                            "name": "echo",
+                            "input": {"value": "hello"},
+                        }
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu-1",
+                            "content": "echoed: hello",
+                        }
+                    ],
+                },
+            ]
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "content": [{"type": "text", "text": "done"}],
+                    "stop_reason": "end_turn",
+                },
+            )
+
+        client = ClaudeClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(
+                messages=[
+                    LLMMessage(role="assistant", tool_calls=[tool_call]),
+                    LLMMessage(role="tool", content="echoed: hello", tool_call_id="toolu-1", tool_name="echo"),
+                ]
+            )
+        )
+        assert response.content == "done"
 
     anyio.run(run_test)
 
@@ -261,6 +480,49 @@ def test_context_compaction_uses_production_thresholds_by_default() -> None:
     assert policy.minimum_remaining_tokens == 20000
 
 
+def test_agent_runtime_executes_tool_and_continues_ota_loop() -> None:
+    """验证 Think 返回 Tool Call 后执行工具并继续下一轮，直到模型返回最终结论。"""
+    factory = LLMFactory.from_mapping(_model_document("deepseek", model_name="tool-model"))
+    llm_client = _ToolLoopLLMClient()
+    factory.register_provider("deepseek", lambda config: llm_client, replace=True)
+    tool_registry = ToolRegistry()
+    echo_tool = _EchoTool()
+    tool_registry.register(echo_tool, source="test")
+    event_bus = EventBus()
+    emitted_events: list[object] = []
+    event_bus.subscribe(emitted_events.append)
+    task = TaskFactory().create(RunParams(message="请用 echo 工具处理 hello", model="tool-model"))
+
+    async def run_test() -> None:
+        """执行包含一次工具调用和一次最终回答的两轮 OTA。"""
+        runtime = AgentRuntime(
+            event_bus=event_bus,
+            llm_factory=factory,
+            model_name="tool-model",
+            tool_registry=tool_registry,
+        )
+        completed_task = await runtime.run(task)
+        assert completed_task.output == "工具返回了 echoed: hello"
+        assert runtime.run_state.iteration == 2
+        assert completed_task.metadata["tool_call_count"] == "1"
+
+    anyio.run(run_test)
+
+    assert echo_tool.values == ["hello"]
+    assert len(llm_client.requests) == 2
+    second_messages = llm_client.requests[1].messages
+    assert [message.role for message in second_messages] == ["user", "assistant", "tool"]
+    assert second_messages[1].tool_calls[0].id == "call-echo-1"
+    assert second_messages[2].tool_call_id == "call-echo-1"
+    assert second_messages[2].content == "echoed: hello"
+    assert any(isinstance(event, ToolCallEvent) for event in emitted_events)
+    assert any(isinstance(event, ToolResultEvent) for event in emitted_events)
+    assert any(
+        isinstance(event, SessionStatusChangeEvent) and event.status == "tool_calling"
+        for event in emitted_events
+    )
+
+
 class _StubLLMClient(LLMClient):
     """记录 Agent 发出的请求并返回固定模型响应。"""
 
@@ -328,3 +590,60 @@ class _CharacterTokenCounter:
     def count_text(self, text: str) -> int:
         """返回文本字符数作为测试 Token 数。"""
         return len(text)
+
+
+class _EchoTool(Tool):
+    """返回输入值并记录调用参数的测试工具。"""
+
+    name = "echo"
+    description = "Echo a string value."
+
+    def __init__(self) -> None:
+        """初始化工具调用记录。"""
+        self.values: list[str] = []
+
+    def input_schema(self) -> dict:
+        """声明 echo 工具需要一个字符串 value。"""
+        return {
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+        }
+
+    async def execute(self, value: str) -> ToolResult:
+        """记录并原样返回输入值。"""
+        self.values.append(value)
+        return ToolResult(content=f"echoed: {value}")
+
+
+class _ToolLoopLLMClient(LLMClient):
+    """第一轮请求工具，第二轮根据工具结果返回最终结论。"""
+
+    def __init__(self) -> None:
+        """初始化模型请求记录。"""
+        self.requests: list[LLMRequest] = []
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        """按请求轮次返回 Tool Call 或最终文本。"""
+        self.requests.append(request)
+        if len(self.requests) == 1:
+            assert request.tools[0]["name"] == "echo"
+            return LLMResponse(
+                content="",
+                model="provider-model-id",
+                provider="deepseek",
+                finish_reason="tool_calls",
+                tool_calls=[
+                    LLMToolCall(
+                        id="call-echo-1",
+                        name="echo",
+                        arguments={"value": "hello"},
+                    )
+                ],
+            )
+        return LLMResponse(
+            content="工具返回了 echoed: hello",
+            model="provider-model-id",
+            provider="deepseek",
+            finish_reason="stop",
+        )

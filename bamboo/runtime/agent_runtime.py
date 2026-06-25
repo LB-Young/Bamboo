@@ -17,11 +17,15 @@ from bamboo.helpers.constant import (
     TextDeltaEvent,
     TextFinishEvent,
     TextStartEvent,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
 )
-from bamboo.llms import LLMFactory, LLMResponse
+from bamboo.llms import LLMFactory, LLMResponse, LLMToolCall
 from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
 from bamboo.runtime.prompt import AgentPrompt, AgentPromptBuilder
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
+from bamboo.tools import ToolRegistry, get_tool_registry
 
 
 @dataclass(slots=True)
@@ -62,11 +66,13 @@ class AgentRuntime:
         compaction_policy: ContextBudgetPolicy | None = None,
         token_counter: TokenCounter | None = None,
         context_compactor: ContextCompactor | None = None,
+        tool_registry: ToolRegistry | None = None,
     ) -> None:
         """初始化 Agent 运行依赖，并固定当前 Agent 使用的模型客户端。"""
         self.event_bus = event_bus
         self.state_machine = state_machine or AgentStateMachine()
-        self.prompt_builder = prompt_builder or AgentPromptBuilder()
+        self.tool_registry = tool_registry or get_tool_registry()
+        self.prompt_builder = prompt_builder or AgentPromptBuilder(tool_registry=self.tool_registry)
         self.recovery_policy = recovery_policy or AgentRecoveryPolicy()
         self.llm_factory = llm_factory
         self.model_name = model_name
@@ -88,7 +94,9 @@ class AgentRuntime:
         while self.run_state.iteration < self.recovery_policy.max_iterations:
             self.run_state.iteration += 1
             try:
-                return await self._run_one_cycle(task)
+                completed = await self._run_one_cycle(task)
+                if completed:
+                    return task
             except Exception as exc:
                 # 单轮失败不立刻让任务失败，先尝试把错误写入上下文并继续下一轮。
                 if not await self._recover(task, exc):
@@ -98,8 +106,8 @@ class AgentRuntime:
         await self._transition(task, AgentState.FAILED, "agent max iterations exhausted")
         raise AgentRuntimeError("Agent max iterations exhausted")
 
-    async def _run_one_cycle(self, task: Task) -> Task:
-        """执行一轮 Observe -> Think -> Act。"""
+    async def _run_one_cycle(self, task: Task) -> bool:
+        """执行一轮 Observe -> Think -> Act，并返回任务是否已经完成。"""
         await self._transition(task, AgentState.OBSERVING, "collect context")
         observation = self._observe(task)
         observation = await self._compact_context_if_needed(task, observation)
@@ -108,10 +116,11 @@ class AgentRuntime:
         thought = await self._think(task, observation)
 
         await self._transition(task, AgentState.ACTING, "apply model decision")
-        await self._act(task, thought)
+        completed = await self._act(task, thought)
 
-        await self._transition(task, AgentState.COMPLETED, "agent completed")
-        return task
+        if completed:
+            await self._transition(task, AgentState.COMPLETED, "agent completed")
+        return completed
 
     def _observe(self, task: Task) -> AgentPrompt:
         """收集本轮 Agent 需要观察的上下文。"""
@@ -124,7 +133,8 @@ class AgentRuntime:
         """调用主模型分析当前观察结果，并返回可供 Act 执行的模型决策。"""
         if task.metadata.pop("inject_agent_error_once", "") == "thinking":
             raise RuntimeError("Injected mock thinking error")
-        return await self.llm_client.complete(observation.to_llm_request())
+        response = await self.llm_client.complete(observation.to_llm_request())
+        return response
 
     async def _compact_context_if_needed(self, task: Task, prompt: AgentPrompt) -> AgentPrompt:
         """在模型调用前按上下文预算压缩 Session，并返回重建后的 Prompt。"""
@@ -167,10 +177,24 @@ class AgentRuntime:
                 break
         return current_prompt
 
-    async def _act(self, task: Task, decision: LLMResponse) -> None:
-        """应用 Think 阶段产生的模型决策，并发布文本结果事件。"""
+    async def _act(self, task: Task, decision: LLMResponse) -> bool:
+        """执行模型的 Tool Calls；没有 Tool Call 时写入最终回答并结束任务。"""
         if task.metadata.pop("inject_agent_error_once", "") == "acting":
             raise RuntimeError("Injected mock acting error")
+
+        if decision.tool_calls:
+            task.session.add_message(
+                "assistant",
+                decision.content,
+                agent_name=f"llm:{self.model_name}",
+                tool_calls=list(decision.tool_calls),
+            )
+            await self._transition(task, AgentState.TOOL_CALLING, "execute model tool calls")
+            for tool_call in decision.tool_calls:
+                await self._execute_tool_call(task, tool_call)
+            current_count = int(task.metadata.get("tool_call_count", "0"))
+            task.metadata["tool_call_count"] = str(current_count + len(decision.tool_calls))
+            return False
 
         content = decision.content
 
@@ -201,6 +225,71 @@ class AgentRuntime:
         task.metadata["llm_model_name"] = self.model_name
         task.metadata["llm_model"] = decision.model
         task.metadata["llm_provider"] = decision.provider
+        return True
+
+    async def _execute_tool_call(self, task: Task, tool_call: LLMToolCall) -> None:
+        """执行一条模型 Tool Call，并把结果或错误写回 Session 与 EventBus。"""
+        await self.event_bus.emit(
+            ToolCallEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                tool_name=tool_call.name,
+                tool_input=tool_call.arguments,
+                tool_call_id=tool_call.id,
+            )
+        )
+
+        tool = self.tool_registry.get(tool_call.name)
+        if tool is None:
+            await self._record_tool_error(task, tool_call, f"Tool is unavailable: {tool_call.name}")
+            return
+
+        try:
+            result = await tool.execute(**tool_call.arguments)
+        except Exception as exc:
+            await self._record_tool_error(task, tool_call, f"Tool execution raised: {exc}")
+            return
+
+        if not result.success:
+            error = result.error or result.content or "Tool execution failed"
+            await self._record_tool_error(task, tool_call, error)
+            return
+
+        task.session.add_message(
+            "tool",
+            result.content,
+            agent_name=tool_call.name,
+            tool_call_id=tool_call.id,
+            tool_name=tool_call.name,
+        )
+        await self.event_bus.emit(
+            ToolResultEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                tool_name=tool_call.name,
+                tool_call_id=tool_call.id,
+                output=result.content,
+            )
+        )
+
+    async def _record_tool_error(self, task: Task, tool_call: LLMToolCall, error: str) -> None:
+        """记录可反馈给模型的工具错误，并发布 ToolErrorEvent。"""
+        task.session.add_message(
+            "tool",
+            f"[tool-error]\n{error}",
+            agent_name=tool_call.name,
+            tool_call_id=tool_call.id,
+            tool_name=tool_call.name,
+        )
+        await self.event_bus.emit(
+            ToolErrorEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                tool_name=tool_call.name,
+                tool_call_id=tool_call.id,
+                error=error,
+            )
+        )
 
     async def _recover(self, task: Task, exc: Exception) -> bool:
         """记录 Agent 可恢复错误，并在策略允许时继续循环。"""

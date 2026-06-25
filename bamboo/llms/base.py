@@ -22,11 +22,23 @@ class LLMResponseError(LLMError):
 
 
 @dataclass(frozen=True, slots=True)
+class LLMToolCall:
+    """表示模型请求执行的一次结构化工具调用。"""
+
+    id: str
+    name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class LLMMessage:
     """表示发送给模型的一条标准化消息。"""
 
     role: LLMRole
-    content: str
+    content: str = ""
+    tool_calls: list[LLMToolCall] = field(default_factory=list)
+    tool_call_id: str = ""
+    tool_name: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +47,7 @@ class LLMRequest:
 
     messages: list[LLMMessage]
     system_prompt: str = ""
+    tools: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +58,7 @@ class LLMResponse:
     model: str
     provider: str
     finish_reason: str = ""
+    tool_calls: list[LLMToolCall] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=dict)
     raw_response: dict[str, Any] = field(default_factory=dict, repr=False)
 
@@ -55,4 +69,3 @@ class LLMClient(ABC):
     @abstractmethod
     async def complete(self, request: LLMRequest) -> LLMResponse:
         """调用模型并返回标准化文本响应。"""
-

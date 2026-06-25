@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
-from bamboo.tools.buildin import get_builtin_registry
+from bamboo.tools import ToolRegistry, get_tool_registry
 
 
 @dataclass(slots=True)
@@ -20,6 +20,7 @@ class AgentPrompt:
     system_prompt: str
     messages: list[LLMMessage]
     tool_catalog: str
+    tools: list[dict]
     error_history: list[str] = field(default_factory=list)
 
     def render(self) -> str:
@@ -46,26 +47,45 @@ class AgentPrompt:
         return LLMRequest(
             system_prompt="\n\n".join(section for section in system_sections if section),
             messages=list(self.messages),
+            tools=list(self.tools),
         )
 
 
 class AgentPromptBuilder:
     """从 Session、工具注册表和错误历史构建 prompt。"""
 
+    def __init__(self, *, tool_registry: ToolRegistry | None = None) -> None:
+        """初始化 Prompt Builder，并固定当前 Agent 可见的工具注册表。"""
+        self.tool_registry = tool_registry or get_tool_registry()
+
     def build(self, session: Session, *, error_history: list[str] | None = None) -> AgentPrompt:
         """构建一轮 Agent 循环的 prompt 快照。"""
-        messages = [LLMMessage(role=message.role, content=message.content) for message in session.active_messages()]
+        messages = [
+            LLMMessage(
+                role=message.role,
+                content=message.content,
+                tool_calls=list(message.tool_calls),
+                tool_call_id=message.tool_call_id,
+                tool_name=message.tool_name,
+            )
+            for message in session.active_messages()
+        ]
+        tools = self._get_tool_schemas()
         return AgentPrompt(
             system_prompt=session.context.system_prompt,
             messages=messages,
             tool_catalog=self._build_tool_catalog(),
+            tools=tools,
             error_history=error_history or [],
         )
 
     def _build_tool_catalog(self) -> str:
         """渲染简洁的内置工具目录。"""
-        registry = get_builtin_registry()
         rows = []
-        for tool in registry.get_tools():
+        for tool in self.tool_registry.get_tools():
             rows.append(f"- `{tool.name}`: {tool.description}")
         return "\n".join(rows)
+
+    def _get_tool_schemas(self) -> list[dict]:
+        """返回当前所有已启用工具的结构化调用 Schema。"""
+        return self.tool_registry.schemas()

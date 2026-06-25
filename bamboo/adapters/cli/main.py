@@ -18,6 +18,9 @@ from bamboo.helpers.constant import (
     TextDeltaEvent,
     TextFinishEvent,
     TextStartEvent,
+    ToolCallEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
 )
 from bamboo.helpers.logging import get_logger
 from bamboo.helpers.requests_params import RunParams
@@ -43,6 +46,9 @@ async def _start_session(run_params: RunParams) -> object:
             "text-start",
             "text-delta",
             "text-finish",
+            "tool-call",
+            "tool-result",
+            "tool-error",
         },
         filter_fn=lambda event: event.session_id == run_params.session_id,
     )
@@ -88,6 +94,18 @@ def _render_cli_event(event: BaseEvent) -> None:
         return
 
     if isinstance(event, TextFinishEvent):
+        return
+
+    if isinstance(event, ToolCallEvent):
+        console.print(f"[dim]tool call[/dim] {event.tool_name} {event.tool_input}")
+        return
+
+    if isinstance(event, ToolResultEvent):
+        console.print(f"[dim]tool result[/dim] {event.tool_name}\n{event.output}")
+        return
+
+    if isinstance(event, ToolErrorEvent):
+        console.print(f"[red]tool error[/red] {event.tool_name}: {event.error}")
         return
 
     if isinstance(event, StepFinishEvent):

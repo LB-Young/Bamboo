@@ -23,7 +23,7 @@ from bamboo.run import main  # noqa: E402
 def run_main_test() -> None:
     """调用 bamboo.run.main，触发当前 mock Agent 主流程。"""
     main(
-        message="请介绍一下自己有什么能力",
+        message="请介绍一下自己有哪些tools",
         project=PROJECT_ROOT,
         model=None,
         provider=None,

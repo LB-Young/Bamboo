@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
 from typing import Protocol
@@ -29,8 +30,19 @@ class HeuristicTokenCounter:
     def count_request(self, request: LLMRequest) -> int:
         """统计 system prompt、消息内容和消息结构开销。"""
         token_count = self.count_text(request.system_prompt)
+        token_count += self.count_text(json.dumps(request.tools, ensure_ascii=False))
         for message in request.messages:
             token_count += 4 + self.count_text(message.role) + self.count_text(message.content)
+            token_count += self.count_text(
+                json.dumps(
+                    [
+                        {"id": call.id, "name": call.name, "arguments": call.arguments}
+                        for call in message.tool_calls
+                    ],
+                    ensure_ascii=False,
+                )
+            )
+            token_count += self.count_text(message.tool_call_id)
         return token_count + 3
 
     def count_text(self, text: str) -> int:
@@ -146,5 +158,22 @@ class ContextCompactor:
 
     @staticmethod
     def _render_messages(messages: list[Message]) -> str:
-        """按原始顺序渲染待压缩消息，并保留角色信息。"""
-        return "\n\n".join(f"[{message.role}]\n{message.content}" for message in messages)
+        """按原始顺序渲染待压缩消息，并保留角色和工具调用信息。"""
+        rendered_messages: list[str] = []
+        for message in messages:
+            sections = [f"[{message.role}]", message.content]
+            if message.tool_calls:
+                sections.append(
+                    "tool_calls="
+                    + json.dumps(
+                        [
+                            {"id": call.id, "name": call.name, "arguments": call.arguments}
+                            for call in message.tool_calls
+                        ],
+                        ensure_ascii=False,
+                    )
+                )
+            if message.tool_call_id:
+                sections.append(f"tool_call_id={message.tool_call_id}")
+            rendered_messages.append("\n".join(section for section in sections if section))
+        return "\n\n".join(rendered_messages)

@@ -6,12 +6,22 @@ from bamboo.tools.buildin.edit import EditTool
 from bamboo.tools.buildin.glob import GlobTool
 from bamboo.tools.buildin.grep import GrepTool
 from bamboo.tools.buildin.read import ReadTool
-from bamboo.tools.buildin.registry import BuiltinToolRegistry, create_builtin_registry, get_builtin_registry
 from bamboo.tools.buildin.write import WriteTool
+
+
+def create_builtin_tools() -> list[Tool]:
+    """创建 Bamboo 随包提供的全部内置工具实例。"""
+    return [
+        BashTool(),
+        EditTool(),
+        GlobTool(),
+        GrepTool(),
+        ReadTool(),
+        WriteTool(),
+    ]
 
 __all__ = [
     "BashTool",
-    "BuiltinToolRegistry",
     "EditTool",
     "GlobTool",
     "GrepTool",
@@ -19,7 +29,5 @@ __all__ = [
     "Tool",
     "ToolResult",
     "WriteTool",
-    "create_builtin_registry",
-    "get_builtin_registry",
+    "create_builtin_tools",
 ]
-
