@@ -10,7 +10,7 @@ from __future__ import annotations
 # Callable 用于描述可注入的 AgentRuntime 工厂函数类型。
 from collections.abc import Callable
 
-# dataclass 用于声明轻量配置对象，field 用于给列表字段创建独立默认值，replace 用于派生新的运行参数。
+# dataclass 用于声明轻量配置对象，field 用于给列表字段创建独立默认值，replace 用于派生新运行参数。
 from dataclasses import dataclass, field, replace
 from uuid import uuid4
 
@@ -75,9 +75,7 @@ class TaskRuntime:
         runtime_context_builder: RuntimeContextBuilder | None = None,
     ) -> None:
         """初始化运行时依赖。"""
-        # task_factory 负责把 RunParams 转成 Task；未注入时使用默认工厂。
         self.task_factory = task_factory or TaskFactory()
-        # event_bus 负责向外发布运行事件；未注入时使用全局默认 EventBus。
         self.event_bus = event_bus or get_event_bus()
         # task_store 负责保存任务状态快照；未注入时使用内存存储。
         self.task_store = task_store or InMemoryTaskStore()
