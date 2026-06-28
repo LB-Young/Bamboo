@@ -2,6 +2,7 @@
 
 from bamboo.runtime.agent_runtime import AgentRecoveryPolicy, AgentRuntime, AgentRuntimeError
 from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, HeuristicTokenCounter
+from bamboo.runtime.runtime_context import RuntimeContext, RuntimeContextBuilder
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
 from bamboo.runtime.task_runtime import TaskRecoveryPolicy, TaskRuntime
 
@@ -12,6 +13,8 @@ __all__ = [
     "ContextBudgetPolicy",
     "ContextCompactor",
     "HeuristicTokenCounter",
+    "RuntimeContext",
+    "RuntimeContextBuilder",
     "AgentState",
     "AgentStateMachine",
     "TaskRecoveryPolicy",

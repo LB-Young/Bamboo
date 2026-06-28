@@ -6,6 +6,9 @@ TaskRuntime，最后把运行时事件渲染到终端。
 
 from __future__ import annotations
 
+import uuid
+
+import anyio
 from rich.console import Console
 
 from bamboo.factory.event_bus import get_event_bus
@@ -64,6 +67,66 @@ async def _start_session(run_params: RunParams) -> object:
         return task
     finally:
         # 会话结束后解除订阅，避免后续任务重复渲染旧 handler。
+        unsubscribe()
+
+
+async def _start_interactive_session(run_params: RunParams) -> object:
+    """启动交互式 CLI 会话，并在多轮输入之间复用同一个 Session。"""
+    log = get_logger("cli")
+    event_bus = get_event_bus()
+    unsubscribe = event_bus.subscribe(
+        _render_cli_event,
+        event_types={
+            "task-create",
+            "task-status-change",
+            "session-status-change",
+            "step-start",
+            "step-finish",
+            "text-start",
+            "text-delta",
+            "text-finish",
+            "tool-call",
+            "tool-result",
+            "tool-error",
+        },
+        filter_fn=lambda event: event.session_id == run_params.session_id,
+    )
+
+    runtime = TaskRuntime(event_bus=event_bus)
+    task = runtime.task_factory.create(run_params)
+    console.print(
+        "[green]Bamboo interactive session started[/green] "
+        f"[dim]session_id={task.session_id} mode={run_params.session_mode_value}[/dim]"
+    )
+    console.print("[dim]输入 /exit 或 /quit 结束会话。[/dim]")
+
+    try:
+        while True:
+            user_input = await anyio.to_thread.run_sync(lambda: console.input("[bold cyan]you> [/bold cyan]"))
+            message = user_input.strip()
+            if not message:
+                continue
+            if message in {"/exit", "/quit", "exit", "quit"}:
+                console.print("[green]bye[/green]")
+                return task
+
+            task.task_id = str(uuid.uuid4())
+            task.user_query = message
+            task.output = ""
+            task.error = ""
+            task.status = "created"
+            task.metadata = {}
+            task.run_params.message = message
+            task.run_params.task_id = task.task_id
+            task.session.add_message("user", message)
+
+            task = await runtime.run_existing_task(task)
+            log.info(
+                "interactive turn completed task_id={task_id} session_id={session_id}",
+                task_id=task.task_id,
+                session_id=task.session_id,
+            )
+    finally:
         unsubscribe()
 
 

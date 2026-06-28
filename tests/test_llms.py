@@ -30,6 +30,7 @@ from bamboo.llms import (
 from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient
 from bamboo.runtime.agent_runtime import AgentRuntime
 from bamboo.runtime.context_compactor import ContextBudgetPolicy
+from bamboo.runtime.runtime_context import RuntimeContextBuilder
 from bamboo.runtime.task_runtime import TaskRuntime
 from bamboo.tools.buildin.base import Tool, ToolResult
 from bamboo.tools.registry import ToolRegistry
@@ -363,7 +364,9 @@ def test_agent_runtime_act_calls_registered_model() -> None:
 
     async def run_test() -> None:
         """执行一轮 Agent OTA 流程并检查最终模型输出。"""
-        runtime = AgentRuntime(event_bus=EventBus(), llm_factory=factory, model_name="agent-model")
+        event_bus = EventBus()
+        runtime_context = RuntimeContextBuilder(event_bus=event_bus, llm_factory=factory).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
         assert runtime.llm_client is stub_client
         assert runtime.compaction_llm_client is stub_client
         assert runtime.model_name == "agent-model"
@@ -440,10 +443,9 @@ def test_agent_runtime_compacts_context_before_model_call() -> None:
 
     async def run_test() -> None:
         """执行一次低阈值 OTA 循环并检查压缩后的 Session。"""
-        runtime = AgentRuntime(
+        runtime_context = RuntimeContextBuilder(
             event_bus=event_bus,
             llm_factory=factory,
-            model_name="compact-model",
             compaction_model_name="summary-model",
             compaction_policy=ContextBudgetPolicy(
                 trigger_ratio=0.1,
@@ -452,7 +454,8 @@ def test_agent_runtime_compacts_context_before_model_call() -> None:
                 max_compaction_passes=1,
             ),
             token_counter=_CharacterTokenCounter(),
-        )
+        ).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
         completed_task = await runtime.run(task)
         assert completed_task.output == "final answer"
         assert runtime.run_state.compaction_count == 1
@@ -495,12 +498,12 @@ def test_agent_runtime_executes_tool_and_continues_ota_loop() -> None:
 
     async def run_test() -> None:
         """执行包含一次工具调用和一次最终回答的两轮 OTA。"""
-        runtime = AgentRuntime(
+        runtime_context = RuntimeContextBuilder(
             event_bus=event_bus,
             llm_factory=factory,
-            model_name="tool-model",
             tool_registry=tool_registry,
-        )
+        ).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
         completed_task = await runtime.run(task)
         assert completed_task.output == "工具返回了 echoed: hello"
         assert runtime.run_state.iteration == 2

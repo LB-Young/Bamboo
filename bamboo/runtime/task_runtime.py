@@ -33,6 +33,7 @@ from bamboo.llms import LLMFactory
 
 # AgentRuntime 执行 Agent 的 OTA 循环，AgentRuntimeError 表示 Agent 层运行失败。
 from bamboo.runtime.agent_runtime import AgentRuntime, AgentRuntimeError
+from bamboo.runtime.runtime_context import RuntimeContextBuilder
 
 # InMemoryTaskStore 保存任务生命周期快照，当前实现是内存级存储。
 from bamboo.runtime.store import InMemoryTaskStore
@@ -70,6 +71,7 @@ class TaskRuntime:
         recovery_policy: TaskRecoveryPolicy | None = None,
         agent_factory: Callable[[EventBus], AgentRuntime] | None = None,
         llm_factory: LLMFactory | None = None,
+        runtime_context_builder: RuntimeContextBuilder | None = None,
     ) -> None:
         """初始化运行时依赖。"""
         # task_factory 负责把 RunParams 转成 Task；未注入时使用默认工厂。
@@ -84,6 +86,11 @@ class TaskRuntime:
         self.agent_factory = agent_factory
         # TaskRuntime 初始化时加载一次模型配置；本次执行创建的所有 Agent 复用该工厂。
         self.llm_factory = llm_factory or LLMFactory.from_bamboo_config(self.task_factory.config)
+        # runtime_context_builder 集中创建 Agent 执行依赖；为空时使用默认构建器。
+        self.runtime_context_builder = runtime_context_builder or RuntimeContextBuilder(
+            event_bus=self.event_bus,
+            llm_factory=self.llm_factory,
+        )
         # _log 是 TaskRuntime 专用日志器，用于记录任务级异常。
         self._log = get_logger("TaskRuntime")
 
@@ -91,6 +98,10 @@ class TaskRuntime:
         """运行一个任务，并在 Agent 整体失败时按策略重试。"""
         # task 是当前要执行的任务对象，内部包含 session、context、用户输入和状态。
         task = self.task_factory.create(run_params)
+        return await self.run_existing_task(task)
+
+    async def run_existing_task(self, task: Task) -> Task:
+        """运行已经创建好的 Task，供交互式会话复用同一个 Session。"""
         # state 保存本次 TaskRuntime 执行期间的尝试次数和可恢复错误。
         state = TaskRunState()
         # 任务创建后先落入 store，再发事件，保证外部订阅者看到的是已存在任务。
@@ -202,39 +213,8 @@ class TaskRuntime:
         # 注入自定义工厂时，由调用方负责构造完整 AgentRuntime。
         if self.agent_factory is not None:
             return self.agent_factory(self.event_bus)
-        # Agent 只选择模型注册名，不读取 Provider、API Key 或 Base URL。
-        model_name = self._resolve_agent_model_name(task, self.llm_factory)
-        # 压缩模型可以单独配置；未配置时复用当前 Agent 的执行模型。
-        compaction_model_name = self._resolve_compaction_model_name(task, model_name)
-        # 默认 Agent 在初始化阶段固定模型客户端，Act 阶段只执行调用。
-        return AgentRuntime(
-            event_bus=self.event_bus,
-            llm_factory=self.llm_factory,
-            model_name=model_name,
-            compaction_model_name=compaction_model_name,
-        )
-
-    @staticmethod
-    def _resolve_agent_model_name(task: Task, llm_factory: LLMFactory) -> str:
-        """根据任务覆盖、主 Agent 配置和默认模型确定 Agent 的模型名。"""
-        if task.session.model:
-            return task.session.model
-        main_agent_config = task.config.get("bamboo_main_agent", {})
-        configured_name = main_agent_config.get("model") if isinstance(main_agent_config, dict) else None
-        if isinstance(configured_name, str) and configured_name:
-            return configured_name
-        return llm_factory.default_model_name
-
-    @staticmethod
-    def _resolve_compaction_model_name(task: Task, agent_model_name: str) -> str:
-        """读取主 Agent 的可选压缩模型名，缺失或为空时复用执行模型。"""
-        main_agent_config = task.config.get("bamboo_main_agent", {})
-        configured_name = (
-            main_agent_config.get("compaction_model") if isinstance(main_agent_config, dict) else None
-        )
-        if isinstance(configured_name, str) and configured_name:
-            return configured_name
-        return agent_model_name
+        # 默认 Agent 接收 RuntimeContextBuilder 已经装配好的完整运行上下文。
+        return AgentRuntime(runtime_context=self.runtime_context_builder.build(task))
 
     async def _transition_task(self, task: Task, from_status: str, to_status: str) -> None:
         """更新任务状态、持久化快照并发布状态事件。"""

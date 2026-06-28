@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
     AuditEvent,
@@ -21,11 +20,10 @@ from bamboo.helpers.constant import (
     ToolErrorEvent,
     ToolResultEvent,
 )
-from bamboo.llms import LLMFactory, LLMResponse, LLMToolCall
-from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
-from bamboo.runtime.prompt import AgentPrompt, AgentPromptBuilder
+from bamboo.llms import LLMResponse, LLMToolCall
+from bamboo.runtime.prompt import AgentPrompt
+from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
-from bamboo.tools import ToolRegistry, get_tool_registry
 
 
 @dataclass(slots=True)
@@ -56,37 +54,24 @@ class AgentRuntime:
     def __init__(
         self,
         *,
-        event_bus: EventBus,
-        llm_factory: LLMFactory,
-        model_name: str,
-        compaction_model_name: str | None = None,
+        runtime_context: RuntimeContext,
         state_machine: AgentStateMachine | None = None,
-        prompt_builder: AgentPromptBuilder | None = None,
         recovery_policy: AgentRecoveryPolicy | None = None,
-        compaction_policy: ContextBudgetPolicy | None = None,
-        token_counter: TokenCounter | None = None,
-        context_compactor: ContextCompactor | None = None,
-        tool_registry: ToolRegistry | None = None,
     ) -> None:
-        """初始化 Agent 运行依赖，并固定当前 Agent 使用的模型客户端。"""
-        self.event_bus = event_bus
+        """初始化 Agent 执行状态，并接收已装配好的运行上下文。"""
+        self.runtime_context = runtime_context
+        self.event_bus = runtime_context.event_bus
         self.state_machine = state_machine or AgentStateMachine()
-        self.tool_registry = tool_registry or get_tool_registry()
-        self.prompt_builder = prompt_builder or AgentPromptBuilder(tool_registry=self.tool_registry)
+        self.tool_registry = runtime_context.tool_registry
+        self.prompt_builder = runtime_context.prompt_builder
         self.recovery_policy = recovery_policy or AgentRecoveryPolicy()
-        self.llm_factory = llm_factory
-        self.model_name = model_name
-        self.compaction_model_name = compaction_model_name or model_name
-        self.model_config = self.llm_factory.get_model_config(self.model_name)
-        self.llm_client = self.llm_factory.get_client(self.model_name)
-        self.compaction_llm_client = self.llm_factory.get_client(self.compaction_model_name)
-        self.context_compactor = context_compactor or ContextCompactor(
-            llm_client=self.compaction_llm_client,
-            # 是否压缩仍按主 Agent 模型的上下文窗口判断。
-            model_config=self.model_config,
-            token_counter=token_counter,
-            policy=compaction_policy,
-        )
+        self.llm_factory = runtime_context.llm_factory
+        self.model_name = runtime_context.model_name
+        self.compaction_model_name = runtime_context.compaction_model_name
+        self.model_config = runtime_context.model_config
+        self.llm_client = runtime_context.llm_client
+        self.compaction_llm_client = runtime_context.compaction_llm_client
+        self.context_compactor = runtime_context.context_compactor
         self.run_state = AgentRunState()
 
     async def run(self, task: Task) -> Task:

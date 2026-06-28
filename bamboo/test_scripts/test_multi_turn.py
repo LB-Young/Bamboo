@@ -26,6 +26,7 @@ from bamboo.helpers.requests_params import RunParams  # noqa: E402
 from bamboo.helpers.utils import BaseEvent  # noqa: E402
 from bamboo.llms import LLMFactory  # noqa: E402
 from bamboo.runtime.agent_runtime import AgentRuntime  # noqa: E402
+from bamboo.runtime.runtime_context import RuntimeContextBuilder  # noqa: E402
 
 
 def resolve_agent_models(config: BambooConfig, llm_factory: LLMFactory) -> tuple[str, str]:
@@ -50,12 +51,15 @@ async def run_agent_turn(
     compaction_model_name: str,
 ) -> str:
     """为当前 Session 创建一轮 AgentRuntime，并返回真实模型输出。"""
-    runtime = AgentRuntime(
+    runtime_context = RuntimeContextBuilder(
         event_bus=event_bus,
         llm_factory=llm_factory,
         model_name=model_name,
         compaction_model_name=compaction_model_name,
-    )
+    ).build(task)
+    if runtime_context.model_name != model_name or runtime_context.compaction_model_name != compaction_model_name:
+        raise AssertionError("RuntimeContextBuilder resolved unexpected agent models")
+    runtime = AgentRuntime(runtime_context=runtime_context)
     completed_task = await runtime.run(task)
     return completed_task.output
 
