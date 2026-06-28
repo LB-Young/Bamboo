@@ -10,8 +10,9 @@ from __future__ import annotations
 # Callable 用于描述可注入的 AgentRuntime 工厂函数类型。
 from collections.abc import Callable
 
-# dataclass 用于声明轻量配置对象，field 用于给列表字段创建独立默认值。
-from dataclasses import dataclass, field
+# dataclass 用于声明轻量配置对象，field 用于给列表字段创建独立默认值，replace 用于派生新的运行参数。
+from dataclasses import dataclass, field, replace
+from uuid import uuid4
 
 # EventBus 是运行时事件总线，get_event_bus 返回进程内默认事件总线实例。
 from bamboo.factory.event_bus import EventBus, get_event_bus
@@ -97,8 +98,38 @@ class TaskRuntime:
     async def run(self, run_params: RunParams) -> Task:
         """运行一个任务，并在 Agent 整体失败时按策略重试。"""
         # task 是当前要执行的任务对象，内部包含 session、context、用户输入和状态。
-        task = self.task_factory.create(run_params)
+        task = self.create_task(run_params)
         return await self.run_existing_task(task)
+
+    def create_task(self, run_params: RunParams) -> Task:
+        """根据入口参数创建一个全新的 Task 和 Session。"""
+        # TaskFactory 负责把标准化输入转换为 Task，并创建本次会话的初始 Session。
+        return self.task_factory.create(run_params)
+
+    def create_followup_task(self, previous_task: Task, message: str) -> Task:
+        """基于已有 Session 创建下一轮用户输入对应的新 Task。"""
+        # task_id 每一轮都独立，便于事件、日志和任务状态按轮次追踪。
+        task_id = str(uuid4())
+        # run_params 保存本轮输入，同时沿用上一轮的 session_id 和其他入口参数。
+        run_params = replace(
+            previous_task.run_params,
+            message=message,
+            task_id=task_id,
+            session_id=previous_task.session_id,
+        )
+        # 同一个交互会话内复用 Session，并把本轮用户消息追加到上下文末尾。
+        previous_task.session.add_message("user", message)
+        # 返回一个新的 Task 对象，避免在 CLI 层手动重置旧 Task 的运行状态字段。
+        return Task(
+            platform=previous_task.platform,
+            session_id=previous_task.session_id,
+            task_id=task_id,
+            user_query=message,
+            session=previous_task.session,
+            config=previous_task.config,
+            run_params=run_params,
+            memory_dir=previous_task.memory_dir,
+        )
 
     async def run_existing_task(self, task: Task) -> Task:
         """运行已经创建好的 Task，供交互式会话复用同一个 Session。"""

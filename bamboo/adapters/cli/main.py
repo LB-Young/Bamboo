@@ -6,8 +6,6 @@ TaskRuntime，最后把运行时事件渲染到终端。
 
 from __future__ import annotations
 
-import uuid
-
 import anyio
 from rich.console import Console
 
@@ -58,7 +56,9 @@ async def _start_session(run_params: RunParams) -> object:
 
     try:
         # CLI 层不直接运行 Agent，只把控制权交给 TaskRuntime。
-        task = await TaskRuntime(event_bus=event_bus).run(run_params)
+        runtime = TaskRuntime(event_bus=event_bus)
+        task = runtime.create_task(run_params)
+        task = await runtime.run_existing_task(task)
         log.info(
             "task completed task_id={task_id} session_id={session_id}",
             task_id=task.task_id,
@@ -93,7 +93,7 @@ async def _start_interactive_session(run_params: RunParams) -> object:
     )
 
     runtime = TaskRuntime(event_bus=event_bus)
-    task = runtime.task_factory.create(run_params)
+    task = runtime.create_task(run_params)
     console.print(
         "[green]Bamboo interactive session started[/green] "
         f"[dim]session_id={task.session_id} mode={run_params.session_mode_value}[/dim]"
@@ -110,16 +110,7 @@ async def _start_interactive_session(run_params: RunParams) -> object:
                 console.print("[green]bye[/green]")
                 return task
 
-            task.task_id = str(uuid.uuid4())
-            task.user_query = message
-            task.output = ""
-            task.error = ""
-            task.status = "created"
-            task.metadata = {}
-            task.run_params.message = message
-            task.run_params.task_id = task.task_id
-            task.session.add_message("user", message)
-
+            task = runtime.create_followup_task(task, message)
             task = await runtime.run_existing_task(task)
             log.info(
                 "interactive turn completed task_id={task_id} session_id={session_id}",
