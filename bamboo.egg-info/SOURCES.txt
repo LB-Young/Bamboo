@@ -60,7 +60,15 @@ bamboo/runtime/state_machine.py
 bamboo/runtime/store.py
 bamboo/runtime/task_runtime.py
 bamboo/skills/__init__.py
+bamboo/skills/creator.py
+bamboo/skills/frontmatter.py
+bamboo/skills/models.py
+bamboo/skills/registry.py
+bamboo/skills/store.py
+bamboo/skills/validator.py
 bamboo/skills/buildin/__init__.py
+bamboo/skills/buildin/skill-creator/SKILL.md
+bamboo/skills/buildin/skill-creator/experiences/README.md
 bamboo/tools/__init__.py
 bamboo/tools/registry.py
 bamboo/tools/buildin/__init__.py
@@ -71,7 +79,9 @@ bamboo/tools/buildin/file_filter.py
 bamboo/tools/buildin/glob.py
 bamboo/tools/buildin/grep.py
 bamboo/tools/buildin/read.py
+bamboo/tools/buildin/skill_load.py
 bamboo/tools/buildin/write.py
 tests/test_llms.py
+tests/test_skills.py
 tests/test_system_prompt.py
 tests/test_tool_registry.py

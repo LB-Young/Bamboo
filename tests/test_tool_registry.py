@@ -6,7 +6,7 @@ from bamboo.tools import create_tool_registry
 def test_tool_registry_loads_builtin_tools() -> None:
     """验证默认注册表从 buildin 目录加载全部内置工具。"""
     registry = create_tool_registry()
-    assert registry.list_names() == ["bash", "edit", "glob", "grep", "read", "write"]
+    assert registry.list_names() == ["bash", "edit", "glob", "grep", "read", "skill_load", "write"]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
 
 

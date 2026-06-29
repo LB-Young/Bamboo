@@ -39,6 +39,8 @@ app = typer.Typer(
     rich_markup_mode="rich",
     no_args_is_help=True
 )
+skill_app = typer.Typer(help="Manage Bamboo skills.", no_args_is_help=True)
+app.add_typer(skill_app, name="skill")
 
 
 @app.command()
@@ -111,6 +113,93 @@ def version() -> None:
     """输出当前 Bamboo 版本。"""
     from bamboo import __version__
     print(f"Bamboo v{__version__}")
+
+
+@skill_app.command("create")
+def skill_create(
+    name: str = typer.Argument(..., help="Skill name"),
+    description: str = typer.Option("", "--description", "-d", help="Skill description"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing skill files"),
+) -> None:
+    """创建 Skill 源目录和状态文件。"""
+    from bamboo.skills import SkillCreator
+
+    result = SkillCreator().create(name, description=description, overwrite=overwrite)
+    console.print(f"[green]skill created[/green] {result.name} status={result.status}")
+    console.print(f"[dim]source[/dim] {result.source_path}")
+    console.print(f"[dim]state[/dim] {result.state_path}")
+
+
+@skill_app.command("list")
+def skill_list(include_inactive: bool = typer.Option(False, "--all", help="Show inactive skills")) -> None:
+    """列出已发现的 Skills。"""
+    from bamboo.skills import create_skill_registry
+
+    registry = create_skill_registry()
+    for definition in registry.list(include_inactive=include_inactive):
+        state = registry.store.load_state(definition.name)
+        status = state.status if state is not None else "unknown"
+        health = state.health if state is not None else "unknown"
+        console.print(f"{definition.name}\t{status}\t{health}\t{definition.description}")
+
+
+@skill_app.command("show")
+def skill_show(name: str = typer.Argument(..., help="Skill name")) -> None:
+    """显示 Skill 定义和状态摘要。"""
+    from bamboo.skills import create_skill_registry
+
+    registry = create_skill_registry()
+    definition = registry.get(name, include_inactive=True)
+    if definition is None:
+        raise typer.BadParameter(f"Skill not found: {name}")
+    state = registry.store.load_state(name)
+    validation = registry.store.load_validation(name)
+    console.print(f"[bold]{definition.name}[/bold] ({definition.source})")
+    console.print(definition.description)
+    console.print(f"[dim]source[/dim] {definition.source_path}")
+    if state is not None:
+        console.print(f"[dim]status[/dim] {state.status} [dim]health[/dim] {state.health}")
+    if validation is not None:
+        console.print(f"[dim]validation[/dim] ok={validation.ok} errors={validation.errors} warnings={validation.warnings}")
+
+
+@skill_app.command("validate")
+def skill_validate(name: str = typer.Argument(..., help="Skill name")) -> None:
+    """重新校验 Skill。"""
+    from bamboo.skills import create_skill_registry
+    from bamboo.skills.models import SkillUsageEvent
+    from bamboo.skills.store import utc_now
+
+    registry = create_skill_registry()
+    definition = registry.get(name, include_inactive=True)
+    if definition is None:
+        raise typer.BadParameter(f"Skill not found: {name}")
+    result = registry.validator.validate(definition)
+    registry.store.save_validation(name, result)
+    registry.store.append_usage(SkillUsageEvent(ts=utc_now(), event="validated", skill_name=name))
+    console.print(f"[green]validation complete[/green] {name} ok={result.ok}")
+    if result.errors:
+        console.print(f"[red]errors[/red] {result.errors}")
+    if result.warnings:
+        console.print(f"[yellow]warnings[/yellow] {result.warnings}")
+
+
+@skill_app.command("disable")
+def skill_disable(name: str = typer.Argument(..., help="Skill name")) -> None:
+    """禁用 Skill。"""
+    from bamboo.skills import SkillStore
+
+    state = SkillStore().disable(name)
+    console.print(f"[yellow]skill disabled[/yellow] {name} status={state.status}")
+
+
+@skill_app.command("enable")
+def skill_enable(name: str = typer.Argument(..., help="Skill name")) -> None:
+    """启用 Skill。"""
+    from bamboo.skills import SkillStore
+
+    state = SkillStore().enable(name)
+    console.print(f"[green]skill enabled[/green] {name} status={state.status}")
 
 
 def debug_main(

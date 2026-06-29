@@ -79,6 +79,8 @@ def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     assert (layout.root / "prompts" / "project" / "00-identity.md").is_file()
     assert (layout.root / "prompts" / "chat" / "00-identity.md").is_file()
     assert (layout.root / "prompts" / "shared" / "00-language.md").is_file()
+    assert (layout.root / "storage" / "skills").is_dir()
+    assert (layout.root / "buildin_skills" / "skill-creator" / "SKILL.md").is_file()
     assert not (layout.root / "prompts" / "__init__.py").exists()
     assert not (layout.root / "prompts" / "system_prompt.py").exists()
 

@@ -30,8 +30,8 @@ from bamboo.runtime.state_machine import AgentState, AgentStateMachine
 class AgentRecoveryPolicy:
     """配置 Agent 单次循环错误后的恢复策略。"""
 
-    max_iterations: int = 3
-    max_recoverable_errors: int = 2
+    max_iterations: int = 50
+    max_recoverable_errors: int = 5
     continue_after_error: bool = True
 
 

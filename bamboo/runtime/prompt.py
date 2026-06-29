@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
+from bamboo.skills import SkillRegistry
 from bamboo.tools import ToolRegistry, get_tool_registry
 
 
@@ -20,6 +21,7 @@ class AgentPrompt:
     system_prompt: str
     messages: list[LLMMessage]
     tool_catalog: str
+    skill_catalog: str
     tools: list[dict]
     error_history: list[str] = field(default_factory=list)
 
@@ -32,6 +34,8 @@ class AgentPrompt:
             "\n".join(f"[{message.role}] {message.content}" for message in self.messages) or "(none)",
             "# Available Tools",
             self.tool_catalog or "(none)",
+            "# Available Skills",
+            self.skill_catalog or "(none)",
         ]
         if self.error_history:
             sections.extend(["# Recoverable Errors", "\n".join(self.error_history)])
@@ -42,6 +46,8 @@ class AgentPrompt:
         system_sections = [self.system_prompt]
         if self.tool_catalog:
             system_sections.extend(["# Available Tools", self.tool_catalog])
+        if self.skill_catalog:
+            system_sections.extend(["# Available Skills", self.skill_catalog])
         if self.error_history:
             system_sections.extend(["# Recoverable Errors", "\n".join(self.error_history)])
         return LLMRequest(
@@ -54,9 +60,15 @@ class AgentPrompt:
 class AgentPromptBuilder:
     """从 Session、工具注册表和错误历史构建 prompt。"""
 
-    def __init__(self, *, tool_registry: ToolRegistry | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        tool_registry: ToolRegistry | None = None,
+        skill_registry: SkillRegistry | None = None,
+    ) -> None:
         """初始化 Prompt Builder，并固定当前 Agent 可见的工具注册表。"""
         self.tool_registry = tool_registry or get_tool_registry()
+        self.skill_registry = skill_registry
 
     def build(self, session: Session, *, error_history: list[str] | None = None) -> AgentPrompt:
         """构建一轮 Agent 循环的 prompt 快照。"""
@@ -75,6 +87,7 @@ class AgentPromptBuilder:
             system_prompt=session.context.system_prompt,
             messages=messages,
             tool_catalog=self._build_tool_catalog(),
+            skill_catalog=self._build_skill_catalog(),
             tools=tools,
             error_history=error_history or [],
         )
@@ -89,3 +102,9 @@ class AgentPromptBuilder:
     def _get_tool_schemas(self) -> list[dict]:
         """返回当前所有已启用工具的结构化调用 Schema。"""
         return self.tool_registry.schemas()
+
+    def _build_skill_catalog(self) -> str:
+        """渲染可用 Skill 摘要。"""
+        if self.skill_registry is None:
+            return ""
+        return self.skill_registry.render_catalog()

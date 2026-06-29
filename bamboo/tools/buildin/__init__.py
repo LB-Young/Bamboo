@@ -6,6 +6,7 @@ from bamboo.tools.buildin.edit import EditTool
 from bamboo.tools.buildin.glob import GlobTool
 from bamboo.tools.buildin.grep import GrepTool
 from bamboo.tools.buildin.read import ReadTool
+from bamboo.tools.buildin.skill_load import SkillLoadTool
 from bamboo.tools.buildin.write import WriteTool
 
 
@@ -17,6 +18,7 @@ def create_builtin_tools() -> list[Tool]:
         GlobTool(),
         GrepTool(),
         ReadTool(),
+        SkillLoadTool(),
         WriteTool(),
     ]
 
@@ -26,6 +28,7 @@ __all__ = [
     "GlobTool",
     "GrepTool",
     "ReadTool",
+    "SkillLoadTool",
     "Tool",
     "ToolResult",
     "WriteTool",

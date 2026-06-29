@@ -35,6 +35,7 @@ packages = [
     "bamboo.prompts",
     "bamboo.llms",
     "bamboo.llms.providers",
+    "bamboo.memory",
     "bamboo.tools",
     "bamboo.tools.buildin",
     "bamboo.skills",
@@ -42,7 +43,12 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-bamboo = ["configs/*.yaml", "prompts/*/*.md"]
+bamboo = [
+    "configs/*.yaml",
+    "prompts/*/*.md",
+    "skills/buildin/*/SKILL.md",
+    "skills/buildin/*/experiences/*.md",
+]
 
 [project.optional-dependencies]
 dev = [

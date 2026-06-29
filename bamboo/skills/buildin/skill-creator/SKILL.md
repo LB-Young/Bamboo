@@ -36,16 +36,23 @@ Do not use this skill when:
 
 ## Skill Anatomy
 
-Every Bamboo skill is a directory:
+Every Bamboo skill has a source directory and a runtime state directory:
 
 ```text
-<skill-name>/
-├── SKILL.md          # Required: YAML frontmatter + Markdown body
-├── scripts/          # Optional: executable helper scripts
+~/.bamboo/skills/<skill-name>/
+├── SKILL.md           # Required: YAML frontmatter + Markdown body
+├── config.yaml        # Required: load policy, requirements, permissions
+├── scripts/           # Optional: executable helper scripts
 ├── references/        # Optional: detailed docs loaded on demand
 ├── assets/            # Optional: templates, examples, images, or generated assets
-└── experiences/       # Optional: lessons learned while using the skill
-    └── README.md      # Experience entries
+└── experiences/
+    └── README.md      # Lessons learned while using the skill
+
+~/.bamboo/storage/skills/<skill-name>/
+├── state.json         # Current lifecycle status and counters
+├── index.json         # Registry cache for summary, hash, resources, triggers
+├── validation.json    # Last validation result
+└── usage.jsonl        # Append-only usage events
 ```
 
 ## SKILL.md Format
@@ -78,6 +85,31 @@ Do not use when...
 4. Complete the task and record useful lessons in experiences when appropriate.
 ```
 
+## config.yaml Format
+
+```yaml
+schema_version: 1
+name: <skill-name>
+enabled: true
+user_invocable: true
+load_experiences: true
+
+load_policy:
+  auto_select: true
+  max_references: 3
+  max_tokens: 6000
+
+requirements:
+  bins: []
+  env: []
+  python_packages: []
+
+permissions:
+  can_run_commands: true
+  can_edit_files: true
+  can_access_network: false
+```
+
 ## Skill Creation Process
 
 1. **Understand the use case**: ask what repeated task or domain the skill should help with.
@@ -85,8 +117,9 @@ Do not use when...
 3. **Choose resources**: decide whether the skill needs scripts, references, assets, or experiences.
 4. **Create the directory**: use lowercase letters, digits, and hyphens for the directory name.
 5. **Write SKILL.md**: keep the body concise and workflow-oriented.
-6. **Add experiences**: create `experiences/README.md` when lessons should be tracked over time.
-7. **Validate manually**: check frontmatter, naming, trigger clarity, and whether the skill avoids loading unnecessary context.
+6. **Create state files**: initialize `state.json`, `index.json`, `validation.json`, and `usage.jsonl` under `~/.bamboo/storage/skills/<skill-name>/`.
+7. **Validate**: check frontmatter, naming, trigger clarity, local requirements, and whether the skill avoids loading unnecessary context.
+8. **Activate or mark error**: set `state.json.status` to `active` only when validation passes; otherwise set it to `error` and record `last_error`.
 
 ## Naming Conventions
 
@@ -103,6 +136,8 @@ Do not use when...
 - **Clear trigger boundaries**: include both "use when" and "do not use when".
 - **Reusable assets**: put templates, scripts, and examples in subdirectories instead of embedding large blobs in the skill body.
 - **Experience tracking**: record lessons that prevent repeated mistakes.
+- **State separation**: keep runtime state in `~/.bamboo/storage/skills/<skill-name>/`, not inside `SKILL.md`.
+- **Lifecycle clarity**: use `draft`, `active`, `disabled`, `error`, and `deprecated` consistently.
 
 ## Audit Checklist
 
@@ -111,6 +146,7 @@ Do not use when...
 - Body explains the workflow clearly.
 - Long references are not pasted directly into `SKILL.md`.
 - Scripts, references, assets, and experiences are only added when they are useful.
+- `config.yaml` exists and names the same skill.
+- Runtime state files exist under `~/.bamboo/storage/skills/<skill-name>/`.
 - The skill name matches the directory name.
 - The skill does not depend on Bamboo internals unless that dependency is documented.
-

@@ -116,6 +116,7 @@ class TaskRuntime:
             session_id=previous_task.session_id,
         )
         # 同一个交互会话内复用 Session，并把本轮用户消息追加到上下文末尾。
+        previous_task.session.current_task_id = task_id
         previous_task.session.add_message("user", message)
         # 返回一个新的 Task 对象，避免在 CLI 层手动重置旧 Task 的运行状态字段。
         return Task(
@@ -133,6 +134,7 @@ class TaskRuntime:
         """运行已经创建好的 Task，供交互式会话复用同一个 Session。"""
         # state 保存本次 TaskRuntime 执行期间的尝试次数和可恢复错误。
         state = TaskRunState()
+        task.session.current_task_id = task.task_id
         # 任务创建后先落入 store，再发事件，保证外部订阅者看到的是已存在任务。
         self.task_store.save_created(task)
         # 通知订阅者任务已经创建，例如 CLI 可以据此打印 task created。

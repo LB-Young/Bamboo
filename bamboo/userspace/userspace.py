@@ -27,6 +27,7 @@ dirs: list[str] = [
     "storage",                  # 结构化存储根
     "storage/projects",         # 项目级存储
     "storage/dates",            # 日期级存储
+    "storage/skills",           # Skill 状态、索引、校验和使用记录
     "memory",                   # 全局记忆
     "tasks",                    # 任务队列
     "logs",                     # 日志
@@ -51,6 +52,26 @@ def get_configs_dir() -> Path:
     return base / ".bamboo"
 
 
+def get_userspace_dir() -> Path:
+    """获取 Bamboo 用户空间根目录。"""
+    return get_configs_dir()
+
+
+def get_user_skills_dir() -> Path:
+    """获取用户安装或 Agent 创建的 Skill 目录。"""
+    return get_userspace_dir() / "skills"
+
+
+def get_builtin_skills_dir() -> Path:
+    """获取用户空间中的内置 Skill 镜像目录。"""
+    return get_userspace_dir() / "buildin_skills"
+
+
+def get_skill_storage_dir() -> Path:
+    """获取 Skill 运行状态存储目录。"""
+    return get_userspace_dir() / "storage" / "skills"
+
+
 def ensure_userspace() -> UserspaceLayout:
     """确保 Bamboo 用户空间目录存在，并复制内置资源。"""
     bamboo_root_dir = get_configs_dir()
@@ -68,7 +89,10 @@ def ensure_userspace() -> UserspaceLayout:
 
 def copy_builtin_info(subdir: str, target_dir: Path) -> None:
     """只复制用户空间中尚不存在的内置文件，避免覆盖用户配置。"""
-    src_dir = Path(__file__).resolve().parent.parent / subdir
+    package_root = Path(__file__).resolve().parent.parent
+    src_dir = package_root / subdir
+    if subdir == "buildin_skills":
+        src_dir = package_root / "skills" / "buildin"
     if src_dir.exists():
         for source_path in src_dir.rglob("*"):
             if subdir == "prompts" and source_path.is_file() and source_path.suffix != ".md":

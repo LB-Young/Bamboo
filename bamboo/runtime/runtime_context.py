@@ -15,6 +15,7 @@ from bamboo.llms import LLMClient, LLMFactory
 from bamboo.llms.config import ModelConfig
 from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
 from bamboo.runtime.prompt import AgentPromptBuilder
+from bamboo.skills import SkillRegistry, create_skill_registry
 from bamboo.tools import ToolRegistry, get_tool_registry
 
 
@@ -35,7 +36,7 @@ class RuntimeContext:
     prompt_builder: AgentPromptBuilder
     context_compactor: ContextCompactor
     memory_manager: object | None = None
-    skill_registry: object | None = None
+    skill_registry: SkillRegistry | None = None
     subagent_registry: object | None = None
     permission_policy: object | None = None
     trace_recorder: object | None = None
@@ -52,6 +53,7 @@ class RuntimeContextBuilder:
         tool_registry: ToolRegistry | None = None,
         prompt_builder: AgentPromptBuilder | None = None,
         context_compactor: ContextCompactor | None = None,
+        skill_registry: SkillRegistry | None = None,
         compaction_policy: ContextBudgetPolicy | None = None,
         token_counter: TokenCounter | None = None,
         model_name: str | None = None,
@@ -61,7 +63,11 @@ class RuntimeContextBuilder:
         self.event_bus = event_bus
         self.llm_factory = llm_factory
         self.tool_registry = tool_registry or get_tool_registry()
-        self.prompt_builder = prompt_builder or AgentPromptBuilder(tool_registry=self.tool_registry)
+        self.skill_registry = skill_registry or create_skill_registry()
+        self.prompt_builder = prompt_builder or AgentPromptBuilder(
+            tool_registry=self.tool_registry,
+            skill_registry=self.skill_registry,
+        )
         self.context_compactor = context_compactor
         self.compaction_policy = compaction_policy
         self.token_counter = token_counter
@@ -95,6 +101,7 @@ class RuntimeContextBuilder:
             tool_registry=self.tool_registry,
             prompt_builder=self.prompt_builder,
             context_compactor=context_compactor,
+            skill_registry=self.skill_registry,
         )
 
     def _resolve_agent_model_name(self, task: Task) -> str:

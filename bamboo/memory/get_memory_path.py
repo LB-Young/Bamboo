@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -18,9 +19,11 @@ def get_memory_dir() -> Path:
 
 
 def get_memory_dir_name(project_path: str | Path) -> str:
-    """根据项目路径生成稳定的 memory 目录名。"""
-    project = Path(project_path).expanduser()
-    return project.name or "default"
+    """根据项目完整路径生成稳定的 memory 目录名。"""
+    project = Path(project_path).expanduser().resolve(strict=False)
+    raw_name = "-".join(part for part in project.parts if part not in {project.anchor, "/", ""})
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "-", raw_name).strip("-")
+    return sanitized or "default"
 
 
 def get_project_memory_path(project_path: str | Path) -> Path:

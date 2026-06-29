@@ -110,8 +110,22 @@ async def _start_interactive_session(run_params: RunParams) -> object:
                 console.print("[green]bye[/green]")
                 return task
 
-            task = runtime.create_followup_task(task, message)
-            task = await runtime.run_existing_task(task)
+            previous_task = task
+            message_checkpoint = len(previous_task.session.messages)
+            task = runtime.create_followup_task(previous_task, message)
+            failed_task_id = task.task_id
+            try:
+                task = await runtime.run_existing_task(task)
+            except Exception as exc:
+                del previous_task.session.messages[message_checkpoint:]
+                task = previous_task
+                log.exception(
+                    "interactive turn failed task_id={task_id} session_id={session_id}",
+                    task_id=failed_task_id,
+                    session_id=previous_task.session_id,
+                )
+                console.print(f"[red]task failed[/red] {exc}")
+                continue
             log.info(
                 "interactive turn completed task_id={task_id} session_id={session_id}",
                 task_id=task.task_id,
