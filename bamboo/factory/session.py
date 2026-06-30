@@ -208,6 +208,4 @@ class SessionFactory:
 
     def _resolve_record_dir(self, *, memory_dir_path: Path, prompt_mode: str) -> Path:
         """根据模式选择完整对话记录目录名。"""
-        if prompt_mode == "project":
-            return memory_dir_path
         return memory_dir_path / current_time_record_name()

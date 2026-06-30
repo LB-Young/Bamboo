@@ -31,6 +31,7 @@ packages = [
     "bamboo.commands",
     "bamboo.adapters",
     "bamboo.adapters.cli",
+    "bamboo.adapters.web",
     "bamboo.runtime",
     "bamboo.prompts",
     "bamboo.llms",
@@ -46,6 +47,9 @@ packages = [
 bamboo = [
     "configs/*.yaml",
     "prompts/*/*.md",
+    "adapters/web/static/*.html",
+    "adapters/web/static/*.js",
+    "adapters/web/static/*.css",
     "skills/buildin/*/SKILL.md",
     "skills/buildin/*/experiences/*.md",
 ]

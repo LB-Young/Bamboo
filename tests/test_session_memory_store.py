@@ -65,7 +65,9 @@ def test_project_session_persists_to_memory_projects(tmp_path: Path) -> None:
 
     SessionFactory().create(memory_dir_path=memory_dir, run_params=run_params)
 
-    session_dir = memory_dir
+    session_dirs = [path for path in memory_dir.iterdir() if path.is_dir()]
+    assert len(session_dirs) == 1
+    session_dir = session_dirs[0]
     session_data = json.loads((session_dir / "session.json").read_text(encoding="utf-8"))
     assert session_data["mode"] == "project"
     assert session_data["project_root"] == str(project_root)

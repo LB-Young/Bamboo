@@ -115,6 +115,19 @@ def version() -> None:
     print(f"Bamboo v{__version__}")
 
 
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="Web server host"),
+    port: int = typer.Option(8899, "--port", "-p", help="Web server port"),
+    reload: bool = typer.Option(False, "--reload", help="Enable uvicorn reload"),
+) -> None:
+    """启动 Bamboo Web 对话入口。"""
+    import uvicorn
+
+    console.print(f"[green]Bamboo Web[/green] http://{host}:{port}")
+    uvicorn.run("bamboo.adapters.web.app:app", host=host, port=port, reload=reload)
+
+
 @skill_app.command("create")
 def skill_create(
     name: str = typer.Argument(..., help="Skill name"),

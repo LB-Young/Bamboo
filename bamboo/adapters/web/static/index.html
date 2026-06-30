@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bamboo Web</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <header class="brand">
+          <div class="mark">B</div>
+          <div>
+            <strong>Bamboo</strong>
+            <span>Agent Console</span>
+          </div>
+        </header>
+
+        <div class="mode-tabs" role="tablist" aria-label="会话模式">
+          <button id="chatMode" class="active" type="button">Chat</button>
+          <button id="projectMode" type="button">Project</button>
+        </div>
+
+        <section id="projectPanel" class="project-panel" hidden>
+          <label for="projectPath">Project path</label>
+          <div class="path-row">
+            <input id="projectPath" type="text" placeholder="/Users/you/project" />
+            <button id="applyProject" type="button">应用</button>
+          </div>
+        </section>
+
+        <div class="session-tools">
+          <div>
+            <span id="sessionScope">Chat history</span>
+            <small id="sessionCount">0 sessions</small>
+          </div>
+          <button id="newSession" type="button">New</button>
+        </div>
+
+        <nav id="sessionList" class="session-list" aria-label="历史会话"></nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h1 id="chatTitle">New chat</h1>
+            <p id="chatMeta">Chat mode</p>
+          </div>
+          <span id="statusPill" class="status idle">Idle</span>
+        </header>
+
+        <section id="chatHistory" class="chat-history" aria-live="polite"></section>
+
+        <form id="composer" class="composer">
+          <textarea id="messageInput" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+          <div class="composer-bar">
+            <span id="composerHint">当前为 Chat 模式</span>
+            <button id="sendButton" type="submit">Send</button>
+          </div>
+        </form>
+      </main>
+    </div>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>
+

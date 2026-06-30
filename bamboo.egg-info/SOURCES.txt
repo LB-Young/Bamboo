@@ -9,6 +9,12 @@ bamboo.egg-info/entry_points.txt
 bamboo.egg-info/requires.txt
 bamboo.egg-info/top_level.txt
 bamboo/adapters/cli/main.py
+bamboo/adapters/web/__init__.py
+bamboo/adapters/web/app.py
+bamboo/adapters/web/session_utils.py
+bamboo/adapters/web/static/app.js
+bamboo/adapters/web/static/index.html
+bamboo/adapters/web/static/styles.css
 bamboo/commands/__init__.py
 bamboo/configs/bamboo_main_agent.yaml
 bamboo/configs/models.yaml
@@ -33,6 +39,8 @@ bamboo/llms/providers/deepseek.py
 bamboo/llms/providers/gpt.py
 bamboo/llms/providers/minimax.py
 bamboo/llms/providers/openai_compatible.py
+bamboo/memory/get_memory_path.py
+bamboo/memory/session_store.py
 bamboo/prompts/__init__.py
 bamboo/prompts/system_prompt.py
 bamboo/prompts/chat/00-identity.md
@@ -82,6 +90,7 @@ bamboo/tools/buildin/read.py
 bamboo/tools/buildin/skill_load.py
 bamboo/tools/buildin/write.py
 tests/test_llms.py
+tests/test_session_memory_store.py
 tests/test_skills.py
 tests/test_system_prompt.py
 tests/test_tool_registry.py

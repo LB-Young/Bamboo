@@ -112,6 +112,39 @@ Provider、实际模型 ID、API Key、Base URL 和生成参数都由 `models.ya
 python -m bamboo.run version
 ```
 
+## 启动 Web 对话入口
+
+先完成初始化和模型配置：
+
+```bash
+python -m bamboo.run init
+```
+
+然后启动 Web 服务：
+
+```bash
+python -m bamboo.run web
+```
+
+默认访问地址：
+
+```text
+http://127.0.0.1:8765
+```
+
+也可以指定端口：
+
+```bash
+python -m bamboo.run web --port 9000
+```
+
+Web 界面包含两种模式：
+
+- `Chat`：普通对话模式，历史记录保存在 `~/.bamboo/memory/dates/`。
+- `Project`：项目模式，左侧填写项目路径后进入项目上下文，历史记录按项目保存在 `~/.bamboo/memory/projects/`。
+
+左侧会显示对应模式下的历史会话，点击任意会话可以加载历史消息并继续对话。
+
 ## 当前执行流程
 
 ```text
