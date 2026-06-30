@@ -248,11 +248,26 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
     if isinstance(event, TextFinishEvent):
         return {"type": "message", "text": event.content}
     if isinstance(event, ToolCallEvent):
-        return {"type": "tool_call", "name": event.tool_name, "input": event.tool_input}
+        return {
+            "type": "tool_call",
+            "id": event.tool_call_id,
+            "name": event.tool_name,
+            "input": event.tool_input,
+        }
     if isinstance(event, ToolResultEvent):
-        return {"type": "tool_result", "name": event.tool_name, "output": event.output}
+        return {
+            "type": "tool_result",
+            "id": event.tool_call_id,
+            "name": event.tool_name,
+            "output": event.output,
+        }
     if isinstance(event, ToolErrorEvent):
-        return {"type": "tool_error", "name": event.tool_name, "error": event.error}
+        return {
+            "type": "tool_error",
+            "id": event.tool_call_id,
+            "name": event.tool_name,
+            "error": event.error,
+        }
     if isinstance(event, SessionStatusChangeEvent):
         return {"type": "status", "status": event.status, "reason": event.reason}
     if isinstance(event, StepStartEvent):
@@ -275,4 +290,3 @@ class _SyntheticError(BaseEvent):
 
 
 app = create_app()
-

@@ -10,6 +10,7 @@ from typing import Any
 from bamboo.factory.context import Context
 from bamboo.factory.message import Message
 from bamboo.factory.session import Session
+from bamboo.llms import LLMToolCall
 from bamboo.memory.get_memory_path import get_memory_dir, get_memory_dir_name
 from bamboo.memory.session_store import SessionMemoryStore
 
@@ -21,7 +22,8 @@ def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 4
     if mode == "project" and project_path is not None:
         bases = [memory_root / "projects" / get_memory_dir_name(project_path)]
     else:
-        bases = sorted((memory_root / "dates").glob("*"), reverse=True) if (memory_root / "dates").exists() else []
+        dates_root = memory_root / "dates"
+        bases = sorted((path for path in dates_root.glob("*") if path.is_dir()), reverse=True) if dates_root.exists() else []
 
     rows: list[dict[str, Any]] = []
     for base in bases:
@@ -85,17 +87,16 @@ def serialize_messages(session: Session) -> list[dict[str, str]]:
     """Return displayable chat messages."""
     rows: list[dict[str, str]] = []
     for message in session.messages:
-        if message.role not in {"user", "assistant", "tool"}:
+        if message.role not in {"user", "assistant"}:
             continue
         if message.compressed or not message.content.strip():
             continue
-        role = message.role if message.role in {"user", "assistant"} else "tool"
-        rows.append({"role": role, "content": message.content, "time": message.created_at})
+        rows.append({"role": message.role, "content": message.content, "time": message.created_at})
     return rows
 
 
 def _list_session_records(base: Path, *, project_path: Path | None) -> list[dict[str, Any]]:
-    if not base.exists():
+    if not base.is_dir():
         return []
 
     candidates = [base] if (base / "session.json").is_file() else []
@@ -156,12 +157,33 @@ def _load_messages(path: Path) -> list[Message]:
                 compressed=bool(payload.get("compressed", False)),
                 origin_message_ids=list(payload.get("origin_message_ids") or []),
                 metadata=dict(payload.get("metadata") or {}),
-                tool_calls=list(payload.get("tool_calls") or []),
+                tool_calls=_restore_tool_calls(payload.get("tool_calls") or []),
                 tool_call_id=str(payload.get("tool_call_id") or ""),
                 tool_name=str(payload.get("tool_name") or ""),
             )
         )
     return messages
+
+
+def _restore_tool_calls(raw_tool_calls: Any) -> list[LLMToolCall]:
+    """Convert persisted JSON tool calls back to LLMToolCall objects."""
+    if not isinstance(raw_tool_calls, list):
+        return []
+    calls: list[LLMToolCall] = []
+    for item in raw_tool_calls:
+        if isinstance(item, LLMToolCall):
+            calls.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        call_id = str(item.get("id") or item.get("tool_call_id") or "")
+        name = str(item.get("name") or item.get("tool_name") or "")
+        arguments = item.get("arguments")
+        if not isinstance(arguments, dict):
+            arguments = {}
+        if call_id and name:
+            calls.append(LLMToolCall(id=call_id, name=name, arguments=arguments))
+    return calls
 
 
 def _is_session_record(path: Path, *, session_id: str) -> bool:
@@ -196,4 +218,3 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except OSError:
         return ""
-

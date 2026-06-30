@@ -28,6 +28,8 @@ const els = {
 };
 
 let pendingAssistant = null;
+const toolRows = new Map();
+let activeToolStack = null;
 
 function applyModeUI() {
   const isProject = state.mode === "project";
@@ -120,6 +122,7 @@ function newSession() {
   state.currentSessionId = null;
   state.currentRecordDir = null;
   pendingAssistant = null;
+  resetToolEvents();
   els.chatHistory.innerHTML = "";
   els.chatTitle.textContent = "New chat";
   els.chatMeta.textContent = state.mode === "project" ? "Project mode" : "Chat mode";
@@ -152,6 +155,7 @@ async function sendMessage(text) {
   state.streaming = true;
   setStatus("running", "Running");
   pendingAssistant = null;
+  resetToolEvents();
   appendMessage("user", text);
 
   const payload = {
@@ -212,15 +216,19 @@ function handleEvent(event) {
     return;
   }
   if (event.type === "tool_call") {
-    showSystem(`[tool] ${event.name} 调用中`);
+    showToolCall(event);
     return;
   }
   if (event.type === "tool_result") {
-    showSystem(`[tool] ${event.name}: ${(event.output || "").slice(0, 120)}`);
+    updateToolResult(event);
     return;
   }
-  if (event.type === "tool_error" || event.type === "error") {
-    showSystem(event.error || event.message || "运行出错");
+  if (event.type === "tool_error") {
+    updateToolError(event);
+    return;
+  }
+  if (event.type === "error") {
+    showSystem(event.message || "运行出错");
     return;
   }
   if (event.type === "status") {
@@ -231,6 +239,118 @@ function handleEvent(event) {
     state.currentRecordDir = event.record_dir || state.currentRecordDir;
     loadSidebar().catch(console.error);
   }
+}
+
+function resetToolEvents() {
+  toolRows.clear();
+  activeToolStack = null;
+}
+
+function ensureToolStack() {
+  if (activeToolStack && document.body.contains(activeToolStack)) return activeToolStack;
+  activeToolStack = document.createElement("section");
+  activeToolStack.className = "tool-stack";
+  activeToolStack.setAttribute("aria-label", "工具调用");
+  els.chatHistory.appendChild(activeToolStack);
+  scrollToBottom();
+  return activeToolStack;
+}
+
+function showToolCall(event) {
+  const id = toolEventId(event);
+  const stack = ensureToolStack();
+  const row = document.createElement("details");
+  row.className = "tool-row running";
+
+  const summary = document.createElement("summary");
+  summary.className = "tool-summary";
+
+  const name = document.createElement("span");
+  name.className = "tool-name";
+  name.textContent = event.name || "tool";
+
+  const status = document.createElement("span");
+  status.className = "tool-status";
+  status.textContent = "运行中";
+
+  const input = document.createElement("code");
+  input.className = "tool-preview";
+  input.textContent = formatToolInput(event.input);
+
+  summary.append(toolIcon(), name, status, input);
+  row.appendChild(summary);
+  stack.appendChild(row);
+  toolRows.set(id, { row, status, input });
+  scrollToBottom();
+}
+
+function updateToolResult(event) {
+  const refs = ensureToolRow(event);
+  refs.row.classList.remove("running", "failed");
+  refs.row.classList.add("done");
+  refs.status.textContent = "完成";
+  refs.input.textContent = summarizeToolOutput(event.output || "");
+  setToolDetails(refs.row, event.output || "");
+}
+
+function updateToolError(event) {
+  const refs = ensureToolRow(event);
+  refs.row.classList.remove("running", "done");
+  refs.row.classList.add("failed");
+  refs.status.textContent = "失败";
+  refs.input.textContent = event.error || "工具执行失败";
+  setToolDetails(refs.row, event.error || "");
+}
+
+function ensureToolRow(event) {
+  const id = toolEventId(event);
+  const existing = toolRows.get(id);
+  if (existing) return existing;
+  showToolCall(event);
+  return toolRows.get(id);
+}
+
+function setToolDetails(row, text) {
+  row.querySelector(".tool-output")?.remove();
+  const content = String(text || "").trim();
+  if (!content) return;
+  const output = document.createElement("pre");
+  output.className = "tool-output";
+  output.textContent = content.length > 2400 ? `${content.slice(0, 2400)}\n...` : content;
+  row.appendChild(output);
+}
+
+function toolIcon() {
+  const icon = document.createElement("span");
+  icon.className = "tool-icon";
+  icon.textContent = ">";
+  return icon;
+}
+
+function toolEventId(event) {
+  return event.id || `${event.name || "tool"}-latest`;
+}
+
+function formatToolInput(input) {
+  if (!input || typeof input !== "object") return "";
+  const entries = Object.entries(input)
+    .filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    .slice(0, 2);
+  if (!entries.length) return "";
+  return entries.map(([key, value]) => `${key}: ${compactValue(value)}`).join(" · ");
+}
+
+function summarizeToolOutput(output) {
+  const text = String(output || "").trim();
+  if (!text) return "无输出";
+  if (text === "(no matches)") return "没有匹配结果";
+  const firstLine = text.split("\n").find(Boolean) || text;
+  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}...` : firstLine;
+}
+
+function compactValue(value) {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > 72 ? `${text.slice(0, 72)}...` : text;
 }
 
 function bindEvents() {
@@ -292,4 +412,3 @@ bootstrap().catch((err) => {
   console.error(err);
   showSystem("初始化失败。");
 });
-

@@ -94,3 +94,4 @@ tests/test_session_memory_store.py
 tests/test_skills.py
 tests/test_system_prompt.py
 tests/test_tool_registry.py
+tests/test_web_session_utils.py
