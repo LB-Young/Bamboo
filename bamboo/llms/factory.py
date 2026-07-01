@@ -8,7 +8,7 @@ from typing import Any
 from bamboo.helpers.config import BambooConfig
 from bamboo.llms.base import LLMClient
 from bamboo.llms.config import ModelCatalog, ModelConfig, ModelConfigError
-from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient
+from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient, OllamaClient, VLLMClient
 
 ProviderBuilder = Callable[[ModelConfig], LLMClient]
 
@@ -17,7 +17,7 @@ class LLMFactory:
     """管理模型名注册、Provider 适配器注册和客户端创建。"""
 
     def __init__(self, catalog: ModelCatalog) -> None:
-        """加载模型目录并注册 Bamboo 当前支持的四个平台。"""
+        """加载模型目录并注册 Bamboo 当前支持的平台。"""
         self._models = dict(catalog.models)
         self._default_model = catalog.default_model
         self._providers: dict[str, ProviderBuilder] = {}
@@ -26,6 +26,8 @@ class LLMFactory:
         self.register_provider("deepseek", DeepSeekClient)
         self.register_provider("minimax", MiniMaxClient)
         self.register_provider("claude", ClaudeClient)
+        self.register_provider("ollama", OllamaClient)
+        self.register_provider("vllm", VLLMClient)
 
     @classmethod
     def from_mapping(cls, document: Mapping[str, Any]) -> LLMFactory:

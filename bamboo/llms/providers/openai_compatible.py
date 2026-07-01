@@ -37,10 +37,11 @@ class OpenAICompatibleClient(LLMClient):
         """发送 Chat Completions 请求并转换为统一响应。"""
         url = f"{self._base_url()}/chat/completions"
         headers = {
-            "Authorization": f"Bearer {self.config.api_key}",
             "Content-Type": "application/json",
             **self.config.extra_headers,
         }
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
         payload = self._build_payload(request)
 
         try:

@@ -8,7 +8,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-SUPPORTED_PROVIDERS = frozenset({"deepseek", "minimax", "gpt", "claude"})
+SUPPORTED_PROVIDERS = frozenset({"deepseek", "minimax", "gpt", "claude", "ollama", "vllm"})
+API_KEY_OPTIONAL_PROVIDERS = frozenset({"ollama", "vllm"})
 _ENV_REFERENCE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 
@@ -34,13 +35,16 @@ class ModelConfig:
 
     def resolve_environment(self) -> ModelConfig:
         """解析当前模型配置中的环境变量引用，不影响其他未使用模型。"""
-        if not self.api_key:
+        if not self.api_key and self.provider not in API_KEY_OPTIONAL_PROVIDERS:
             raise ModelConfigError(
                 f"models.{self.name}.api_key is empty; configure the key before using this model"
             )
+        resolved_api_key = ""
+        if self.api_key:
+            resolved_api_key = _resolve_environment_value(self.api_key, f"models.{self.name}.api_key")
         return replace(
             self,
-            api_key=_resolve_environment_value(self.api_key, f"models.{self.name}.api_key"),
+            api_key=resolved_api_key,
             base_url=_resolve_environment_value(self.base_url, f"models.{self.name}.base_url", allow_empty=True),
             extra_headers={
                 key: _resolve_environment_value(value, f"models.{self.name}.extra_headers.{key}")

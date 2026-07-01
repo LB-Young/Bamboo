@@ -42,3 +42,23 @@ models:
     temperature: 0.2
     context_window: 200000
     max_tokens: 4096
+
+  ollama-local:
+    provider: ollama
+    model: qwen2.5:7b
+    api_key: ""
+    base_url: http://localhost:11434/v1
+    timeout: 120
+    temperature: 0.2
+    context_window: 32768
+    max_tokens: 4096
+
+  vllm-local:
+    provider: vllm
+    model: Qwen/Qwen2.5-7B-Instruct
+    api_key: ""
+    base_url: http://localhost:8000/v1
+    timeout: 120
+    temperature: 0.2
+    context_window: 32768
+    max_tokens: 4096

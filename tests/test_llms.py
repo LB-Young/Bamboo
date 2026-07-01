@@ -27,7 +27,7 @@ from bamboo.llms import (
     ModelCatalog,
     ModelConfigError,
 )
-from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient
+from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient, OllamaClient, VLLMClient
 from bamboo.runtime.agent_runtime import AgentRuntime
 from bamboo.runtime.context_compactor import ContextBudgetPolicy
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
@@ -84,6 +84,39 @@ def test_openai_compatible_client_builds_and_parses_request() -> None:
         assert response.content == "deepseek answer"
         assert response.provider == "deepseek"
         assert response.usage["total_tokens"] == 6
+
+    anyio.run(run_test)
+
+
+def test_local_openai_compatible_client_allows_empty_api_key() -> None:
+    """验证本地 OpenAI-compatible Provider 支持免密调用。"""
+    document = _model_document("ollama")
+    document["models"]["test-model"]["api_key"] = ""
+    document["models"]["test-model"]["base_url"] = ""
+    catalog = ModelCatalog.from_mapping(document)
+    config = catalog.models["test-model"].resolve_environment()
+
+    async def run_test() -> None:
+        """检查本地默认地址和请求头。"""
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url == "http://localhost:11434/v1/chat/completions"
+            assert "authorization" not in request.headers
+            payload = json.loads(request.content)
+            assert payload["model"] == "provider-model-id"
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [{"message": {"content": "local answer"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = OllamaClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(messages=[LLMMessage(role="user", content="hello local")])
+        )
+        assert response.content == "local answer"
+        assert response.provider == "ollama"
 
     anyio.run(run_test)
 
@@ -328,15 +361,20 @@ def test_anthropic_client_serializes_tool_result_history() -> None:
 
 
 def test_factory_uses_a_distinct_client_for_each_provider() -> None:
-    """验证四个平台分别注册独立客户端，而不是直接复用同一 Provider 类。"""
+    """验证各平台分别注册独立客户端，而不是直接复用同一 Provider 类。"""
     expected_clients = {
         "gpt": GPTClient,
         "deepseek": DeepSeekClient,
         "minimax": MiniMaxClient,
         "claude": ClaudeClient,
+        "ollama": OllamaClient,
+        "vllm": VLLMClient,
     }
     for provider, expected_client in expected_clients.items():
-        factory = LLMFactory.from_mapping(_model_document(provider))
+        document = _model_document(provider)
+        if provider in {"ollama", "vllm"}:
+            document["models"]["test-model"]["api_key"] = ""
+        factory = LLMFactory.from_mapping(document)
         assert type(factory.get_client("test-model")) is expected_client
 
 

@@ -38,7 +38,9 @@ bamboo/llms/providers/claude.py
 bamboo/llms/providers/deepseek.py
 bamboo/llms/providers/gpt.py
 bamboo/llms/providers/minimax.py
+bamboo/llms/providers/ollama.py
 bamboo/llms/providers/openai_compatible.py
+bamboo/llms/providers/vllm.py
 bamboo/memory/get_memory_path.py
 bamboo/memory/session_store.py
 bamboo/prompts/__init__.py
