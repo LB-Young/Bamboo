@@ -22,6 +22,9 @@ class Tool(ABC):
 
     name: str
     description: str
+    risk_level: str = "read"
+    tags: tuple[str, ...] = ()
+    is_builtin: bool = True
 
     @abstractmethod
     async def execute(self, **kwargs: Any) -> ToolResult:

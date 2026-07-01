@@ -90,10 +90,14 @@ bamboo/tools/buildin/glob.py
 bamboo/tools/buildin/grep.py
 bamboo/tools/buildin/read.py
 bamboo/tools/buildin/skill_load.py
+bamboo/tools/buildin/task.py
+bamboo/tools/buildin/todo.py
 bamboo/tools/buildin/write.py
 tests/test_llms.py
 tests/test_session_memory_store.py
 tests/test_skills.py
 tests/test_system_prompt.py
+tests/test_task_tools.py
+tests/test_todo_tool.py
 tests/test_tool_registry.py
 tests/test_web_session_utils.py

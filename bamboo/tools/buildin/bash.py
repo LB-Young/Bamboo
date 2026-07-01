@@ -32,6 +32,8 @@ class BashTool(Tool):
 
     name = "bash"
     description = "Execute a shell command with timeout and dangerous-command rejection."
+    risk_level = "execute"
+    tags = ("shell", "execute")
 
     def __init__(self, *, default_timeout: int = 30, max_timeout: int = 120) -> None:
         """初始化命令超时限制。"""

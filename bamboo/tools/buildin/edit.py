@@ -13,6 +13,8 @@ class EditTool(Tool):
 
     name = "edit"
     description = "Replace one exact string in an existing UTF-8 text file."
+    risk_level = "write"
+    tags = ("filesystem", "write")
 
     def input_schema(self) -> dict[str, Any]:
         """返回精确编辑的参数 schema。"""

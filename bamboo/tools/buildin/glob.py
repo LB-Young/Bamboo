@@ -14,6 +14,8 @@ class GlobTool(Tool):
 
     name = "glob"
     description = "List files and directories matching a glob pattern."
+    risk_level = "read"
+    tags = ("filesystem", "search")
 
     def input_schema(self) -> dict[str, Any]:
         """返回 glob 搜索的参数 schema。"""

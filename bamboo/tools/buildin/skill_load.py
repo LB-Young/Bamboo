@@ -13,6 +13,8 @@ class SkillLoadTool(Tool):
 
     name = "skill_load"
     description = "Load a Bamboo skill's full instructions before following its workflow."
+    risk_level = "read"
+    tags = ("skill", "read")
 
     def __init__(self, *, skill_registry: SkillRegistry | None = None) -> None:
         """初始化 Skill 加载工具。"""

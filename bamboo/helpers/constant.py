@@ -126,6 +126,41 @@ class ToolErrorEvent(BaseEvent):
         }
 
 
+@dataclass(kw_only=True)
+class TodoUpdateEvent(BaseEvent):
+    """Todo 列表更新事件。"""
+
+    type: str = "todo-update"
+    todos: list[dict[str, Any]] = field(default_factory=list)
+    counts: dict[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "todos": self.todos, "counts": self.counts}
+
+
+@dataclass(kw_only=True)
+class TaskSnapshotEvent(BaseEvent):
+    """任务快照事件。"""
+
+    type: str = "task-snapshot"
+    snapshot: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "snapshot": self.snapshot}
+
+
+@dataclass(kw_only=True)
+class TaskStopEvent(BaseEvent):
+    """任务停止事件。"""
+
+    type: str = "task-stop"
+    stopped_task_id: str = ""
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "stopped_task_id": self.stopped_task_id, "reason": self.reason}
+
+
 # ─── Step 事件 ───────────────────────────────────────────────────────────────
 
 @dataclass(kw_only=True)

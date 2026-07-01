@@ -15,6 +15,8 @@ class GrepTool(Tool):
 
     name = "grep"
     description = "Search for a regex pattern in text files."
+    risk_level = "read"
+    tags = ("filesystem", "search")
 
     def input_schema(self) -> dict[str, Any]:
         """返回内容搜索的参数 schema。"""

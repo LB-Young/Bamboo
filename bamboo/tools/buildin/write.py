@@ -13,6 +13,8 @@ class WriteTool(Tool):
 
     name = "write"
     description = "Write UTF-8 text content to a file, creating parent directories if needed."
+    risk_level = "write"
+    tags = ("filesystem", "write")
 
     def input_schema(self) -> dict[str, Any]:
         """返回写入文件的参数 schema。"""

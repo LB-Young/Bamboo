@@ -37,7 +37,7 @@ from bamboo.runtime.agent_runtime import AgentRuntime, AgentRuntimeError
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
 
 # InMemoryTaskStore 保存任务生命周期快照，当前实现是内存级存储。
-from bamboo.runtime.store import InMemoryTaskStore
+from bamboo.runtime.store import InMemoryTaskStore, get_task_store
 
 
 @dataclass(slots=True)
@@ -78,7 +78,7 @@ class TaskRuntime:
         self.task_factory = task_factory or TaskFactory()
         self.event_bus = event_bus or get_event_bus()
         # task_store 负责保存任务状态快照；未注入时使用内存存储。
-        self.task_store = task_store or InMemoryTaskStore()
+        self.task_store = task_store or get_task_store()
         # recovery_policy 控制 Agent 整体失败后的重试次数和是否继续执行。
         self.recovery_policy = recovery_policy or TaskRecoveryPolicy()
         # agent_factory 允许测试或未来真实 Agent 注入替代实现；为空时由运行时创建标准 Agent。

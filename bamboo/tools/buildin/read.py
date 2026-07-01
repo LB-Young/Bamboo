@@ -14,6 +14,8 @@ class ReadTool(Tool):
 
     name = "read"
     description = "Read the content of a text file with optional line offset and limit."
+    risk_level = "read"
+    tags = ("filesystem", "read")
 
     def input_schema(self) -> dict[str, Any]:
         """返回读取文件的参数 schema。"""
