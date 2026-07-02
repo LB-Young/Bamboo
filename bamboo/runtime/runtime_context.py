@@ -15,8 +15,10 @@ from bamboo.llms import LLMClient, LLMFactory
 from bamboo.llms.config import ModelConfig
 from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
 from bamboo.runtime.prompt import AgentPromptBuilder
+from bamboo.security import PermissionPolicy, PermissionResolver, ToolAuditLogger, create_permission_resolver
 from bamboo.skills import SkillRegistry, create_skill_registry
 from bamboo.tools import ToolRegistry, get_tool_registry
+from bamboo.tools.mcp import MCPManager
 
 
 @dataclass(slots=True)
@@ -38,7 +40,10 @@ class RuntimeContext:
     memory_manager: object | None = None
     skill_registry: SkillRegistry | None = None
     subagent_registry: object | None = None
-    permission_policy: object | None = None
+    mcp_manager: MCPManager | None = None
+    permission_policy: PermissionPolicy | None = None
+    permission_resolver: PermissionResolver | None = None
+    audit_logger: ToolAuditLogger | None = None
     trace_recorder: object | None = None
 
 
@@ -58,6 +63,9 @@ class RuntimeContextBuilder:
         token_counter: TokenCounter | None = None,
         model_name: str | None = None,
         compaction_model_name: str | None = None,
+        permission_policy: PermissionPolicy | None = None,
+        permission_resolver: PermissionResolver | None = None,
+        audit_logger: ToolAuditLogger | None = None,
     ) -> None:
         """初始化运行上下文构建所需的共享依赖。"""
         self.event_bus = event_bus
@@ -73,9 +81,15 @@ class RuntimeContextBuilder:
         self.token_counter = token_counter
         self.model_name = model_name
         self.compaction_model_name = compaction_model_name
+        self.permission_policy = permission_policy or PermissionPolicy()
+        self.permission_resolver = permission_resolver
+        self.audit_logger = audit_logger or ToolAuditLogger()
+        self.mcp_manager: MCPManager | None = None
+        self._mcp_loaded = False
 
     def build(self, task: Task) -> RuntimeContext:
         """根据 Task 配置创建 AgentRuntime 可直接使用的上下文。"""
+        self._ensure_mcp_tools(task)
         model_name = self.model_name or self._resolve_agent_model_name(task)
         compaction_model_name = self.compaction_model_name or self._resolve_compaction_model_name(task, model_name)
         model_config = self.llm_factory.get_model_config(model_name)
@@ -102,7 +116,26 @@ class RuntimeContextBuilder:
             prompt_builder=self.prompt_builder,
             context_compactor=context_compactor,
             skill_registry=self.skill_registry,
+            mcp_manager=self.mcp_manager,
+            permission_policy=self.permission_policy,
+            permission_resolver=self.permission_resolver or create_permission_resolver(task.run_params),
+            audit_logger=self.audit_logger,
         )
+
+    def _ensure_mcp_tools(self, task: Task) -> None:
+        """按配置启动 MCP servers，并把工具注册进 ToolRegistry。"""
+        if self._mcp_loaded:
+            return
+        mcp_document = task.config.get("mcp", {})
+        manager = MCPManager.from_config(mcp_document if isinstance(mcp_document, dict) else {})
+        if not manager.configs:
+            self._mcp_loaded = True
+            self.mcp_manager = manager
+            return
+        manager.start_all()
+        manager.register_tools(self.tool_registry)
+        self.mcp_manager = manager
+        self._mcp_loaded = True
 
     def _resolve_agent_model_name(self, task: Task) -> str:
         """根据任务覆盖、主 Agent 配置和默认模型确定执行模型名。"""

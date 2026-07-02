@@ -127,6 +127,82 @@ class ToolErrorEvent(BaseEvent):
 
 
 @dataclass(kw_only=True)
+class PermissionRequestEvent(BaseEvent):
+    """工具权限请求事件。"""
+
+    type: str = "permission-request"
+    tool_name: str = ""
+    tool_call_id: str = ""
+    risk_level: str = "read"
+    reason: str = ""
+    requires_confirmation: bool = False
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "tool_name": self.tool_name,
+            "tool_call_id": self.tool_call_id,
+            "risk_level": self.risk_level,
+            "reason": self.reason,
+            "requires_confirmation": self.requires_confirmation,
+        }
+
+
+@dataclass(kw_only=True)
+class PermissionResultEvent(BaseEvent):
+    """工具权限决策事件。"""
+
+    type: str = "permission-result"
+    tool_name: str = ""
+    tool_call_id: str = ""
+    decision: str = ""
+    approved: bool = False
+    risk_level: str = "read"
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "tool_name": self.tool_name,
+            "tool_call_id": self.tool_call_id,
+            "decision": self.decision,
+            "approved": self.approved,
+            "risk_level": self.risk_level,
+            "reason": self.reason,
+        }
+
+
+@dataclass(kw_only=True)
+class ToolAuditEvent(BaseEvent):
+    """工具审计事件。"""
+
+    type: str = "tool-audit"
+    tool_name: str = ""
+    tool_call_id: str = ""
+    risk_level: str = "read"
+    decision: str = ""
+    approved: bool = False
+    success: bool | None = None
+    reason: str = ""
+    error: str = ""
+    duration_ms: int | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "tool_name": self.tool_name,
+            "tool_call_id": self.tool_call_id,
+            "risk_level": self.risk_level,
+            "decision": self.decision,
+            "approved": self.approved,
+            "success": self.success,
+            "reason": self.reason,
+            "error": self.error,
+            "duration_ms": self.duration_ms,
+        }
+
+
+@dataclass(kw_only=True)
 class TodoUpdateEvent(BaseEvent):
     """Todo 列表更新事件。"""
 
@@ -395,6 +471,7 @@ BambooEvent = (
     TextStartEvent | TextDeltaEvent | TextFinishEvent
     | ReasoningStartEvent | ReasoningDeltaEvent | ReasoningFinishEvent
     | ToolCallEvent | ToolResultEvent | ToolErrorEvent
+    | PermissionRequestEvent | PermissionResultEvent | ToolAuditEvent
     | StepStartEvent | StepFinishEvent
     | SessionCompactEvent | SessionStatusChangeEvent | AuditEvent
     | PlanStartEvent | PlanConfirmEvent | PlanStepExecuteEvent | PlanCancelEvent

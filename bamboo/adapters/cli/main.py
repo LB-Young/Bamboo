@@ -11,6 +11,8 @@ from rich.console import Console
 
 from bamboo.factory.event_bus import get_event_bus
 from bamboo.helpers.constant import (
+    PermissionRequestEvent,
+    PermissionResultEvent,
     SessionStatusChangeEvent,
     StepFinishEvent,
     StepStartEvent,
@@ -47,6 +49,8 @@ async def _start_session(run_params: RunParams) -> object:
             "text-start",
             "text-delta",
             "text-finish",
+            "permission-request",
+            "permission-result",
             "tool-call",
             "tool-result",
             "tool-error",
@@ -85,6 +89,8 @@ async def _start_interactive_session(run_params: RunParams) -> object:
             "text-start",
             "text-delta",
             "text-finish",
+            "permission-request",
+            "permission-result",
             "tool-call",
             "tool-result",
             "tool-error",
@@ -166,6 +172,18 @@ def _render_cli_event(event: BaseEvent) -> None:
 
     if isinstance(event, ToolCallEvent):
         console.print(f"[dim]tool call[/dim] {event.tool_name} {event.tool_input}")
+        return
+
+    if isinstance(event, PermissionRequestEvent):
+        console.print(
+            f"[yellow]permission required[/yellow] {event.tool_name} "
+            f"[dim]risk={event.risk_level} reason={event.reason}[/dim]"
+        )
+        return
+
+    if isinstance(event, PermissionResultEvent):
+        status = "approved" if event.approved else "denied"
+        console.print(f"[dim]permission {status}[/dim] {event.tool_name} {event.reason}")
         return
 
     if isinstance(event, ToolResultEvent):

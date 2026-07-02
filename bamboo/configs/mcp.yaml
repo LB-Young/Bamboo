@@ -1,0 +1,3 @@
+mcp:
+  auto_start: false
+  servers: {}

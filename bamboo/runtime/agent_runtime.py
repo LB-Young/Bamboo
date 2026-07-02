@@ -6,16 +6,20 @@ LLMFactory 调用 models.yaml 中注册的模型。
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
     AuditEvent,
+    PermissionRequestEvent,
+    PermissionResultEvent,
     SessionCompactEvent,
     SessionStatusChangeEvent,
     TextDeltaEvent,
     TextFinishEvent,
     TextStartEvent,
+    ToolAuditEvent,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -24,6 +28,7 @@ from bamboo.llms import LLMResponse, LLMToolCall
 from bamboo.runtime.prompt import AgentPrompt
 from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
+from bamboo.security import PermissionDecision, PermissionRequest, PermissionResult, ToolAuditRecord
 
 
 @dataclass(slots=True)
@@ -72,6 +77,9 @@ class AgentRuntime:
         self.llm_client = runtime_context.llm_client
         self.compaction_llm_client = runtime_context.compaction_llm_client
         self.context_compactor = runtime_context.context_compactor
+        self.permission_policy = runtime_context.permission_policy
+        self.permission_resolver = runtime_context.permission_resolver
+        self.audit_logger = runtime_context.audit_logger
         self.run_state = AgentRunState()
 
     async def run(self, task: Task) -> Task:
@@ -229,17 +237,57 @@ class AgentRuntime:
             await self._record_tool_error(task, tool_call, f"Tool is unavailable: {tool_call.name}")
             return
 
+        permission = await self._authorize_tool_call(task, tool_call)
+        if not permission.allowed:
+            await self._audit_tool_call(
+                task,
+                tool_call,
+                permission,
+                success=False,
+                error=permission.reason,
+            )
+            await self._record_tool_error(task, tool_call, f"Tool call denied: {permission.reason}")
+            return
+
+        started_at = time.perf_counter()
         try:
             result = await tool.execute(**tool_call.arguments)
         except Exception as exc:
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            await self._audit_tool_call(
+                task,
+                tool_call,
+                permission,
+                success=False,
+                error=str(exc),
+                duration_ms=duration_ms,
+            )
             await self._record_tool_error(task, tool_call, f"Tool execution raised: {exc}")
             return
 
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
         if not result.success:
             error = result.error or result.content or "Tool execution failed"
+            await self._audit_tool_call(
+                task,
+                tool_call,
+                permission,
+                success=False,
+                error=error,
+                duration_ms=duration_ms,
+                output_preview=result.content,
+            )
             await self._record_tool_error(task, tool_call, error)
             return
 
+        await self._audit_tool_call(
+            task,
+            tool_call,
+            permission,
+            success=True,
+            duration_ms=duration_ms,
+            output_preview=result.content,
+        )
         task.session.add_message(
             "tool",
             result.content,
@@ -254,6 +302,98 @@ class AgentRuntime:
                 tool_name=tool_call.name,
                 tool_call_id=tool_call.id,
                 output=result.content,
+            )
+        )
+
+    async def _authorize_tool_call(self, task: Task, tool_call: LLMToolCall) -> PermissionResult:
+        """Run permission policy and emit permission lifecycle events."""
+        metadata = self.tool_registry.get_metadata(tool_call.name)
+        request = PermissionRequest(
+            session_id=task.session_id,
+            task_id=task.task_id,
+            tool_call_id=tool_call.id,
+            tool_name=tool_call.name,
+            arguments=dict(tool_call.arguments),
+            risk_level=metadata.risk_level if metadata is not None else "read",
+            source=metadata.source if metadata is not None else "unknown",
+        )
+        policy_result = (
+            self.permission_policy.evaluate(request, task.run_params)
+            if self.permission_policy is not None
+            else PermissionResult(PermissionDecision.ALLOW, request.risk_level, "permission policy disabled")
+        )
+        await self.event_bus.emit(
+            PermissionRequestEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                tool_name=tool_call.name,
+                tool_call_id=tool_call.id,
+                risk_level=policy_result.risk_level,
+                reason=policy_result.reason,
+                requires_confirmation=policy_result.requires_confirmation,
+            )
+        )
+        permission = (
+            await self.permission_resolver.resolve(request, policy_result, task.run_params)
+            if self.permission_resolver is not None
+            else policy_result
+        )
+        await self.event_bus.emit(
+            PermissionResultEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                tool_name=tool_call.name,
+                tool_call_id=tool_call.id,
+                decision=permission.decision.value,
+                approved=permission.allowed,
+                risk_level=permission.risk_level,
+                reason=permission.reason,
+            )
+        )
+        return permission
+
+    async def _audit_tool_call(
+        self,
+        task: Task,
+        tool_call: LLMToolCall,
+        permission: PermissionResult,
+        *,
+        success: bool,
+        error: str = "",
+        duration_ms: int | None = None,
+        output_preview: str = "",
+    ) -> None:
+        """Persist and emit a tool audit record."""
+        record = ToolAuditRecord(
+            session_id=task.session_id,
+            task_id=task.task_id,
+            tool_call_id=tool_call.id,
+            tool_name=tool_call.name,
+            risk_level=permission.risk_level,
+            decision=permission.decision.value,
+            approved=permission.allowed,
+            reason=permission.reason,
+            arguments=dict(tool_call.arguments),
+            success=success,
+            error=error,
+            duration_ms=duration_ms,
+            output_preview=output_preview,
+        )
+        if self.audit_logger is not None:
+            self.audit_logger.append(record)
+        await self.event_bus.emit(
+            ToolAuditEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                tool_name=tool_call.name,
+                tool_call_id=tool_call.id,
+                risk_level=permission.risk_level,
+                decision=permission.decision.value,
+                approved=permission.allowed,
+                success=success,
+                reason=permission.reason,
+                error=error,
+                duration_ms=duration_ms,
             )
         )
 

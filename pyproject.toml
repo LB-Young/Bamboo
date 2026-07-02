@@ -37,8 +37,10 @@ packages = [
     "bamboo.llms",
     "bamboo.llms.providers",
     "bamboo.memory",
+    "bamboo.security",
     "bamboo.tools",
     "bamboo.tools.buildin",
+    "bamboo.tools.mcp",
     "bamboo.skills",
     "bamboo.skills.buildin",
 ]

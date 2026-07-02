@@ -17,6 +17,8 @@ from pydantic import BaseModel
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
+    PermissionRequestEvent,
+    PermissionResultEvent,
     SessionMode,
     SessionStatusChangeEvent,
     StepFinishEvent,
@@ -140,6 +142,8 @@ def create_app() -> FastAPI:
                 "step-finish",
                 "text-delta",
                 "text-finish",
+                "permission-request",
+                "permission-result",
                 "tool-call",
                 "tool-result",
                 "tool-error",
@@ -253,6 +257,25 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
             "id": event.tool_call_id,
             "name": event.tool_name,
             "input": event.tool_input,
+        }
+    if isinstance(event, PermissionRequestEvent):
+        return {
+            "type": "permission_request",
+            "id": event.tool_call_id,
+            "name": event.tool_name,
+            "risk": event.risk_level,
+            "reason": event.reason,
+            "requires_confirmation": event.requires_confirmation,
+        }
+    if isinstance(event, PermissionResultEvent):
+        return {
+            "type": "permission_result",
+            "id": event.tool_call_id,
+            "name": event.tool_name,
+            "decision": event.decision,
+            "approved": event.approved,
+            "risk": event.risk_level,
+            "reason": event.reason,
         }
     if isinstance(event, ToolResultEvent):
         return {

@@ -7,24 +7,14 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from pathlib import Path
 from typing import Any
 
+from bamboo.security import inspect_command
 from bamboo.tools.buildin.base import Tool, ToolResult
 
 
 MAX_OUTPUT_BYTES = 512 * 1024
-
-DANGEROUS_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"(^|\s)rm\s+-[^\n]*r[^\n]*f\b"),
-    re.compile(r"(^|\s)sudo\b"),
-    re.compile(r"(^|\s)mkfs\b"),
-    re.compile(r"(^|\s)dd\s+"),
-    re.compile(r"(^|\s):\(\)\s*\{"),
-    re.compile(r"curl\b[^\n|;]*\|\s*(sh|bash)\b"),
-    re.compile(r"wget\b[^\n|;]*\|\s*(sh|bash)\b"),
-)
 
 
 class BashTool(Tool):
@@ -54,9 +44,14 @@ class BashTool(Tool):
 
     async def execute(self, command: str, cwd: str = ".", timeout: int | None = None) -> ToolResult:
         """运行 shell 命令，并返回 stdout、stderr 和退出码。"""
-        blocked_reason = self._blocked_reason(command)
-        if blocked_reason:
-            return ToolResult(content=f"Command blocked: {blocked_reason}", success=False, error="command_blocked")
+        security = inspect_command(command)
+        if not security.allowed:
+            return ToolResult(
+                content=f"Command blocked: {security.reason}",
+                success=False,
+                error="command_blocked",
+                metadata={"risk": security.risk.value, "requires_confirmation": security.requires_confirmation},
+            )
 
         workdir = Path(cwd).expanduser()
         if not workdir.exists() or not workdir.is_dir():
@@ -88,17 +83,12 @@ class BashTool(Tool):
             ]
             if part
         )
-        return ToolResult(content=content, success=process.returncode == 0, error=error_output)
-
-    def _blocked_reason(self, command: str) -> str:
-        """返回命令被拒绝的原因；空字符串表示允许执行。"""
-        normalized = command.strip()
-        if not normalized:
-            return "empty command"
-        for pattern in DANGEROUS_PATTERNS:
-            if pattern.search(normalized):
-                return f"matches dangerous pattern: {pattern.pattern}"
-        return ""
+        return ToolResult(
+            content=content,
+            success=process.returncode == 0,
+            error=error_output,
+            metadata={"risk": security.risk.value, "requires_confirmation": security.requires_confirmation},
+        )
 
     def _truncate(self, content: str) -> str:
         """把命令输出截断到固定字节上限。"""

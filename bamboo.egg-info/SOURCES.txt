@@ -17,6 +17,7 @@ bamboo/adapters/web/static/index.html
 bamboo/adapters/web/static/styles.css
 bamboo/commands/__init__.py
 bamboo/configs/bamboo_main_agent.yaml
+bamboo/configs/mcp.yaml
 bamboo/configs/models.yaml
 bamboo/configs/skills.yaml
 bamboo/configs/skills_buildin.yaml
@@ -69,6 +70,12 @@ bamboo/runtime/runtime_context.py
 bamboo/runtime/state_machine.py
 bamboo/runtime/store.py
 bamboo/runtime/task_runtime.py
+bamboo/security/__init__.py
+bamboo/security/audit_log.py
+bamboo/security/command_security.py
+bamboo/security/permission_policy.py
+bamboo/security/permission_resolver.py
+bamboo/security/sandbox.py
 bamboo/skills/__init__.py
 bamboo/skills/creator.py
 bamboo/skills/frontmatter.py
@@ -93,7 +100,14 @@ bamboo/tools/buildin/skill_load.py
 bamboo/tools/buildin/task.py
 bamboo/tools/buildin/todo.py
 bamboo/tools/buildin/write.py
+bamboo/tools/mcp/__init__.py
+bamboo/tools/mcp/client.py
+bamboo/tools/mcp/manager.py
+bamboo/tools/mcp/models.py
+bamboo/tools/mcp/tool.py
 tests/test_llms.py
+tests/test_mcp_tools.py
+tests/test_security_phase3.py
 tests/test_session_memory_store.py
 tests/test_skills.py
 tests/test_system_prompt.py
