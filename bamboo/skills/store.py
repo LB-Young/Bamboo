@@ -9,7 +9,7 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
-from bamboo.skills.models import SkillIndex, SkillState, SkillUsageEvent, SkillValidationResult
+from bamboo.skills.models import SkillHubLockEntry, SkillIndex, SkillState, SkillUsageEvent, SkillValidationResult
 from bamboo.userspace.userspace import get_skill_storage_dir
 
 
@@ -34,6 +34,51 @@ class SkillStore:
         path = self.skill_dir(name)
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    def hub_dir(self) -> Path:
+        """返回 SkillHub 存储目录。"""
+        return self.root / ".hub"
+
+    def quarantine_dir(self) -> Path:
+        """返回外部 Skill 安装隔离区目录。"""
+        return self.hub_dir() / "quarantine"
+
+    def lock_path(self) -> Path:
+        """返回 SkillHub lockfile 路径。"""
+        return self.hub_dir() / "lock.json"
+
+    def audit_path(self) -> Path:
+        """返回 SkillHub audit JSONL 路径。"""
+        return self.hub_dir() / "audit.jsonl"
+
+    def load_hub_lock(self) -> dict[str, SkillHubLockEntry]:
+        """读取 SkillHub lockfile。"""
+        data = self._read_json(self.lock_path()) or {}
+        entries = data.get("skills", data)
+        if not isinstance(entries, dict):
+            return {}
+        lock: dict[str, SkillHubLockEntry] = {}
+        for name, raw_entry in entries.items():
+            if not isinstance(raw_entry, dict):
+                continue
+            try:
+                lock[str(name)] = SkillHubLockEntry(**raw_entry)
+            except TypeError:
+                continue
+        return lock
+
+    def save_hub_lock(self, entries: dict[str, SkillHubLockEntry]) -> None:
+        """保存 SkillHub lockfile。"""
+        payload = {"schema_version": 1, "skills": {name: asdict(entry) for name, entry in sorted(entries.items())}}
+        self._write_json(self.lock_path(), payload)
+
+    def append_hub_audit(self, event: dict[str, Any]) -> None:
+        """追加一条 SkillHub 审计事件。"""
+        payload = {"ts": utc_now(), **event}
+        path = self.audit_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
     def load_state(self, name: str) -> SkillState | None:
         """读取 Skill 当前状态。"""

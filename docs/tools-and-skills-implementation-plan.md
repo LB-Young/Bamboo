@@ -13,7 +13,7 @@ TaskFactory -> TaskRuntime -> AgentRuntime -> RuntimeContextBuilder
 
 工具层已有 `read/write/edit/glob/grep/bash/skill_load`，SkillRegistry 也已有扫描、索引、校验、状态、usage 记录。但相比其他项目，Bamboo 缺少：
 
-- 工具能力：MCP、web、task、todo、git、LSP、batch、apply_patch/multiedit。
+- 工具能力：MCP、web_fetch、task snapshot、todo、LSP；Git/patch/batch 通过既有 Bash/Edit/Runtime 能力增强，不新增重复工具。
 - 安全能力：命令风险分类、权限审批、沙箱、审计、输出脱敏。
 - Skill 内容：内置 skill 太少，缺开发工作流类 skill。
 - Skill 生态：Hub、安装前扫描、trust level、lockfile。
@@ -113,6 +113,46 @@ Skill Layer
 ```
 
 核心方向：工具和 skill 都必须变成运行时可观察对象，所有执行、加载、拦截、失败都发事件并可追踪。
+
+## 后续能力边界和去重原则
+
+Phase 3 及之前已经完成工具注册、任务快照工具、MCP 接入、Bash 安全、权限审批和审计。后续规划必须避免 skill、tool、command 之间做同一件事。
+
+### 三类能力的职责边界
+
+| 类型 | 定义 | 可以做什么 | 不能做什么 |
+|---|---|---|---|
+| Tool | Agent 可调用的运行时能力 | 读取文件、修改文件、执行命令、访问 MCP、访问网络、语义检索代码 | 承载长篇工作流说明；绕过 PermissionPolicy；重复包装已有工具 |
+| Skill | Agent 可加载的可复用知识和流程 | 说明什么时候用哪些工具、如何拆解任务、给出质量标准和检查清单 | 直接执行命令；实现 side effect；替代 tool |
+| Command | 用户入口快捷模板 | 把用户命令扩展成一段 prompt，作为新任务或当前会话输入 | 作为模型工具调用；执行 shell；替代 skill 或 tool |
+
+### 后续阶段的硬规则
+
+1. `skill_load` 是唯一的 skill 运行时入口；新增 skill 只能增加知识和资源，不新增执行能力。
+2. Command 不注册成 Tool，不再新增 `command_run` 工具；Command 只在 CLI/Web 输入进入 `TaskRuntime` 前展开 prompt。
+3. 文件修改只保留 `write/edit` 作为核心工具；如果需要 patch/multi-edit，扩展 `edit` 的参数和校验，不新增重复工具。
+4. Git 操作优先走 `bash`，由 `command_security` 识别 git 子命令风险；不新增独立 `git` wrapper，避免和 Bash 能力重复。
+5. 批量工具调用不做 `batch` 工具；如果需要并行，只在 `AgentRuntime` 内部调度只读 tool calls，并逐个走 PermissionPolicy。
+6. Phase 1 的 `task_create/task_get/task_list/task_stop` 只管理任务快照，不执行子 Agent；子 Agent 委派使用独立 `subagent_run` 工具。
+7. Web 搜索默认通过 MCP 或后续 plugin provider 接入；核心只保留可安全审计的 `web_fetch`，避免内置多个搜索后端。
+8. LSP 是语义代码查询工具，和 `grep/glob/read` 不重复；它只提供 definition/references/symbols/hover 这类结构化只读能力。
+
+### 后续能力唯一归属表
+
+| 能力 | 唯一实现位置 | 不再新增 |
+|---|---|---|
+| 加载工作流知识 | `skill_load` + `SkillRegistry` | 不做 command/tool 版本 |
+| 用户快捷任务 | `CommandRegistry` + CLI/Web adapter 展开 | 不做 `command_run` tool |
+| 文件读取 | `read/glob/grep` | 不做重复 file tool |
+| 文件写入 | `write/edit` | 不做 `apply_patch/multi_edit` 独立工具 |
+| Shell/Git/构建/测试 | `bash` + `command_security` | 不做 `git` wrapper |
+| 网页读取 | `web_fetch` | 不用 `bash curl` 作为推荐入口 |
+| 网页搜索 | MCP 或 plugin provider | 不做 core `web_search` |
+| MCP 远程能力 | MCP-discovered tools | 不复制成内置 tools |
+| 子 Agent 执行 | `subagent_run` | 不复用 `task_create` |
+| 任务快照管理 | `task_create/task_get/task_list/task_stop` | 不执行 Agent |
+| 多工具并发 | `AgentRuntime` 内部只读调度 | 不做 `batch` tool |
+| 语义代码查询 | `lsp` | 不用 skill/command 模拟 |
 
 ## Phase 0：工具注册表和权限基座
 
@@ -529,7 +569,13 @@ bamboo skills update
 
 ### 目标
 
-引入 OpenCode custom commands 的轻量能力，不必把每个流程都做成 skill。
+引入 OpenCode custom commands 的轻量入口能力，但 Command 不作为 Tool 暴露给模型。Command 只在用户输入进入 `TaskRuntime` 前展开 prompt，用来降低常用任务的输入成本。
+
+Command 和 Skill 的区别：
+
+- Command 是用户主动触发的 prompt 模板，例如 `/commit 修复登录报错`。
+- Skill 是模型按需加载的知识包，例如 `github-pr-workflow` 告诉模型如何用现有工具完成 PR。
+- Command 可以建议模型加载某个 skill，但不能替代 skill，也不能直接执行工具。
 
 ### 格式
 
@@ -555,7 +601,7 @@ subtask: true
 
 - `$ARGUMENTS`
 - `!` shell interpolation 第一版先不支持，避免安全复杂度。
-- 后续可支持受控 `!`，必须走 PermissionPolicy。
+- 后续如果支持受控 `!`，必须转换为普通 prompt，不能在 CommandRegistry 内直接执行。
 
 ### 内置命令候选
 
@@ -570,11 +616,12 @@ subtask: true
 
 - 新增 `bamboo/commands/models.py`
 - 新增 `bamboo/commands/registry.py`
-- 新增 `bamboo/tools/buildin/command_run.py`
+- 新增 `bamboo/adapters/cli/commands.py`
+- Web 入口后续可在消息提交前调用同一套 registry 展开命令。
 
 ### 验收
 
-- `command_run(name, arguments)` 生成一条 user/system message 并继续 Agent。
+- `/command arguments` 能在 CLI 输入层展开为 user message。
 - command 可绑定 model，但第一版可以只写入 metadata，不实际切模型。
 - project command 覆盖 user/global command。
 
@@ -608,18 +655,20 @@ tools:
 permission: deny_write
 ```
 
-### Task Tool
+### Subagent Tool
 
 参考 OpenCode：
 
 ```python
-task(
+subagent_run(
   description: str,
   prompt: str,
   subagent_type: str,
   task_id: str | None = None,
 )
 ```
+
+这里不复用 Phase 1 的 `task_create/task_get/task_list/task_stop`。那些工具只管理任务快照，不执行 Agent；`subagent_run` 才是执行子 Agent 的唯一入口。
 
 行为：
 
@@ -647,7 +696,7 @@ task(
 - 新增 `bamboo/subagents/models.py`
 - 新增 `bamboo/subagents/registry.py`
 - 新增 `bamboo/runtime/subagent_runtime.py`
-- 新增 `bamboo/tools/buildin/task.py` 或扩展 Phase 1 task 工具
+- 新增 `bamboo/tools/buildin/subagent_run.py`
 
 ### 验收
 
@@ -655,14 +704,24 @@ task(
 - 子 Agent 看不到被禁用工具。
 - 子 Agent 的事件有 parent_session_id / parent_task_id。
 
-## Phase 8：Web、Git、Batch、LSP、Patch 工具
+## Phase 8：WebFetch、LSP 和既有工具增强
 
-### Web
+### 目标
+
+补齐高频 coding agent 能力，但必须避免和既有工具重复：
+
+- Web 只新增安全的 `web_fetch`；搜索交给 MCP/plugin provider。
+- Git 不新增独立工具，继续走 `bash`，由 Phase 3 的 `command_security` 分类 git 子命令。
+- Batch 不新增工具，后续在 `AgentRuntime` 做只读 tool calls 的内部并发调度。
+- Patch/MultiEdit 不新增工具，改为增强 `edit`。
+- LSP 保留为结构化只读语义查询工具。
+
+### Web Fetch
 
 先实现：
 
 - `web_fetch`：抓取网页，转文本，长度限制，SSRF 拦截。
-- `web_search`：默认不内置公网 API；先支持可配置 provider，未配置时返回明确错误。
+- 不实现 `web_search` 内置工具。搜索场景优先通过 MCP server 或后续 plugin provider 接入。
 
 Hermes 的 SSRF 防护应作为强制规则：
 
@@ -673,19 +732,22 @@ Hermes 的 SSRF 防护应作为强制规则：
 
 ### Git
 
-新增 `git` wrapper：
+不新增 `git` wrapper。理由：
 
-- 默认只允许 read-only git：`status/log/diff/show/branch`
-- 写操作走 PermissionPolicy。
-- destructive：`reset --hard`、`clean -fd`、`push --force` 默认 deny/ask。
+- `bash` 已能执行 git。
+- `command_security` 已能把 `git status/log/diff/show` 判为 read，把 `git fetch/pull/push/clone` 判为 network，把 `git reset --hard`、`push --force` 判为 destructive。
+- 新增 `git` 工具会和 Bash 形成两套权限入口，增加绕过风险。
+
+后续只增强 `command_security.classify_git_args()` 和内置 skill/command 里的 git 使用说明。
 
 ### Batch
 
-参考 OpenCode `batch.ts`：
+不新增 `batch` 工具。理由：
 
-- 允许并行执行 read-only 工具。
-- 禁止 batch 自身、bash write、write/edit、MCP network 第一版进入 batch。
-- 上限 10 或 25 个调用。
+- batch 工具内部再调用工具，容易绕过单个 tool call 的事件、权限、审计。
+- 更优方式是在 `AgentRuntime` 内部识别同一轮多个 read-only tool calls，并做受控并发。
+
+第一版只做接口预留，不改变执行顺序；真正并发放到单独 phase。
 
 ### LSP
 
@@ -698,12 +760,13 @@ Hermes 的 SSRF 防护应作为强制规则：
 
 第一版可不启动完整 LSP server，先接 `pyright`/`typescript-language-server` 后台能力或做接口预留。
 
-### Patch / MultiEdit
+### Edit 增强
 
-Bamboo 已有 `edit/write`，但可以补：
+Bamboo 已有 `edit/write`，后续不要新增 `apply_patch` 或 `multi_edit` 工具。需要这些能力时扩展 `edit`：
 
-- `apply_patch`：统一补丁格式，降低模型误改风险。
-- `multi_edit`：单文件多处替换，必须全部匹配才提交。
+- 增加 `mode = "replace" | "multi_replace" | "patch_preview"`。
+- 多处替换必须全部匹配才提交。
+- 写入前返回 preview metadata，仍由同一个 `edit` 工具执行。
 
 ## Phase 9：本地模型发现和向导
 
@@ -734,18 +797,18 @@ Bamboo 已有 `edit/write`，但可以补：
 新增事件建议：
 
 ```text
-tool-permission-request
-tool-permission-result
+permission-request
+permission-result
 tool-audit
 todo-update
-task-created
-task-stopped
+task-create
+task-stop
 mcp-server-start
 mcp-server-stop
 mcp-tool-discovered
 skill-scan
 skill-install
-command-run
+command-expanded
 subagent-start
 subagent-finish
 ```
@@ -772,13 +835,13 @@ subagent-finish
 6. MCP stdio client + native tool registration。
 7. SkillLoad 增强。
 8. 移植开发类内置 skills。
-9. Commands registry + command_run。
+9. Commands registry + CLI/Web adapter expansion。
 
 ### P2：生态和智能化
 
 10. SkillGuard + SkillHub。
 11. Subagent runtime。
-12. Web/Git/Batch tools。
+12. WebFetch + LSP + Edit 增强。
 13. Ollama/vLLM discovery。
 
 ### P3：高级开发体验
@@ -1450,7 +1513,9 @@ mcp:
 
 ### Phase 6：Commands 系统
 
-目标：引入轻量命令模板，适合 commit、changelog、learn、issues 这类流程。
+目标：引入轻量命令模板，适合 commit、changelog、learn、issues 这类入口快捷方式。
+
+Command 不注册为 Tool。模型不能主动调用 Command；Command 只在 CLI/Web adapter 收到用户输入后、创建 `RunParams` 前展开成普通用户消息。这样可以避免 `command_run` 和 Skill/Tool 重复。
 
 #### 修改现有文件
 
@@ -1463,12 +1528,13 @@ mcp:
 
 `bamboo/tools/buildin/__init__.py`
 
-- 注册 `CommandRunTool`。
+- 不修改。
+- 不注册任何 command 相关工具，因为 Command 不是模型工具。
 
 `bamboo/runtime/prompt.py`
 
-- 如果 prompt builder 有 tools catalog section，可把可用 commands 摘要作为独立 section。
-- 第一版也可只通过 `command_run` 工具 description 动态列出。
+- 不把 commands 加到 tools catalog。
+- 可在 system prompt 中短提示“用户可能通过 `/command` 触发预展开任务”，但第一版不需要。
 
 `bamboo/helpers/config.py`
 
@@ -1476,6 +1542,20 @@ mcp:
   - package built-in
   - user
   - project
+
+`bamboo/adapters/cli/main.py`
+
+- 在读取用户输入后判断是否以 `/` 开头。
+- 如果命中 command：
+  - 调 `CommandRegistry.expand(name, arguments, project)`。
+  - 把展开结果作为 `run_params.message` 或 followup message。
+  - 保留原始 command 到 `run_params` metadata 或 task metadata。
+- 如果 command 不存在，给出 available commands，不进入 Agent。
+
+`bamboo/adapters/web/app.py`
+
+- 第一版可以不做 UI，只在消息以 `/` 开头时走同一套 registry 展开。
+- 返回 stream 前先发送一条普通 task/session 事件即可，不新增 command tool event。
 
 #### 新增文件和目录
 
@@ -1500,15 +1580,6 @@ mcp:
 - 支持 `$ARGUMENTS` 替换。
 - project 覆盖 user，user 覆盖 builtin。
 
-`bamboo/tools/buildin/command_run.py`
-
-- `CommandRunTool`：
-  - `name = "command_run"`
-  - 输入 `name`、`arguments`
-  - 输出展开后的 prompt。
-- 第一版只返回内容给模型，不自动递归调用 Agent。
-- 后续可将展开 prompt 追加到 session 并继续 run。
-
 `bamboo/commands/buildin/commit.md`
 
 - 参考 OpenCode `.opencode/command/commit.md`，改成 Bamboo 风格。
@@ -1531,19 +1602,24 @@ mcp:
 - `$ARGUMENTS` 替换。
 - project override。
 
-`tests/test_command_run_tool.py`
+`tests/test_command_adapter.py`
 
-- command 存在时返回展开 prompt。
-- 不存在时列出 available commands。
+- CLI/Web helper 能展开 command。
+- command 不存在时返回 available commands。
+- 展开后的消息进入 `RunParams.message`。
 
 #### 不做的事
 
 - 第一版不支持 `!` shell interpolation。
 - 第一版不按 command model 切换模型，只记录 metadata。
+- 不新增 `command_run` 工具。
+- 不允许模型在运行时主动调用 command。
 
 ### Phase 7：Subagent Runtime
 
 目标：把 Bamboo 空的 subagents 目录落地，支持只读/受限子 Agent。
+
+Subagent 能力不能复用 Phase 1 的 `task_*` 工具。Phase 1 的 Task 工具只用于任务快照 CRUD；Phase 7 的子 Agent 执行入口统一命名为 `subagent_run`。
 
 #### 修改现有文件
 
@@ -1571,8 +1647,8 @@ mcp:
 
 `bamboo/tools/buildin/__init__.py`
 
-- 如果 Phase 1 的 `task.py` 已存在，在里面追加 `TaskDelegateTool`。
-- 或新增 `subagent_task` 工具。
+- 注册 `SubagentRunTool`。
+- 不修改 Phase 1 的 `task.py`，避免 `task_create` 既像快照工具又像执行工具。
 
 #### 新增文件
 
@@ -1606,12 +1682,14 @@ mcp:
   - 调用 AgentRuntime。
   - 返回 `<task_result>`。
 
-`bamboo/tools/buildin/subagent_task.py`
+`bamboo/tools/buildin/subagent_run.py`
 
-- `TaskDelegateTool`：
-  - `name = "task"`
+- `SubagentRunTool`：
+  - `name = "subagent_run"`
   - 输入 `description/prompt/subagent_type/task_id`
   - 输出 task_id + task_result。
+- `risk_level = "read"` 仅限只读 subagent。
+- 如果 subagent profile 允许 `write/network/unknown`，工具自身 risk 至少提升到对应级别，并走 PermissionPolicy。
 
 `bamboo/subagents/buildin/explorer.yaml`
 
@@ -1646,9 +1724,20 @@ mcp:
 - 第一版不做 worktree。
 - 第一版不做多进程。
 
-### Phase 8：Web、Git、Batch、LSP、Patch 工具
+### Phase 8：WebFetch、LSP 和既有工具增强
 
-目标：补齐高频 coding agent 工具，但每个工具都要经过 PermissionPolicy。
+目标：补齐高频 coding agent 能力，但不制造重复工具。
+
+本阶段最终保留两个新增工具方向：
+
+- `web_fetch`：比 `bash curl` 更安全的网页读取入口，内置 URL safety 和输出限制。
+- `lsp`：语义代码查询，补充 `grep/glob/read` 做不到的 definition/references/symbols/hover。
+
+以下能力不新增工具：
+
+- Git：继续用 `bash`，增强 `command_security` 对 git 子命令的分类。
+- Batch：不做 `batch` 工具，未来在 `AgentRuntime` 内部并发调度只读 tool calls。
+- Patch/MultiEdit：不新增 `apply_patch/multi_edit`，扩展已有 `edit`。
 
 #### 修改现有文件
 
@@ -1656,12 +1745,8 @@ mcp:
 
 - 注册：
   - `WebFetchTool`
-  - `WebSearchTool`
-  - `GitTool`
-  - `BatchTool`
-  - `ApplyPatchTool`
-  - `MultiEditTool`
-  - `LSPTool` 可选
+  - `LSPTool`
+- 明确不注册 web_search、git、batch、apply_patch、multi_edit 等重复工具。
 
 `bamboo/tools/buildin/file_filter.py`
 
@@ -1670,13 +1755,32 @@ mcp:
 
 `bamboo/security/permission_policy.py`
 
-- 增加 web/git/batch/lsp 的 risk 规则。
-- Git destructive 子命令特殊处理。
-- Batch 中每个子工具仍需要评估 permission。
+- 增加 `web_fetch` 的 network risk 规则。
+- `lsp` 保持 read risk。
+- 不增加 git/batch/patch 独立工具规则。
 
 `bamboo/security/command_security.py`
 
 - 增加 `classify_git_args(args: str)`。
+- 继续把 git 子命令风险收敛在 Bash 命令分类中：
+  - `status/log/diff/show/branch/rev-parse/ls-files/remote` -> read
+  - `fetch/pull/push/clone` -> network
+  - `reset --hard/clean -fd/push --force` -> destructive
+
+`bamboo/tools/buildin/edit.py`
+
+- 可选增强，不新增新工具：
+  - 支持 `mode="multi_replace"`。
+  - `edits: list[{old, new}]`。
+  - 所有 old 必须唯一匹配，否则整体失败。
+  - 保留原有单次 edit 行为兼容。
+
+`bamboo/runtime/agent_runtime.py`
+
+- 可选预留只读并发调度，不在第一版启用：
+  - 同一轮多个 tool calls 如果全部 risk 为 read，可并发执行。
+  - 每个 tool call 仍单独发 ToolCall/Permission/Audit/ToolResult 事件。
+  - 不新增 batch 工具。
 
 #### 新增文件
 
@@ -1690,53 +1794,14 @@ mcp:
   - 禁止 localhost/private/link-local/cloud metadata。
   - 禁止非 http/https。
 - HTML 转文本第一版可用简单 parser，后续再引入 readability。
-
-`bamboo/tools/buildin/web_search.py`
-
-- 输入：
-  - `query`
-  - `limit`
-- 第一版如果没有配置 provider，返回明确错误。
-- 后续接 Brave/SerpAPI/Tavily。
+- `risk_level = "network"`，默认需要用户确认，除非 `--yes` 或 `bypass/yolo`。
+- 如果用户需要搜索能力，优先通过 MCP server 或 plugin provider 暴露为 MCP tool。
 
 `bamboo/security/url_safety.py`
 
 - `is_url_allowed(url) -> tuple[bool, str]`
 - DNS 解析后检查 IP 网段。
 - 保护云 metadata。
-
-`bamboo/tools/buildin/git.py`
-
-- 输入：
-  - `args`
-  - `cwd`
-- 内部调用 BashTool 或 subprocess。
-- read-only git 直接 allow，写操作走 PermissionPolicy。
-
-`bamboo/tools/buildin/batch.py`
-
-- 输入：
-  - `tool_calls: list[{tool, arguments}]`
-- 限制：
-  - 最多 10 或 25 个。
-  - 禁止 batch 调 batch。
-  - 第一版只允许 read risk 工具。
-
-`bamboo/tools/buildin/apply_patch.py`
-
-- 输入：
-  - `patch`
-- 解析统一 patch 格式。
-- 必须只写 workspace 内文件。
-- 可复用现有 `edit/write` 逻辑。
-
-`bamboo/tools/buildin/multi_edit.py`
-
-- 输入：
-  - `path`
-  - `edits: list[{old, new}]`
-- 所有 old 必须唯一匹配，否则整个操作失败。
-- 写入前可生成 preview metadata。
 
 `bamboo/tools/buildin/lsp.py`
 
@@ -1753,24 +1818,29 @@ mcp:
 - 禁止 private IP、metadata。
 - 允许公网 URL。
 
-`tests/test_git_tool.py`
+`tests/test_command_security.py`
 
-- git status/log/diff。
-- git reset --hard 触发 destructive。
+- 增加 git 子命令分类测试：
+  - git status/log/diff -> read。
+  - git fetch/pull/push -> network。
+  - git reset --hard / git clean -fd / git push --force -> destructive。
 
-`tests/test_batch_tool.py`
+`tests/test_agent_readonly_parallel.py`
 
-- 只读工具 batch 成功。
-- write/bash destructive 被拒。
+- 仅在启用 runtime 只读并发时新增。
+- 验证多个 read-only tool calls 可以并发执行。
+- 验证 write/network/unknown 不进入并发路径。
 
-`tests/test_multi_edit_tool.py`
+`tests/test_edit_tool.py`
 
+- 增加 `mode="multi_replace"` 用例。
 - 多处替换全部成功。
 - 任一 old 不匹配则不写文件。
 
 #### 不做的事
 
 - 不在第一版引入真实 web_search provider。
+- 不新增 git/batch/apply_patch/multi_edit 独立工具。
 - LSP 第一版可以只做接口和错误提示。
 
 ### Phase 9：Ollama/vLLM 本地模型发现和向导
@@ -1870,7 +1940,12 @@ tests/test_command_security.py
 tests/test_mcp_tools.py
 tests/test_skill_guard.py
 tests/test_command_registry.py
+tests/test_command_adapter.py
 tests/test_subagent_runtime.py
+tests/test_web_fetch_tool.py
+tests/test_edit_tool.py
+tests/test_lsp_tool.py
+tests/test_local_model_discovery.py
 ```
 
 ## 兼容性和迁移
@@ -1908,5 +1983,19 @@ MCP server 是外部进程，不能默认继承全部 env。必须先做 env all
 5. `mcp-stdio`：MCP client + native registration。
 6. `skill-load-upgrade`：动态 skill catalog + base dir + sampled files。
 7. `builtin-dev-skills`：迁移 systematic-debugging/TDD/writing-plans。
+8. `skill-hub-guard`：quarantine、scan、lockfile、install audit。
+9. `command-adapter`：CommandRegistry + CLI/Web 输入展开，不新增 tool。
+10. `subagent-runtime`：SubagentRegistry + SubagentRuntime + `subagent_run`。
+11. `web-fetch-tool`：安全 URL 读取，不做 core web_search。
+12. `edit-multi-replace`：增强现有 `edit`，不新增 patch/multi_edit 工具。
+13. `lsp-readonly-tool`：语义代码查询，只读。
+14. `local-model-discovery`：Ollama/vLLM 显式 discovery 和配置片段。
+
+不再拆分这些 PR：
+
+- `git-tool`：Git 通过 `bash` + `command_security` 处理。
+- `batch-tool`：并发由 `AgentRuntime` 只读调度处理。
+- `apply-patch-tool` / `multi-edit-tool`：归入 `edit` 增强。
+- command 工具 PR：Command 只在 adapter 层展开，不做工具 PR。
 
 这个拆法能保证每一步都可独立测试、独立回滚。

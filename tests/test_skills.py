@@ -9,8 +9,9 @@ import pytest
 
 from bamboo.skills.creator import SkillCreator
 from bamboo.skills.frontmatter import parse_skill_markdown
-from bamboo.skills.registry import SkillRegistry
+from bamboo.skills.registry import PACKAGE_BUILTIN_SKILLS_DIR, SkillRegistry
 from bamboo.skills.store import SkillStore
+from bamboo.skills.validator import SkillValidator
 from bamboo.tools.buildin.skill_load import SkillLoadTool
 
 
@@ -133,12 +134,32 @@ def test_skill_registry_tolerates_legacy_state_schema(tmp_path: Path) -> None:
     assert state.schema_version == 1
 
 
+def test_skill_registry_renders_tool_catalog_and_resource_files(tmp_path: Path) -> None:
+    """验证 SkillRegistry 能给工具描述和 skill_load 输出提供资源摘要。"""
+    skills_dir = tmp_path / "skills"
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    SkillCreator(skills_dir=skills_dir, store=store).create("demo-skill", description="Demo workflow.")
+    reference_path = skills_dir / "demo-skill" / "references" / "guide.md"
+    reference_path.write_text("# Guide\n", encoding="utf-8")
+    script_path = skills_dir / "demo-skill" / "scripts" / "helper.sh"
+    script_path.write_text("echo helper\n", encoding="utf-8")
+
+    registry = SkillRegistry(skill_dirs=[("user", skills_dir)], store=store)
+    registry.refresh()
+
+    catalog = registry.render_tool_catalog(verbose=True)
+    assert "- demo-skill: Demo workflow." in catalog
+    assert "references/guide.md" in catalog
+    assert registry.list_resource_files("demo-skill") == ["references/guide.md", "scripts/helper.sh"]
+
+
 @pytest.mark.asyncio
 async def test_skill_load_tool_returns_content_and_updates_state(tmp_path: Path) -> None:
     """验证 skill_load 返回完整 Skill 内容并记录 usage/state。"""
     skills_dir = tmp_path / "skills"
     store = SkillStore(root=tmp_path / "storage" / "skills")
     SkillCreator(skills_dir=skills_dir, store=store).create("demo-skill", description="Demo workflow.")
+    (skills_dir / "demo-skill" / "references" / "guide.md").write_text("# Guide\n", encoding="utf-8")
     registry = SkillRegistry(skill_dirs=[("user", skills_dir)], store=store)
     registry.refresh()
 
@@ -146,8 +167,13 @@ async def test_skill_load_tool_returns_content_and_updates_state(tmp_path: Path)
     result = await tool.execute("demo-skill")
 
     assert result.success is True
+    assert '<skill_content name="demo-skill">' in result.content
     assert "# Skill: demo-skill" in result.content
     assert "Demo workflow." in result.content
+    assert "<skill_base_dir>" in result.content
+    assert "<file>references/guide.md</file>" in result.content
+    assert result.metadata is not None
+    assert result.metadata["resources"] == ["references/guide.md"]
 
     state = store.load_state("demo-skill")
     assert state is not None
@@ -155,3 +181,43 @@ async def test_skill_load_tool_returns_content_and_updates_state(tmp_path: Path)
     assert state.last_loaded_at is not None
     usage_lines = (store.skill_dir("demo-skill") / "usage.jsonl").read_text(encoding="utf-8").splitlines()
     assert any('"event": "loaded"' in line for line in usage_lines)
+
+
+@pytest.mark.asyncio
+async def test_skill_load_tool_lists_available_skills_when_missing(tmp_path: Path) -> None:
+    """验证加载不存在 Skill 时返回可用列表，方便模型纠正选择。"""
+    skills_dir = tmp_path / "skills"
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    SkillCreator(skills_dir=skills_dir, store=store).create("demo-skill", description="Demo workflow.")
+    registry = SkillRegistry(skill_dirs=[("user", skills_dir)], store=store)
+    registry.refresh()
+
+    result = await SkillLoadTool(skill_registry=registry).execute("missing-skill")
+
+    assert result.success is False
+    assert "Available skills:" in result.content
+    assert "demo-skill" in result.content
+
+
+def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
+    """验证 Phase 4 新增内置开发类 Skill 都能被扫描和校验。"""
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    registry = SkillRegistry(skill_dirs=[("buildin", PACKAGE_BUILTIN_SKILLS_DIR)], store=store)
+    registry.refresh()
+    names = {definition.name for definition in registry.list(include_inactive=True)}
+
+    expected = {
+        "systematic-debugging",
+        "test-driven-development",
+        "writing-plans",
+        "requesting-code-review",
+        "github-pr-workflow",
+        "native-mcp",
+    }
+    assert expected.issubset(names)
+
+    validator = SkillValidator()
+    for definition in registry.list(include_inactive=True):
+        if definition.name in expected:
+            result = validator.validate(definition)
+            assert result.ok, f"{definition.name}: {result.errors}"

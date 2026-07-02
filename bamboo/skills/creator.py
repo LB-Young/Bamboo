@@ -92,6 +92,8 @@ load-experiences: true
 metadata:
   bamboo:
     emoji: "🔧"
+    tags:
+      - workflow
 ---
 
 # {name}
@@ -166,6 +168,7 @@ def load_skill_definition(source_path: Path, *, source: str) -> SkillDefinition:
         body=parsed.body,
         user_invocable=user_invocable,
         load_experiences=load_experiences,
+        trust_level="builtin" if source == "buildin" else "local",
     )
 
 

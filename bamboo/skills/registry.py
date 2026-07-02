@@ -39,6 +39,7 @@ class SkillRegistry:
     def refresh(self) -> None:
         """重新扫描所有 Skill 目录并更新索引状态。"""
         discovered: dict[str, SkillDefinition] = {}
+        hub_lock = self.store.load_hub_lock()
         for source, root in self.skill_dirs:
             if not root.is_dir():
                 continue
@@ -59,6 +60,12 @@ class SkillRegistry:
                         pass
                     continue
                 if definition.name:
+                    lock_entry = hub_lock.get(definition.name)
+                    if lock_entry is not None:
+                        definition.origin = lock_entry.source
+                        definition.trust_level = lock_entry.trust_level
+                        if lock_entry.blocked:
+                            continue
                     discovered[definition.name] = definition
                     self._sync_definition(definition)
         self._definitions = discovered
@@ -102,12 +109,44 @@ class SkillRegistry:
             ]
         )
 
+    def render_tool_catalog(self, verbose: bool = False) -> str:
+        """渲染适合放入 `skill_load` 工具描述或错误提示的 Skill 列表。"""
+        rows = []
+        for definition in self.list():
+            if verbose:
+                resources = self.list_resource_files(definition.name, limit=8)
+                suffix = f" resources={resources}" if resources else ""
+                rows.append(f"- {definition.name}: {definition.description}{suffix}")
+            else:
+                rows.append(f"- {definition.name}: {definition.description}")
+        return "\n".join(rows)
+
+    def list_resource_files(self, name: str, limit: int = 20) -> list[str]:
+        """返回 skill 下可被后续读取的资源文件相对路径。"""
+        definition = self.get(name, include_inactive=True)
+        if definition is None:
+            return []
+        source_path = Path(definition.source_path)
+        resource_files: list[str] = []
+        for dirname in ("references", "scripts", "templates", "assets"):
+            root = source_path / dirname
+            if not root.is_dir():
+                continue
+            for path in sorted(root.rglob("*")):
+                if path.is_file():
+                    resource_files.append(str(path.relative_to(source_path)))
+                    if len(resource_files) >= limit:
+                        return resource_files
+        return resource_files
+
     def load_skill_content(
         self,
         name: str,
         *,
         include_experiences: bool = True,
         references: list[str] | None = None,
+        include_metadata: bool = False,
+        resource_limit: int = 20,
     ) -> str:
         """读取完整 Skill 内容，并记录 loaded 事件。"""
         definition = self.get(name)
@@ -115,10 +154,8 @@ class SkillRegistry:
             raise KeyError(f"Skill is not active or does not exist: {name}")
 
         source_path = Path(definition.source_path)
-        sections = [
-            f"# Skill: {definition.name}",
-            (source_path / "SKILL.md").read_text(encoding="utf-8"),
-        ]
+        skill_md_content = (source_path / "SKILL.md").read_text(encoding="utf-8")
+        sections = [f"# Skill: {definition.name}", skill_md_content]
         if include_experiences and definition.load_experiences:
             experiences_path = source_path / "experiences" / "README.md"
             if experiences_path.is_file():
@@ -136,6 +173,20 @@ class SkillRegistry:
             sections.extend([f"# Reference: {reference}", reference_path.read_text(encoding="utf-8")])
 
         content = "\n\n".join(section.strip() for section in sections if section.strip())
+        if include_metadata:
+            resource_files = self.list_resource_files(name, limit=resource_limit)
+            files_block = "\n".join(f"<file>{path}</file>" for path in resource_files)
+            content = "\n".join(
+                [
+                    f'<skill_content name="{definition.name}">',
+                    content,
+                    f"<skill_base_dir>{source_path.resolve().as_uri()}</skill_base_dir>",
+                    "<skill_files>",
+                    files_block,
+                    "</skill_files>",
+                    "</skill_content>",
+                ]
+            )
         self.store.append_usage(
             SkillUsageEvent(
                 ts=utc_now(),

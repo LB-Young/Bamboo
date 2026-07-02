@@ -19,6 +19,13 @@ class SkillLoadTool(Tool):
     def __init__(self, *, skill_registry: SkillRegistry | None = None) -> None:
         """初始化 Skill 加载工具。"""
         self.skill_registry = skill_registry
+        if skill_registry is not None:
+            catalog = skill_registry.render_tool_catalog()
+            if catalog:
+                self.description = (
+                    "Load a Bamboo skill's full instructions before following its workflow. "
+                    f"Available skills:\n{catalog}"
+                )
 
     def input_schema(self) -> dict[str, Any]:
         """返回 Skill 加载参数 schema。"""
@@ -52,7 +59,13 @@ class SkillLoadTool(Tool):
                 name,
                 include_experiences=include_experiences,
                 references=references or [],
+                include_metadata=True,
             )
         except Exception as exc:
-            return ToolResult(content=f"Failed to load skill `{name}`: {exc}", success=False, error=str(exc))
-        return ToolResult(content=content, metadata={"skill_name": name})
+            available = registry.render_tool_catalog()
+            detail = f"Failed to load skill `{name}`: {exc}"
+            if available:
+                detail = f"{detail}\n\nAvailable skills:\n{available}"
+            return ToolResult(content=detail, success=False, error=str(exc), metadata={"available_skills": available})
+        resources = registry.list_resource_files(name)
+        return ToolResult(content=content, metadata={"skill_name": name, "resources": resources})

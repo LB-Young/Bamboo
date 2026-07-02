@@ -21,6 +21,8 @@ SkillUsageEventType = Literal[
     "disabled",
     "enabled",
 ]
+SkillTrustLevel = Literal["builtin", "trusted", "community", "local"]
+SkillScanLevel = Literal["safe", "caution", "dangerous"]
 
 
 @dataclass(slots=True)
@@ -35,6 +37,8 @@ class SkillDefinition:
     body: str = ""
     user_invocable: bool = True
     load_experiences: bool = True
+    trust_level: str = "local"
+    origin: str = ""
 
 
 @dataclass(slots=True)
@@ -98,3 +102,56 @@ class SkillUsageEvent:
     tokens: int = 0
     error: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class SkillHubSource:
+    """Describes an external skill source."""
+
+    identifier: str
+    source_type: str
+    location: str
+    ref: str = ""
+    path: str = ""
+
+
+@dataclass(slots=True)
+class SkillHubLockEntry:
+    """Lockfile entry for an installed external skill."""
+
+    schema_version: int
+    name: str
+    source: str
+    source_type: str
+    trust_level: SkillTrustLevel | str
+    installed_at: str
+    source_path: str
+    content_hash: str
+    scan_level: SkillScanLevel | str
+    blocked: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class SkillScanFinding:
+    """One finding produced by SkillGuard."""
+
+    severity: SkillScanLevel | str
+    category: str
+    message: str
+    path: str = ""
+    line: int = 0
+    pattern: str = ""
+
+
+@dataclass(slots=True)
+class SkillScanResult:
+    """Complete result of scanning a skill directory."""
+
+    schema_version: int
+    scanned_at: str
+    source: str
+    path: str
+    level: SkillScanLevel | str
+    ok: bool
+    findings: list[SkillScanFinding] = field(default_factory=list)

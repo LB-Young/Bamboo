@@ -146,14 +146,37 @@ def skill_create(
 @skill_app.command("list")
 def skill_list(include_inactive: bool = typer.Option(False, "--all", help="Show inactive skills")) -> None:
     """列出已发现的 Skills。"""
-    from bamboo.skills import create_skill_registry
+    from bamboo.skills.cli import list_skills
 
-    registry = create_skill_registry()
-    for definition in registry.list(include_inactive=include_inactive):
-        state = registry.store.load_state(definition.name)
-        status = state.status if state is not None else "unknown"
-        health = state.health if state is not None else "unknown"
-        console.print(f"{definition.name}\t{status}\t{health}\t{definition.description}")
+    for name, status, health, trust_level, description in list_skills(include_inactive=include_inactive):
+        console.print(f"{name}\t{status}\t{health}\t{trust_level}\t{description}")
+
+
+@skill_app.command("install")
+def skill_install(
+    identifier: str = typer.Argument(..., help="Skill source, e.g. local:/path/to/skill"),
+    trust_level: str = typer.Option("community", "--trust", help="Trust level: trusted/community/local"),
+    force: bool = typer.Option(False, "--force", help="Allow install despite non-safe scan findings"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite an existing skill with the same name"),
+) -> None:
+    """安装外部 Skill，先进入 quarantine 并通过 SkillGuard 扫描。"""
+    from bamboo.skills.cli import install_skill
+    from bamboo.skills.guard import format_scan_report
+
+    result = install_skill(identifier, trust_level=trust_level, force=force, overwrite=overwrite)
+    console.print(format_scan_report(result.scan_result))
+    if not result.installed:
+        console.print(f"[red]skill install blocked[/red] {result.name}: {result.reason}")
+        raise typer.Exit(1)
+    console.print(f"[green]skill installed[/green] {result.name} -> {result.destination}")
+
+
+@skill_app.command("scan")
+def skill_scan(path: Path = typer.Argument(..., help="Local skill directory to scan")) -> None:
+    """扫描本地 Skill 目录，不执行安装。"""
+    from bamboo.skills.cli import scan_skill_path
+
+    console.print(scan_skill_path(path))
 
 
 @skill_app.command("show")

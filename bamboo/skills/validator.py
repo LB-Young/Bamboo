@@ -48,6 +48,33 @@ class SkillValidator:
         checks["description_present"] = "ok" if definition.description else "error"
         if not definition.description:
             errors.append("frontmatter.description is required")
+        elif len(definition.description) > 1024:
+            checks["description_length"] = "error"
+            errors.append("frontmatter.description must be 1024 characters or fewer")
+        else:
+            checks["description_length"] = "ok"
+
+        metadata = definition.frontmatter.get("metadata", {})
+        if metadata:
+            if not isinstance(metadata, dict):
+                checks["metadata"] = "error"
+                errors.append("frontmatter.metadata must be a mapping")
+            else:
+                bamboo_metadata = metadata.get("bamboo", {})
+                if bamboo_metadata:
+                    if not isinstance(bamboo_metadata, dict):
+                        checks["metadata.bamboo"] = "error"
+                        errors.append("frontmatter.metadata.bamboo must be a mapping")
+                    else:
+                        tags = bamboo_metadata.get("tags", [])
+                        if tags and (
+                            not isinstance(tags, list)
+                            or any(not isinstance(tag, str) or not tag.strip() for tag in tags)
+                        ):
+                            checks["metadata.bamboo.tags"] = "error"
+                            errors.append("frontmatter.metadata.bamboo.tags must be a list of non-empty strings")
+                        else:
+                            checks["metadata.bamboo.tags"] = "ok"
 
         config = self._read_config(config_path, errors, warnings)
         checks["config_yaml"] = "ok" if config_path.is_file() else "warning"
