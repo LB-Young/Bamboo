@@ -36,6 +36,7 @@ from bamboo.helpers.requests_params import RunParams
 from bamboo.helpers.utils import BaseEvent
 from bamboo.runtime import TaskRuntime
 
+from bamboo.adapters.cli.commands import expand_command_message
 from .session_utils import list_sessions, load_session, resolve_session_record, serialize_messages
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -106,6 +107,10 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="消息不能为空")
         mode = _normalize_mode(payload.mode)
         project = _resolve_project(payload.project_path, strict=True) if mode == "project" else Path.cwd()
+        expanded = expand_command_message(message, project=project)
+        if expanded.error:
+            raise HTTPException(status_code=400, detail=expanded.error)
+        message = expanded.message
         event_bus = EventBus()
         runtime = TaskRuntime(event_bus=event_bus)
 

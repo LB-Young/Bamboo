@@ -52,6 +52,7 @@ bamboo = [
     "adapters/web/static/*.html",
     "adapters/web/static/*.js",
     "adapters/web/static/*.css",
+    "commands/buildin/*.md",
     "skills/buildin/*/SKILL.md",
     "skills/buildin/*/experiences/*.md",
 ]

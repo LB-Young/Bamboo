@@ -29,6 +29,7 @@ from bamboo.helpers.logging import get_logger
 from bamboo.helpers.requests_params import RunParams
 from bamboo.helpers.utils import BaseEvent
 from bamboo.runtime import TaskRuntime
+from bamboo.adapters.cli.commands import expand_command_message
 
 console = Console()
 
@@ -36,6 +37,13 @@ console = Console()
 async def _start_session(run_params: RunParams) -> object:
     """启动一个 CLI 任务会话，并渲染当前 session 的事件流。"""
     log = get_logger("cli")
+    expanded = expand_command_message(run_params.message, project=run_params.project)
+    if expanded.error:
+        console.print(f"[red]command error[/red] {expanded.error}")
+        raise ValueError(expanded.error)
+    if expanded.expanded:
+        console.print(f"[dim]command expanded[/dim] /{expanded.command_name}")
+        run_params.message = expanded.message
     event_bus = get_event_bus()
     # 先订阅事件，再启动任务，确保 task-created 等早期事件不会丢失。
     unsubscribe = event_bus.subscribe(
@@ -115,6 +123,15 @@ async def _start_interactive_session(run_params: RunParams) -> object:
             if message in {"/exit", "/quit", "exit", "quit"}:
                 console.print("[green]bye[/green]")
                 return task
+            expanded = expand_command_message(message, project=run_params.project)
+            if expanded.error:
+                console.print(f"[red]command error[/red] {expanded.error}")
+                if expanded.available_commands:
+                    console.print(f"[dim]available[/dim] {', '.join(expanded.available_commands)}")
+                continue
+            if expanded.expanded:
+                console.print(f"[dim]command expanded[/dim] /{expanded.command_name}")
+                message = expanded.message
 
             previous_task = task
             message_checkpoint = len(previous_task.session.messages)
