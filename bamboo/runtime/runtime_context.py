@@ -17,6 +17,7 @@ from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompact
 from bamboo.runtime.prompt import AgentPromptBuilder
 from bamboo.security import PermissionPolicy, PermissionResolver, ToolAuditLogger, create_permission_resolver
 from bamboo.skills import SkillRegistry, create_skill_registry
+from bamboo.subagents import SubagentRegistry, create_subagent_registry
 from bamboo.tools import ToolRegistry, get_tool_registry
 from bamboo.tools.mcp import MCPManager
 
@@ -39,7 +40,7 @@ class RuntimeContext:
     context_compactor: ContextCompactor
     memory_manager: object | None = None
     skill_registry: SkillRegistry | None = None
-    subagent_registry: object | None = None
+    subagent_registry: SubagentRegistry | None = None
     mcp_manager: MCPManager | None = None
     permission_policy: PermissionPolicy | None = None
     permission_resolver: PermissionResolver | None = None
@@ -59,6 +60,7 @@ class RuntimeContextBuilder:
         prompt_builder: AgentPromptBuilder | None = None,
         context_compactor: ContextCompactor | None = None,
         skill_registry: SkillRegistry | None = None,
+        subagent_registry: SubagentRegistry | None = None,
         compaction_policy: ContextBudgetPolicy | None = None,
         token_counter: TokenCounter | None = None,
         model_name: str | None = None,
@@ -66,12 +68,14 @@ class RuntimeContextBuilder:
         permission_policy: PermissionPolicy | None = None,
         permission_resolver: PermissionResolver | None = None,
         audit_logger: ToolAuditLogger | None = None,
+        mcp_enabled: bool = True,
     ) -> None:
         """初始化运行上下文构建所需的共享依赖。"""
         self.event_bus = event_bus
         self.llm_factory = llm_factory
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry or create_skill_registry()
+        self.subagent_registry = subagent_registry
         self.prompt_builder = prompt_builder or AgentPromptBuilder(
             tool_registry=self.tool_registry,
             skill_registry=self.skill_registry,
@@ -84,6 +88,7 @@ class RuntimeContextBuilder:
         self.permission_policy = permission_policy or PermissionPolicy()
         self.permission_resolver = permission_resolver
         self.audit_logger = audit_logger or ToolAuditLogger()
+        self.mcp_enabled = mcp_enabled
         self.mcp_manager: MCPManager | None = None
         self._mcp_loaded = False
 
@@ -116,6 +121,7 @@ class RuntimeContextBuilder:
             prompt_builder=self.prompt_builder,
             context_compactor=context_compactor,
             skill_registry=self.skill_registry,
+            subagent_registry=self.subagent_registry or create_subagent_registry(task.run_params.project),
             mcp_manager=self.mcp_manager,
             permission_policy=self.permission_policy,
             permission_resolver=self.permission_resolver or create_permission_resolver(task.run_params),
@@ -125,6 +131,10 @@ class RuntimeContextBuilder:
     def _ensure_mcp_tools(self, task: Task) -> None:
         """按配置启动 MCP servers，并把工具注册进 ToolRegistry。"""
         if self._mcp_loaded:
+            return
+        if not self.mcp_enabled:
+            self._mcp_loaded = True
+            self.mcp_manager = MCPManager.from_config({})
             return
         mcp_document = task.config.get("mcp", {})
         manager = MCPManager.from_config(mcp_document if isinstance(mcp_document, dict) else {})

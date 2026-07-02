@@ -1,0 +1,12 @@
+name: reviewer
+description: Read-only code review agent focused on correctness, regressions, and missing tests.
+model: ""
+permission: read-only
+tools:
+  read: true
+  grep: true
+  glob: true
+  skill_load: true
+  bash: false
+  write: false
+  edit: false

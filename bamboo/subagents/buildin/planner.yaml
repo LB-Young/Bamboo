@@ -1,0 +1,12 @@
+name: planner
+description: Read-only planning agent that turns gathered context into implementation steps and risk notes.
+model: ""
+permission: read-only
+tools:
+  read: true
+  grep: true
+  glob: true
+  skill_load: true
+  bash: false
+  write: false
+  edit: false

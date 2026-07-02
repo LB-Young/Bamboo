@@ -23,6 +23,8 @@ from bamboo.helpers.constant import (
     SessionStatusChangeEvent,
     StepFinishEvent,
     StepStartEvent,
+    SubagentFinishEvent,
+    SubagentStartEvent,
     TaskCreateEvent,
     TaskStatusChangeEvent,
     TextDeltaEvent,
@@ -149,6 +151,8 @@ def create_app() -> FastAPI:
                 "text-finish",
                 "permission-request",
                 "permission-result",
+                "subagent-start",
+                "subagent-finish",
                 "tool-call",
                 "tool-result",
                 "tool-error",
@@ -281,6 +285,25 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
             "approved": event.approved,
             "risk": event.risk_level,
             "reason": event.reason,
+        }
+    if isinstance(event, SubagentStartEvent):
+        return {
+            "type": "subagent_start",
+            "name": event.subagent_name,
+            "child_task_id": event.child_task_id,
+            "parent_session_id": event.parent_session_id,
+            "parent_task_id": event.parent_task_id,
+            "description": event.description,
+        }
+    if isinstance(event, SubagentFinishEvent):
+        return {
+            "type": "subagent_finish",
+            "name": event.subagent_name,
+            "child_task_id": event.child_task_id,
+            "child_session_id": event.child_session_id,
+            "parent_session_id": event.parent_session_id,
+            "parent_task_id": event.parent_task_id,
+            "status": event.status,
         }
     if isinstance(event, ToolResultEvent):
         return {

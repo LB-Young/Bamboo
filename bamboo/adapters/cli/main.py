@@ -16,6 +16,8 @@ from bamboo.helpers.constant import (
     SessionStatusChangeEvent,
     StepFinishEvent,
     StepStartEvent,
+    SubagentFinishEvent,
+    SubagentStartEvent,
     TaskCreateEvent,
     TaskStatusChangeEvent,
     TextDeltaEvent,
@@ -59,6 +61,8 @@ async def _start_session(run_params: RunParams) -> object:
             "text-finish",
             "permission-request",
             "permission-result",
+            "subagent-start",
+            "subagent-finish",
             "tool-call",
             "tool-result",
             "tool-error",
@@ -99,6 +103,8 @@ async def _start_interactive_session(run_params: RunParams) -> object:
             "text-finish",
             "permission-request",
             "permission-result",
+            "subagent-start",
+            "subagent-finish",
             "tool-call",
             "tool-result",
             "tool-error",
@@ -201,6 +207,14 @@ def _render_cli_event(event: BaseEvent) -> None:
     if isinstance(event, PermissionResultEvent):
         status = "approved" if event.approved else "denied"
         console.print(f"[dim]permission {status}[/dim] {event.tool_name} {event.reason}")
+        return
+
+    if isinstance(event, SubagentStartEvent):
+        console.print(f"[dim]subagent start[/dim] {event.subagent_name} {event.description}")
+        return
+
+    if isinstance(event, SubagentFinishEvent):
+        console.print(f"[dim]subagent finish[/dim] {event.subagent_name} status={event.status}")
         return
 
     if isinstance(event, ToolResultEvent):

@@ -34,6 +34,7 @@ packages = [
     "bamboo.adapters.web",
     "bamboo.runtime",
     "bamboo.prompts",
+    "bamboo.subagents",
     "bamboo.llms",
     "bamboo.llms.providers",
     "bamboo.memory",
@@ -53,6 +54,7 @@ bamboo = [
     "adapters/web/static/*.js",
     "adapters/web/static/*.css",
     "commands/buildin/*.md",
+    "subagents/buildin/*.yaml",
     "skills/buildin/*/SKILL.md",
     "skills/buildin/*/experiences/*.md",
 ]

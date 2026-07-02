@@ -1,0 +1,12 @@
+name: verifier
+description: Verification agent that can inspect code and run read-only or test commands through bash.
+model: ""
+permission: read-only
+tools:
+  read: true
+  grep: true
+  glob: true
+  skill_load: true
+  bash: read_only
+  write: false
+  edit: false

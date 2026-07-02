@@ -237,6 +237,52 @@ class TaskStopEvent(BaseEvent):
         return {**super().to_dict(), "stopped_task_id": self.stopped_task_id, "reason": self.reason}
 
 
+@dataclass(kw_only=True)
+class SubagentStartEvent(BaseEvent):
+    """子 Agent 启动事件。"""
+
+    type: str = "subagent-start"
+    subagent_name: str = ""
+    child_task_id: str = ""
+    parent_session_id: str = ""
+    parent_task_id: str = ""
+    description: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "subagent_name": self.subagent_name,
+            "child_task_id": self.child_task_id,
+            "parent_session_id": self.parent_session_id,
+            "parent_task_id": self.parent_task_id,
+            "description": self.description,
+        }
+
+
+@dataclass(kw_only=True)
+class SubagentFinishEvent(BaseEvent):
+    """子 Agent 完成事件。"""
+
+    type: str = "subagent-finish"
+    subagent_name: str = ""
+    child_task_id: str = ""
+    child_session_id: str = ""
+    parent_session_id: str = ""
+    parent_task_id: str = ""
+    status: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "subagent_name": self.subagent_name,
+            "child_task_id": self.child_task_id,
+            "child_session_id": self.child_session_id,
+            "parent_session_id": self.parent_session_id,
+            "parent_task_id": self.parent_task_id,
+            "status": self.status,
+        }
+
+
 # ─── Step 事件 ───────────────────────────────────────────────────────────────
 
 @dataclass(kw_only=True)
@@ -472,6 +518,7 @@ BambooEvent = (
     | ReasoningStartEvent | ReasoningDeltaEvent | ReasoningFinishEvent
     | ToolCallEvent | ToolResultEvent | ToolErrorEvent
     | PermissionRequestEvent | PermissionResultEvent | ToolAuditEvent
+    | SubagentStartEvent | SubagentFinishEvent
     | StepStartEvent | StepFinishEvent
     | SessionCompactEvent | SessionStatusChangeEvent | AuditEvent
     | PlanStartEvent | PlanConfirmEvent | PlanStepExecuteEvent | PlanCancelEvent

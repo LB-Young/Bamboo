@@ -236,6 +236,9 @@ class AgentRuntime:
         if tool is None:
             await self._record_tool_error(task, tool_call, f"Tool is unavailable: {tool_call.name}")
             return
+        bind_runtime_context = getattr(tool, "bind_runtime_context", None)
+        if callable(bind_runtime_context):
+            bind_runtime_context(runtime_context=self.runtime_context, task=task)
 
         permission = await self._authorize_tool_call(task, tool_call)
         if not permission.allowed:
