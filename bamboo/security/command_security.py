@@ -36,6 +36,7 @@ DESTRUCTIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(^|\s):\(\)\s*\{"),
     re.compile(r"\b(curl|wget)\b[^\n|;]*\|\s*(sh|bash|zsh|python|python3)\b"),
     re.compile(r"(^|\s)git\s+reset\s+--hard\b"),
+    re.compile(r"(^|\s)git\s+clean\s+[^\n]*-[^\n]*[fd][^\n]*(\s|$)"),
     re.compile(r"(^|\s)git\s+push\b[^\n]*(--force|-f)\b"),
     re.compile(r"(^|\s)chmod\s+(-R\s+)?777\s+(/|~|\$HOME)(\s|$)"),
     re.compile(r"(^|\s)chmod\s+[^\n]*\+s\b"),
@@ -206,7 +207,7 @@ def _inspect_git(command: str) -> CommandSecurityResult:
         return CommandSecurityResult(True, CommandRisk.READ_ONLY, "git help/status style command")
 
     subcommand = tokens[1]
-    if subcommand in {"status", "log", "diff", "show", "branch", "rev-parse", "ls-files", "remote"}:
+    if subcommand in {"status", "log", "diff", "show", "branch", "rev-parse", "ls-files", "remote", "grep"}:
         return CommandSecurityResult(True, CommandRisk.READ_ONLY, f"git {subcommand} is read-only")
     if subcommand in {"fetch", "pull", "push", "clone"}:
         return CommandSecurityResult(True, CommandRisk.NETWORK, f"git {subcommand} uses network", True)

@@ -14,6 +14,7 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "edit",
         "glob",
         "grep",
+        "lsp",
         "read",
         "skill_load",
         "subagent_run",
@@ -22,11 +23,12 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "task_list",
         "task_stop",
         "todo_write",
+        "web_fetch",
         "write",
     ]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
-    assert registry.summary()["by_source"] == {"buildin": 13}
-    assert registry.summary()["by_risk"] == {"execute": 1, "read": 7, "write": 5}
+    assert registry.summary()["by_source"] == {"buildin": 15}
+    assert registry.summary()["by_risk"] == {"execute": 1, "network": 1, "read": 8, "write": 5}
 
 
 def test_tool_registry_hides_disabled_tool() -> None:

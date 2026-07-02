@@ -47,10 +47,14 @@ def test_command_security_classifies_read_write_network_and_destructive() -> Non
     assert inspect_command("git status").risk == CommandRisk.READ_ONLY
     assert inspect_command("touch created.txt").risk == CommandRisk.WRITE
     assert inspect_command("curl https://example.com").risk == CommandRisk.NETWORK
+    assert inspect_command("git fetch origin").risk == CommandRisk.NETWORK
 
     destructive = inspect_command("rm -rf /")
     assert not destructive.allowed
     assert destructive.risk == CommandRisk.DESTRUCTIVE
+    git_clean = inspect_command("git clean -fd")
+    assert not git_clean.allowed
+    assert git_clean.risk == CommandRisk.DESTRUCTIVE
 
 
 def test_permission_policy_allows_read_and_requires_yes_for_write() -> None:

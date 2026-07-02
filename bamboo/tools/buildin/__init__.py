@@ -9,11 +9,13 @@ def create_builtin_tools() -> list[Tool]:
     from bamboo.tools.buildin.edit import EditTool
     from bamboo.tools.buildin.glob import GlobTool
     from bamboo.tools.buildin.grep import GrepTool
+    from bamboo.tools.buildin.lsp import LSPTool
     from bamboo.tools.buildin.read import ReadTool
     from bamboo.tools.buildin.skill_load import SkillLoadTool
     from bamboo.tools.buildin.subagent_run import SubagentRunTool
     from bamboo.tools.buildin.task import TaskCreateTool, TaskGetTool, TaskListTool, TaskStopTool
     from bamboo.tools.buildin.todo import TodoWriteTool
+    from bamboo.tools.buildin.web_fetch import WebFetchTool
     from bamboo.tools.buildin.write import WriteTool
 
     return [
@@ -21,6 +23,7 @@ def create_builtin_tools() -> list[Tool]:
         EditTool(),
         GlobTool(),
         GrepTool(),
+        LSPTool(),
         ReadTool(),
         SkillLoadTool(),
         SubagentRunTool(),
@@ -29,6 +32,7 @@ def create_builtin_tools() -> list[Tool]:
         TaskListTool(),
         TaskStopTool(),
         TodoWriteTool(),
+        WebFetchTool(),
         WriteTool(),
     ]
 
