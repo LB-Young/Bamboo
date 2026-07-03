@@ -1,29 +1,30 @@
 # P0-03 Tool Result Budget
 
+## 当前状态
+
+未完成。
+
+当前 `AgentRuntime._execute_tool_call` 会把 tool result 直接写入 session。`ContextCompactor` 只能处理已有上下文整体预算，不能阻止单个超大 `read/grep/bash/web_fetch` 输出进入模型上下文。
+
 ## 目标
 
-限制工具结果写入模型上下文的体积，防止单次 `read/grep/bash` 输出撑爆上下文。
+限制工具结果写入模型上下文的体积，防止单次工具输出撑爆上下文；UI 和审计仍应尽量保留完整或可追踪信息。
 
-## 背景
-
-当前工具执行结果会完整写入 session。上下文压缩只处理旧消息，对单个巨大的 tool result 没有保护。
-
-## 参考
-
-- OpenClaw：`tool-result-context-guard.ts` 对单个工具结果和工具结果总量做预算。
-- Claude Code Source：对 prompt-too-long 这类可恢复错误延迟暴露并尝试恢复。
-
-## 范围
-
-新增：
+## 新增文件
 
 - `bamboo/runtime/tool_result_budget.py`
+- `tests/test_tool_result_budget.py`
 
-调整：
+## 修改文件
 
-- `AgentRuntime._execute_tool_call`
-- `Message` 增加 metadata
-- `ToolResultEvent` 区分 UI 输出和模型上下文输出
+- `bamboo/runtime/agent_runtime.py`
+  - 在 `_execute_tool_call` 得到工具结果后调用 budgeter。
+  - 写入 session 的 tool result 使用截断版。
+  - 发出的 `ToolResultEvent` 增加截断元信息。
+- `bamboo/factory/message.py`
+  - 确认 `Message.metadata` 可记录 `truncated/original_length/context_length`。
+- `bamboo/helpers/constant.py`
+  - `ToolResultEvent` 增加 `context_content`、`truncated`、`original_length`、`context_length` 字段，或至少增加 `metadata` 字段。
 
 ## 建议接口
 
@@ -48,7 +49,7 @@ class ToolResultBudgeter:
 1. 实现简单 token 估算，复用 `HeuristicTokenCounter`。
 2. 单个结果超限时保留头尾，中间插入 truncation notice。
 3. 写入 session 的是截断版。
-4. EventBus 事件可以保留完整输出，或至少记录 original_length 和 truncated。
+4. EventBus 事件保留 UI 可展示内容，并记录 `original_length`、`context_length` 和 `truncated`。
 5. 历史 tool result 总量超限时，替换最旧 tool result 内容为 compact placeholder。
 6. 在测试中构造 100k 字符 tool result，确认 session 中被截断。
 

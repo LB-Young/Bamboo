@@ -1,18 +1,14 @@
 # P0-05 Session Store And Trace
 
+## 当前状态
+
+部分完成。
+
+已有 `bamboo/memory/session_store.py`，会保存 `session.json`、`system_prompt.md`、`messages.jsonl`、`compactions.jsonl`，并已接入 `Session.add_message`。但还缺完整 `events.jsonl`、`tasks.jsonl`、resume/replay API，以及和 `EventBus` 绑定的 trace recorder。
+
 ## 目标
 
 把 session、messages、events、tasks 持久化到用户空间，支持恢复、回放和问题定位。
-
-## 背景
-
-当前 `InMemoryTaskStore` 只保存内存快照。多轮对话、工具调用、压缩、错误恢复缺少稳定轨迹。
-
-## 参考
-
-- Auton：SessionStore 区分 project/date。
-- Hermes Agent：session lifecycle hooks 和 session commit。
-- OpenCode：保存 message finish/error 等执行状态。
 
 ## 存储结构
 
@@ -32,13 +28,26 @@
 
 ## 实现步骤
 
-1. 新增 `bamboo/runtime/session_store.py`。
-2. 实现 project/chat 两种 scope 的 session 路径解析。
-3. 每次 `Session.add_message` 后可 append 到 `messages.jsonl`。
-4. EventBus 增加 `TraceRecorder`，订阅所有事件写入 `events.jsonl`。
-5. TaskRuntime 状态变化写入 `tasks.jsonl`。
+1. 保留并扩展 `bamboo/memory/session_store.py`，不要再新增重复的 session store。
+2. 增加 `TraceRecorder`，建议放在 `bamboo/runtime/trace_recorder.py`。
+3. `TraceRecorder` 订阅 `EventBus` 所有事件，写入 `events.jsonl`。
+4. `TaskRuntime` 在 create/status/error/completed 时写入 `tasks.jsonl`。
+5. 把 project/chat 两种 scope 的路径解析集中到一个 helper，避免 Web 和 CLI 各自拼路径。
 6. CLI 增加最小 `--resume <session_id>` 或先提供内部 API。
-7. 增加 replay 脚本或测试工具读取 jsonl 重建执行链。
+7. 增加 replay 测试工具读取 jsonl 重建执行链。
+
+## 修改文件
+
+- `bamboo/memory/session_store.py`
+  - 增加 `append_event()`、`append_task()`、`load_session()`、`load_messages()`。
+- `bamboo/runtime/task_runtime.py`
+  - 在任务状态变化时写 tasks trace。
+- `bamboo/factory/event_bus.py`
+  - 支持 recorder 作为普通订阅者接入即可，避免在 EventBus 内部写文件。
+- `bamboo/adapters/cli/main.py`
+  - 后续增加 `--resume`。
+- `tests/test_session_memory_store.py`
+  - 补 events/tasks 持久化测试。
 
 ## 验收标准
 

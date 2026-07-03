@@ -1,5 +1,11 @@
 # P2-03 Cron And Heartbeat
 
+## 当前状态
+
+未完成。
+
+当前没有 cron scheduler、job store、heartbeat runtime。Cron 必须复用 `TaskRuntime` 和 `PermissionPolicy`，不能绕过已有权限层。
+
 ## 目标
 
 支持定时任务和心跳任务，让 Bamboo 可以在未来自动执行 isolated 或 main-session 任务。
@@ -31,6 +37,20 @@ jobs:
 5. 增加 retry/backoff 和 logs jsonl。
 6. cron 执行必须走 PermissionPolicy。
 7. heartbeat 用于周期性检查待办或继续当前线程。
+
+## 修改文件
+
+- `bamboo/runtime/task_runtime.py`
+- `bamboo/helpers/requests_params.py`
+- `bamboo/adapters/cli/main.py`
+
+## 新增文件
+
+- `bamboo/cron/__init__.py`
+- `bamboo/cron/models.py`
+- `bamboo/cron/scheduler.py`
+- `bamboo/cron/store.py`
+- `tests/test_cron_scheduler.py`
 
 ## 验收标准
 

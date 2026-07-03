@@ -1,5 +1,11 @@
 # P1-07 Reactive Compact
 
+## 当前状态
+
+未完成。
+
+当前已有请求前的 `ContextCompactor`，但模型请求失败后不会自动做 reactive compact 再重试。
+
 ## 目标
 
 模型返回 context length 错误时，自动触发强制压缩并重试当前模型调用。
@@ -26,6 +32,19 @@
 3. compact 成功后重建 prompt 并重试一次。
 4. compact 无收益时按低价值策略丢弃旧 tool result 或旧 assistant 输出。
 5. `SessionCompactEvent` 增加 reason：preemptive/reactive/manual。
+
+## 修改文件
+
+- `bamboo/llms/base.py`
+- `bamboo/llms/providers/openai_compatible.py`
+- `bamboo/llms/providers/anthropic.py`
+- `bamboo/runtime/agent_runtime.py`
+- `bamboo/runtime/context_compactor.py`
+- `bamboo/helpers/constant.py`
+
+## 新增测试
+
+- `tests/test_reactive_compact.py`
 
 ## 验收标准
 

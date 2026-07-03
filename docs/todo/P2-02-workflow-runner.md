@@ -1,5 +1,11 @@
 # P2-02 Workflow Runner
 
+## 当前状态
+
+未完成。
+
+当前已有 `bamboo/configs/workflows.yaml` 和 `workflows_buildin.yaml`，但没有 workflow registry/runner/runtime 接入。注意：Commands 已经用于“把斜杠命令扩展成 prompt”，Skills 已经用于“加载可复用工作流说明”，Workflow Runner 只负责确定性的多步骤执行编排。
+
 ## 目标
 
 支持用户定义多步骤工作流，让 Agent、工具和固定步骤可以顺序执行。
@@ -29,6 +35,22 @@ workflows:
 4. 支持变量传递：上一步输出作为下一步输入。
 5. 支持失败策略：stop/continue/retry。
 6. 工作流执行必须复用 TaskRuntime 和 PermissionPolicy。
+
+## 修改文件
+
+- `bamboo/configs/workflows.yaml`
+- `bamboo/configs/workflows_buildin.yaml`
+- `bamboo/runtime/runtime_context.py`
+- `bamboo/runtime/task_runtime.py`
+- `bamboo/helpers/constant.py`
+
+## 新增文件
+
+- `bamboo/workflows/__init__.py`
+- `bamboo/workflows/models.py`
+- `bamboo/workflows/registry.py`
+- `bamboo/workflows/runner.py`
+- `tests/test_workflow_runner.py`
 
 ## 验收标准
 

@@ -1,38 +1,39 @@
-# Bamboo Agent 优化需求列表
+# Bamboo Agent 剩余 Todo
 
-本目录把 `docs/agent-optimization-roadmap.md` 拆成可逐个实现的需求文档。
+本目录只保留当前还没有完成的开发项。已经完成的能力不再保留 todo，避免后续重复实现。
 
-建议按编号顺序推进。P0 是主循环稳定性和结构边界，P1 是效果提升，P2 是生态扩展。
+## 已完成并移除的条目
 
-## P0：主循环和运行时边界
+- RuntimeContextBuilder：已由 `bamboo/runtime/runtime_context.py` 实现。
+- Prompt Section Pipeline：已由 `bamboo/prompts/system_prompt.py` 和 `bamboo/runtime/prompt.py` 实现基础分段。
+- Permission Policy：已由 `bamboo/security/permission_policy.py`、resolver、audit 和 AgentRuntime 接入实现。
+- Skills Hub / Guard：已由 `bamboo/skills/hub.py`、`guard.py`、CLI 和 lock/audit 实现。
+- Subagent Runtime：已由 `bamboo/runtime/subagent_runtime.py`、`bamboo/tools/buildin/subagent_run.py` 和内置 subagent 配置实现。
 
-1. `P0-01-runtime-context-builder.md`
-2. `P0-02-prompt-section-pipeline.md`
-3. `P0-03-tool-result-budget.md`
-4. `P0-04-permission-policy.md`
-5. `P0-05-session-store-and-trace.md`
+## P0：运行时稳定性补齐
 
-## P1：效果和长期上下文
+1. `P0-03-tool-result-budget.md`
+2. `P0-05-session-store-and-trace.md`
 
-6. `P1-01-memory-source-log.md`
-7. `P1-02-memory-knowledge-layer.md`
-8. `P1-03-memory-query-retrieval.md`
-9. `P1-04-knowledge-subagent.md`
-10. `P1-05-skills-hub.md`
-11. `P1-06-model-fallback-and-auxiliary-router.md`
-12. `P1-07-reactive-compact.md`
-13. `P1-08-provider-specific-prompt.md`
-14. `P1-09-agent-trace-events.md`
+## P1：长期上下文和模型可靠性
 
-## P2：扩展能力
+3. `P1-01-memory-source-log.md`
+4. `P1-02-memory-knowledge-layer.md`
+5. `P1-03-memory-query-retrieval.md`
+6. `P1-04-knowledge-subagent.md`
+7. `P1-06-model-fallback-and-auxiliary-router.md`
+8. `P1-07-reactive-compact.md`
+9. `P1-08-provider-specific-prompt.md`
+10. `P1-09-agent-trace-events.md`
 
-15. `P2-01-subagent-runtime.md`
-16. `P2-02-workflow-runner.md`
-17. `P2-03-cron-heartbeat.md`
+## P2：自动化扩展
+
+11. `P2-02-workflow-runner.md`
+12. `P2-03-cron-heartbeat.md`
 
 ## 实施原则
 
 - 每次只做一个需求，避免跨模块大面积重构。
-- 每个需求完成后必须补测试和最小可运行验证。
-- 新能力优先走现有主链路：`TaskFactory -> TaskRuntime -> AgentRuntime -> EventBus`。
-- 用户空间内容必须优先可配置，包内内容作为默认模板。
+- 已有能力优先复用：工具走 `ToolRegistry`，审批走 `PermissionPolicy`，委派走 `SubagentRuntime`，可复用流程走 `Command` 或 `Skill`。
+- 新运行时能力继续接入主链路：`TaskFactory -> TaskRuntime -> AgentRuntime -> EventBus`。
+- 用户空间内容优先可配置，包内内容只作为默认模板。
