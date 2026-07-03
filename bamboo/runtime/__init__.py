@@ -6,6 +6,7 @@ from bamboo.runtime.runtime_context import RuntimeContext, RuntimeContextBuilder
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
 from bamboo.runtime.task_runtime import TaskRecoveryPolicy, TaskRuntime
 from bamboo.runtime.tool_result_budget import BudgetedToolResult, ToolResultBudgeter, ToolResultBudgetPolicy
+from bamboo.runtime.trace_recorder import TraceRecorder
 
 __all__ = [
     "AgentRecoveryPolicy",
@@ -23,4 +24,5 @@ __all__ = [
     "BudgetedToolResult",
     "ToolResultBudgeter",
     "ToolResultBudgetPolicy",
+    "TraceRecorder",
 ]

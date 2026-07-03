@@ -122,6 +122,56 @@ class SessionMemoryStore:
             return
         self._append_jsonl(self.session_dir / "compactions.jsonl", payload)
 
+    def append_event(self, event: Any) -> None:
+        """追加保存一条运行时事件。"""
+        if not self.enabled:
+            return
+        if hasattr(event, "to_dict"):
+            payload = event.to_dict()
+        elif isinstance(event, dict):
+            payload = dict(event)
+        else:
+            payload = {"type": type(event).__name__, "value": self._to_plain(event)}
+        payload.setdefault("schema_version", 1)
+        payload.setdefault("time", utc_now())
+        self._append_jsonl(self.session_dir / "events.jsonl", self._to_jsonable(payload))
+
+    def append_task(self, task: Any, *, action: str) -> None:
+        """追加保存一条任务生命周期快照。"""
+        if not self.enabled:
+            return
+        payload = {
+            "schema_version": 1,
+            "type": "task",
+            "time": utc_now(),
+            "action": action,
+            "session_id": getattr(task, "session_id", self.session_id),
+            "task_id": getattr(task, "task_id", ""),
+            "status": getattr(task, "status", ""),
+            "platform": getattr(task, "platform", ""),
+            "user_query": getattr(task, "user_query", ""),
+            "output": getattr(task, "output", ""),
+            "error": getattr(task, "error", ""),
+            "metadata": dict(getattr(task, "metadata", {}) or {}),
+        }
+        self._append_jsonl(self.session_dir / "tasks.jsonl", payload)
+
+    def load_session(self) -> dict[str, Any]:
+        """读取 session.json。"""
+        return self._read_json(self.session_dir / "session.json") or {}
+
+    def load_messages(self) -> list[dict[str, Any]]:
+        """读取 messages.jsonl。"""
+        return self._read_jsonl(self.session_dir / "messages.jsonl")
+
+    def load_events(self) -> list[dict[str, Any]]:
+        """读取 events.jsonl。"""
+        return self._read_jsonl(self.session_dir / "events.jsonl")
+
+    def load_tasks(self) -> list[dict[str, Any]]:
+        """读取 tasks.jsonl。"""
+        return self._read_jsonl(self.session_dir / "tasks.jsonl")
+
     def message_snapshot(self, message: Any) -> dict[str, Any]:
         """生成一条完整消息快照。"""
         return {
@@ -145,6 +195,21 @@ class SessionMemoryStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
 
+    def _read_jsonl(self, path: Path) -> list[dict[str, Any]]:
+        if not path.is_file():
+            return []
+        records: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                records.append(value)
+        return records
+
     def _read_json(self, path: Path) -> dict[str, Any] | None:
         if not path.is_file():
             return None
@@ -163,6 +228,19 @@ class SessionMemoryStore:
         if is_dataclass(value):
             return asdict(value)
         if isinstance(value, dict):
+            return value
+        return str(value)
+
+    def _to_jsonable(self, value: Any) -> Any:
+        if is_dataclass(value):
+            return self._to_jsonable(asdict(value))
+        if isinstance(value, dict):
+            return {str(key): self._to_jsonable(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._to_jsonable(item) for item in value]
+        if isinstance(value, tuple):
+            return [self._to_jsonable(item) for item in value]
+        if isinstance(value, (str, int, float, bool)) or value is None:
             return value
         return str(value)
 

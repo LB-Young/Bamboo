@@ -10,25 +10,21 @@
 - Skills Hub / Guard：已由 `bamboo/skills/hub.py`、`guard.py`、CLI 和 lock/audit 实现。
 - Subagent Runtime：已由 `bamboo/runtime/subagent_runtime.py`、`bamboo/tools/buildin/subagent_run.py` 和内置 subagent 配置实现。
 
-## P0：运行时稳定性补齐
-
-1. `P0-05-session-store-and-trace.md`
-
 ## P1：长期上下文和模型可靠性
 
-2. `P1-01-memory-source-log.md`
-3. `P1-02-memory-knowledge-layer.md`
-4. `P1-03-memory-query-retrieval.md`
-5. `P1-04-knowledge-subagent.md`
-6. `P1-06-model-fallback-and-auxiliary-router.md`
-7. `P1-07-reactive-compact.md`
-8. `P1-08-provider-specific-prompt.md`
-9. `P1-09-agent-trace-events.md`
+1. `P1-01-memory-source-log.md`
+2. `P1-02-memory-knowledge-layer.md`
+3. `P1-03-memory-query-retrieval.md`
+4. `P1-04-knowledge-subagent.md`
+5. `P1-06-model-fallback-and-auxiliary-router.md`
+6. `P1-07-reactive-compact.md`
+7. `P1-08-provider-specific-prompt.md`
+8. `P1-09-agent-trace-events.md`
 
 ## P2：自动化扩展
 
-10. `P2-02-workflow-runner.md`
-11. `P2-03-cron-heartbeat.md`
+9. `P2-02-workflow-runner.md`
+10. `P2-03-cron-heartbeat.md`
 
 ## 实施原则
 

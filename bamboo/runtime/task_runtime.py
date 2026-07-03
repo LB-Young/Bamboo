@@ -35,6 +35,7 @@ from bamboo.llms import LLMFactory
 # AgentRuntime 执行 Agent 的 OTA 循环，AgentRuntimeError 表示 Agent 层运行失败。
 from bamboo.runtime.agent_runtime import AgentRuntime, AgentRuntimeError
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
+from bamboo.runtime.trace_recorder import TraceRecorder
 
 # InMemoryTaskStore 保存任务生命周期快照，当前实现是内存级存储。
 from bamboo.runtime.store import InMemoryTaskStore, get_task_store
@@ -135,8 +136,20 @@ class TaskRuntime:
         # state 保存本次 TaskRuntime 执行期间的尝试次数和可恢复错误。
         state = TaskRunState()
         task.session.current_task_id = task.task_id
+        trace_recorder = self._create_trace_recorder(task)
+        if trace_recorder is not None:
+            trace_recorder.start()
+        try:
+            return await self._run_existing_task_with_trace(task, state)
+        finally:
+            if trace_recorder is not None:
+                trace_recorder.close()
+
+    async def _run_existing_task_with_trace(self, task: Task, state: TaskRunState) -> Task:
+        """运行任务主体；外层负责 trace recorder 生命周期。"""
         # 任务创建后先落入 store，再发事件，保证外部订阅者看到的是已存在任务。
         self.task_store.save_created(task)
+        self._append_task_trace(task, "created")
         # 通知订阅者任务已经创建，例如 CLI 可以据此打印 task created。
         await self._emit_task_created(task)
         # 将任务从 created 推进到 running，并发布状态变化事件。
@@ -174,6 +187,23 @@ class TaskRuntime:
         # 抛出最终错误，保持运行入口可以感知失败。
         raise error
 
+    def _create_trace_recorder(self, task: Task) -> TraceRecorder | None:
+        """Create a trace recorder for tasks backed by SessionMemoryStore."""
+        if task.session.memory_store is None:
+            return None
+        return TraceRecorder(
+            event_bus=self.event_bus,
+            store=task.session.memory_store,
+            session_id=task.session_id,
+            task_id=task.task_id,
+        )
+
+    def _append_task_trace(self, task: Task, action: str) -> None:
+        """Persist one task lifecycle snapshot when session storage is enabled."""
+        if task.session.memory_store is None:
+            return
+        task.session.memory_store.append_task(task, action=action)
+
     async def _recover_agent_failure(self, task: Task, state: TaskRunState, exc: Exception) -> bool:
         """记录 Agent 整体失败，并判断任务是否还能继续。"""
         # error 是带尝试次数的错误摘要，方便排查是哪一轮 Agent 出错。
@@ -188,6 +218,7 @@ class TaskRuntime:
         task.session.add_message("system", f"[recoverable-task-error]\n{error}", agent_name="runtime")
         # 保存错误快照，即使后续恢复成功，也能追踪曾经发生过的 Agent 失败。
         self.task_store.save_error(task, error)
+        self._append_task_trace(task, "agent_error")
 
         # 发布审计事件，说明 TaskRuntime 捕获了 Agent 错误并进入恢复判断。
         await self.event_bus.emit(
@@ -236,6 +267,7 @@ class TaskRuntime:
         await self._transition_task(task, task.status, "failed")
         # 保存失败快照，便于后续查询失败原因。
         self.task_store.save_error(task, task.error)
+        self._append_task_trace(task, "failed")
         # 发布步骤完成事件，但 summary 中明确说明任务失败。
         await self._emit_step_finished(task, f"Bamboo task failed: {task.error}")
 
@@ -253,6 +285,7 @@ class TaskRuntime:
         task.status = to_status  # type: ignore[assignment]
         # 将状态变化保存到任务存储。
         self.task_store.save_status(task, to_status)
+        self._append_task_trace(task, f"status:{to_status}")
         # 发布任务状态变化事件，外部订阅者可以据此更新 UI 或打印日志。
         await self.event_bus.emit(
             TaskStatusChangeEvent(
