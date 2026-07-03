@@ -165,6 +165,7 @@ def test_task_runtime_records_trace_events_and_task_snapshots(tmp_path: Path) ->
     session_dir = trace_dirs[0].parent
     events = _read_jsonl(session_dir / "events.jsonl")
     tasks = _read_jsonl(session_dir / "tasks.jsonl")
+    turns = _read_jsonl(session_dir / "turns.jsonl")
 
     assert [event["type"] for event in events] == [
         "task-create",
@@ -176,6 +177,10 @@ def test_task_runtime_records_trace_events_and_task_snapshots(tmp_path: Path) ->
     assert all(event["session_id"] == "session-runtime-trace" for event in events)
     assert {task["action"] for task in tasks} >= {"created", "status:running", "status:completed"}
     assert tasks[-1]["status"] == "completed"
+    assert turns[0]["type"] == "turn"
+    assert turns[0]["task_id"] == "task-runtime-trace"
+    assert turns[0]["user_message"] == "trace this task"
+    assert turns[0]["assistant_answer"] == "done"
 
 
 def _read_jsonl(path: Path) -> list[dict]:

@@ -168,6 +168,7 @@ class TaskRuntime:
                 task = await agent.run(task)
                 # Agent 成功完成后，将任务状态标记为 completed。
                 await self._transition_task(task, "running", "completed")
+                self._append_turn_trace(task)
                 # 发布步骤完成事件，summary 会被 CLI 或 UI 展示。
                 await self._emit_step_finished(task, "Bamboo task completed.")
                 # 任务成功结束，返回最终 Task 给调用方。
@@ -203,6 +204,12 @@ class TaskRuntime:
         if task.session.memory_store is None:
             return
         task.session.memory_store.append_task(task, action=action)
+
+    def _append_turn_trace(self, task: Task) -> None:
+        """Persist one turn-level source log record."""
+        if task.session.memory_store is None:
+            return
+        task.session.memory_store.append_turn(task)
 
     async def _recover_agent_failure(self, task: Task, state: TaskRunState, exc: Exception) -> bool:
         """记录 Agent 整体失败，并判断任务是否还能继续。"""
@@ -268,6 +275,7 @@ class TaskRuntime:
         # 保存失败快照，便于后续查询失败原因。
         self.task_store.save_error(task, task.error)
         self._append_task_trace(task, "failed")
+        self._append_turn_trace(task)
         # 发布步骤完成事件，但 summary 中明确说明任务失败。
         await self._emit_step_finished(task, f"Bamboo task failed: {task.error}")
 

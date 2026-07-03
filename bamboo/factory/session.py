@@ -43,6 +43,9 @@ class Session:
         persist: bool = True,
     ) -> Message:
         """向会话追加一条消息并返回。"""
+        message_metadata = dict(metadata or {})
+        if self.current_task_id and "task_id" not in message_metadata:
+            message_metadata["task_id"] = self.current_task_id
         message = Message(
             role=role,
             content=content,
@@ -53,7 +56,7 @@ class Session:
             message_type=message_type,
             active_for_prompt=active_for_prompt,
             origin_message_ids=origin_message_ids or [],
-            metadata=metadata or {},
+            metadata=message_metadata,
         )
         if insert_at is None:
             self.messages.append(message)

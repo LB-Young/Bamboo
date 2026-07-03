@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from bamboo.helpers.redact import redact_sensitive_text
+
 
 def utc_now() -> str:
     """返回 UTC ISO 时间戳。"""
@@ -156,6 +158,38 @@ class SessionMemoryStore:
         }
         self._append_jsonl(self.session_dir / "tasks.jsonl", payload)
 
+    def append_turn(self, task: Any) -> None:
+        """追加保存一次用户请求对应的 turn 级源日志。"""
+        if not self.enabled:
+            return
+        task_id = getattr(task, "task_id", "")
+        session = getattr(task, "session", None)
+        messages = list(getattr(session, "messages", []) or [])
+        task_messages = [
+            message
+            for message in messages
+            if (getattr(message, "metadata", {}) or {}).get("task_id") == task_id
+            and getattr(message, "message_type", "") != "compaction"
+        ]
+        if not task_messages:
+            task_messages = [message for message in messages if getattr(message, "message_type", "") != "compaction"]
+        payload = {
+            "schema_version": 1,
+            "type": "turn",
+            "time": utc_now(),
+            "session_id": getattr(task, "session_id", self.session_id),
+            "task_id": task_id,
+            "status": getattr(task, "status", ""),
+            "user_message": self._redact(self._last_content(task_messages, "user")),
+            "assistant_answer": self._redact(getattr(task, "output", "") or self._last_content(task_messages, "assistant")),
+            "tool_calls": self._collect_tool_calls(task_messages),
+            "tool_results": self._collect_tool_results(task_messages),
+            "message_ids": [getattr(message, "message_id", "") for message in task_messages],
+            "error": self._redact(getattr(task, "error", "")),
+            "metadata": self._redact_jsonable(dict(getattr(task, "metadata", {}) or {})),
+        }
+        self._append_jsonl(self.session_dir / "turns.jsonl", payload)
+
     def load_session(self) -> dict[str, Any]:
         """读取 session.json。"""
         return self._read_json(self.session_dir / "session.json") or {}
@@ -171,6 +205,10 @@ class SessionMemoryStore:
     def load_tasks(self) -> list[dict[str, Any]]:
         """读取 tasks.jsonl。"""
         return self._read_jsonl(self.session_dir / "tasks.jsonl")
+
+    def load_turns(self) -> list[dict[str, Any]]:
+        """读取 turns.jsonl。"""
+        return self._read_jsonl(self.session_dir / "turns.jsonl")
 
     def message_snapshot(self, message: Any) -> dict[str, Any]:
         """生成一条完整消息快照。"""
@@ -243,6 +281,64 @@ class SessionMemoryStore:
         if isinstance(value, (str, int, float, bool)) or value is None:
             return value
         return str(value)
+
+    def _last_content(self, messages: list[Any], role: str) -> str:
+        for message in reversed(messages):
+            if getattr(message, "role", "") == role and getattr(message, "message_type", "") != "compaction":
+                return str(getattr(message, "content", ""))
+        return ""
+
+    def _collect_tool_calls(self, messages: list[Any]) -> list[dict[str, Any]]:
+        calls: list[dict[str, Any]] = []
+        for message in messages:
+            for tool_call in getattr(message, "tool_calls", []) or []:
+                plain = self._to_jsonable(self._to_plain(tool_call))
+                if isinstance(plain, dict):
+                    calls.append(self._redact_mapping(plain))
+                else:
+                    calls.append({"value": self._redact(str(plain))})
+        return calls
+
+    def _collect_tool_results(self, messages: list[Any]) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        for message in messages:
+            if getattr(message, "role", "") != "tool":
+                continue
+            content = str(getattr(message, "content", ""))
+            results.append(
+                {
+                    "tool_name": getattr(message, "tool_name", "") or getattr(message, "agent_name", ""),
+                    "tool_call_id": getattr(message, "tool_call_id", ""),
+                    "summary": self._redact(self._summarize_text(content)),
+                    "content_length": len(content),
+                    "metadata": self._redact_jsonable(dict(getattr(message, "metadata", {}) or {})),
+                }
+            )
+        return results
+
+    def _summarize_text(self, text: str, *, limit: int = 1200) -> str:
+        if len(text) <= limit:
+            return text
+        head = text[: limit // 2]
+        tail = text[-limit // 2 :]
+        return f"{head}\n[truncated source log tool result omitted_chars={len(text) - limit}]\n{tail}"
+
+    def _redact_mapping(self, value: dict[str, Any]) -> dict[str, Any]:
+        redacted = self._redact_jsonable(value)
+        return redacted if isinstance(redacted, dict) else {}
+
+    def _redact(self, value: str) -> str:
+        return redact_sensitive_text(value)
+
+    def _redact_jsonable(self, value: Any) -> Any:
+        value = self._to_jsonable(value)
+        if isinstance(value, str):
+            return self._redact(value)
+        if isinstance(value, dict):
+            return {key: self._redact_jsonable(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._redact_jsonable(item) for item in value]
+        return value
 
 
 def current_time_record_name() -> str:
