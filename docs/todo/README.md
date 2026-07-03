@@ -12,24 +12,23 @@
 
 ## P0：运行时稳定性补齐
 
-1. `P0-03-tool-result-budget.md`
-2. `P0-05-session-store-and-trace.md`
+1. `P0-05-session-store-and-trace.md`
 
 ## P1：长期上下文和模型可靠性
 
-3. `P1-01-memory-source-log.md`
-4. `P1-02-memory-knowledge-layer.md`
-5. `P1-03-memory-query-retrieval.md`
-6. `P1-04-knowledge-subagent.md`
-7. `P1-06-model-fallback-and-auxiliary-router.md`
-8. `P1-07-reactive-compact.md`
-9. `P1-08-provider-specific-prompt.md`
-10. `P1-09-agent-trace-events.md`
+2. `P1-01-memory-source-log.md`
+3. `P1-02-memory-knowledge-layer.md`
+4. `P1-03-memory-query-retrieval.md`
+5. `P1-04-knowledge-subagent.md`
+6. `P1-06-model-fallback-and-auxiliary-router.md`
+7. `P1-07-reactive-compact.md`
+8. `P1-08-provider-specific-prompt.md`
+9. `P1-09-agent-trace-events.md`
 
 ## P2：自动化扩展
 
-11. `P2-02-workflow-runner.md`
-12. `P2-03-cron-heartbeat.md`
+10. `P2-02-workflow-runner.md`
+11. `P2-03-cron-heartbeat.md`
 
 ## 实施原则
 

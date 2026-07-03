@@ -99,6 +99,12 @@ class ToolResultEvent(BaseEvent):
     tool_name: str = ""
     tool_call_id: str = ""
     output: str = ""
+    context_output: str = ""
+    truncated: bool = False
+    original_length: int = 0
+    context_length: int = 0
+    original_tokens: int = 0
+    context_tokens: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -106,6 +112,12 @@ class ToolResultEvent(BaseEvent):
             "tool_name": self.tool_name,
             "tool_call_id": self.tool_call_id,
             "output": self.output,
+            "context_output": self.context_output,
+            "truncated": self.truncated,
+            "original_length": self.original_length,
+            "context_length": self.context_length,
+            "original_tokens": self.original_tokens,
+            "context_tokens": self.context_tokens,
         }
 
 

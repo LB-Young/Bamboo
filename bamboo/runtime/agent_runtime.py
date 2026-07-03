@@ -28,6 +28,7 @@ from bamboo.llms import LLMResponse, LLMToolCall
 from bamboo.runtime.prompt import AgentPrompt
 from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
+from bamboo.runtime.tool_result_budget import ToolResultBudgeter
 from bamboo.security import PermissionDecision, PermissionRequest, PermissionResult, ToolAuditRecord
 
 
@@ -80,6 +81,7 @@ class AgentRuntime:
         self.permission_policy = runtime_context.permission_policy
         self.permission_resolver = runtime_context.permission_resolver
         self.audit_logger = runtime_context.audit_logger
+        self.tool_result_budgeter = ToolResultBudgeter()
         self.run_state = AgentRunState()
 
     async def run(self, task: Task) -> Task:
@@ -291,13 +293,18 @@ class AgentRuntime:
             duration_ms=duration_ms,
             output_preview=result.content,
         )
+        budgeted_result = self.tool_result_budgeter.prepare_for_session(result.content)
         task.session.add_message(
             "tool",
-            result.content,
+            budgeted_result.context_content,
             agent_name=tool_call.name,
             tool_call_id=tool_call.id,
             tool_name=tool_call.name,
+            metadata={
+                "tool_result_budget": budgeted_result.metadata,
+            },
         )
+        self.tool_result_budgeter.compact_old_tool_results(task.session)
         await self.event_bus.emit(
             ToolResultEvent(
                 session_id=task.session_id,
@@ -305,6 +312,12 @@ class AgentRuntime:
                 tool_name=tool_call.name,
                 tool_call_id=tool_call.id,
                 output=result.content,
+                context_output=budgeted_result.context_content,
+                truncated=budgeted_result.truncated,
+                original_length=budgeted_result.original_length,
+                context_length=budgeted_result.context_length,
+                original_tokens=budgeted_result.original_tokens,
+                context_tokens=budgeted_result.context_tokens,
             )
         )
 

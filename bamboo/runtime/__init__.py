@@ -5,6 +5,7 @@ from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompact
 from bamboo.runtime.runtime_context import RuntimeContext, RuntimeContextBuilder
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
 from bamboo.runtime.task_runtime import TaskRecoveryPolicy, TaskRuntime
+from bamboo.runtime.tool_result_budget import BudgetedToolResult, ToolResultBudgeter, ToolResultBudgetPolicy
 
 __all__ = [
     "AgentRecoveryPolicy",
@@ -19,4 +20,7 @@ __all__ = [
     "AgentStateMachine",
     "TaskRecoveryPolicy",
     "TaskRuntime",
+    "BudgetedToolResult",
+    "ToolResultBudgeter",
+    "ToolResultBudgetPolicy",
 ]
