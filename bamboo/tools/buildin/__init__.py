@@ -10,6 +10,7 @@ def create_builtin_tools() -> list[Tool]:
     from bamboo.tools.buildin.glob import GlobTool
     from bamboo.tools.buildin.grep import GrepTool
     from bamboo.tools.buildin.lsp import LSPTool
+    from bamboo.tools.buildin.memory_retrieve import MemoryRetrieveTool
     from bamboo.tools.buildin.read import ReadTool
     from bamboo.tools.buildin.skill_load import SkillLoadTool
     from bamboo.tools.buildin.subagent_run import SubagentRunTool
@@ -24,6 +25,7 @@ def create_builtin_tools() -> list[Tool]:
         GlobTool(),
         GrepTool(),
         LSPTool(),
+        MemoryRetrieveTool(),
         ReadTool(),
         SkillLoadTool(),
         SubagentRunTool(),

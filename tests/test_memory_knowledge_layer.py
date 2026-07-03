@@ -32,24 +32,25 @@ def test_memory_manager_creates_chat_templates_without_injecting_empty_templates
 
     assert context.scope.kind == "chat"
     assert context.knowledge_dir.parts[-3:] == ("dates", "chat", "knowledge")
+    assert (context.knowledge_dir / "global.md").is_file()
     assert (context.knowledge_dir / "profile.md").is_file()
     assert (context.knowledge_dir / "preferences.md").is_file()
     assert "# Profile" in (context.knowledge_dir / "profile.md").read_text(encoding="utf-8")
     assert context.content == ""
 
 
-def test_memory_manager_loads_chat_knowledge_next_prompt(tmp_path: Path) -> None:
+def test_memory_manager_loads_chat_global_knowledge_next_prompt(tmp_path: Path) -> None:
     manager = MemoryManager()
     session = _session(mode="chat", project_root=tmp_path)
     first_context = manager.load_prompt_context(session)
-    (first_context.knowledge_dir / "preferences.md").write_text(
+    (first_context.knowledge_dir / "global.md").write_text(
         "- Prefer concise Chinese answers. source: session-a/task-a\n",
         encoding="utf-8",
     )
 
     second_context = manager.load_prompt_context(session)
 
-    assert "preferences.md" in second_context.content
+    assert "global.md" in second_context.content
     assert "Prefer concise Chinese answers" in second_context.content
 
 
@@ -62,13 +63,13 @@ def test_memory_manager_keeps_project_knowledge_isolated(tmp_path: Path) -> None
 
     session_a = _session(mode="project", project_root=project_a)
     context_a = manager.load_prompt_context(session_a)
-    (context_a.knowledge_dir / "architecture.md").write_text(
+    (context_a.knowledge_dir / "global.md").write_text(
         "- Project A uses Redis. source: session-a/task-a\n",
         encoding="utf-8",
     )
     project_global_dir = context_a.knowledge_dirs[0]
     assert project_global_dir.parts[-3:] == ("memory", "projects", "knowledge")
-    (project_global_dir / "workflows.md").write_text(
+    (project_global_dir / "global.md").write_text(
         "- All projects use pytest before final answers. source: session-global/task-global\n",
         encoding="utf-8",
     )
@@ -92,7 +93,7 @@ def test_runtime_prompt_builder_injects_memory_knowledge(tmp_path: Path) -> None
     project_root.mkdir()
     session = _session(mode="project", project_root=project_root)
     context = manager.load_prompt_context(session)
-    (context.knowledge_dir / "coding_style.md").write_text(
+    (context.knowledge_dir / "global.md").write_text(
         "- Use pytest for verification. source: session-a/task-a\n",
         encoding="utf-8",
     )
@@ -105,7 +106,7 @@ def test_runtime_prompt_builder_injects_memory_knowledge(tmp_path: Path) -> None
     ).build(task)
     prompt = runtime_context.prompt_builder.build(session)
 
-    assert "# Memory Knowledge" in prompt.to_llm_request().system_prompt
+    assert "# Global Memory" in prompt.to_llm_request().system_prompt
     assert "Use pytest for verification" in prompt.to_llm_request().system_prompt
 
 

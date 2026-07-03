@@ -10,8 +10,16 @@ from bamboo.memory.get_memory_path import get_memory_dir
 from bamboo.memory.scope import MemoryScope
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
-CHAT_TEMPLATE_NAMES = ("profile.md", "preferences.md", "recurring_topics.md", "decisions.md", "open_questions.md")
+CHAT_TEMPLATE_NAMES = (
+    "global.md",
+    "profile.md",
+    "preferences.md",
+    "recurring_topics.md",
+    "decisions.md",
+    "open_questions.md",
+)
 PROJECT_TEMPLATE_NAMES = (
+    "global.md",
     "overview.md",
     "architecture.md",
     "decisions.md",
@@ -64,7 +72,7 @@ class MemoryManager:
         for label, knowledge_dir in knowledge_dirs:
             if not self.ensure_knowledge_templates(scope, knowledge_dir):
                 continue
-            loaded_files.extend(self._load_knowledge_files(knowledge_dir, label=label))
+            loaded_files.extend(self._load_knowledge_files(knowledge_dir, label=label, global_only=True))
         primary_dir = knowledge_dirs[-1][1]
         return MemoryPromptContext(
             scope=scope,
@@ -140,11 +148,29 @@ class MemoryManager:
                 return False
         return True
 
-    def _load_knowledge_files(self, knowledge_dir: Path, *, label: str) -> list[MemoryKnowledgeFile]:
+    def load_knowledge_files_for_retrieval(self, session: Session) -> list[MemoryKnowledgeFile]:
+        """Load all knowledge files for retrieval, including non-global files."""
+        scope = self.resolve_scope(session)
+        files: list[MemoryKnowledgeFile] = []
+        for label, knowledge_dir in self.knowledge_dirs_for_scope(scope):
+            if not self.ensure_knowledge_templates(scope, knowledge_dir):
+                continue
+            files.extend(self._load_knowledge_files(knowledge_dir, label=label, global_only=False))
+        return files
+
+    def _load_knowledge_files(
+        self,
+        knowledge_dir: Path,
+        *,
+        label: str,
+        global_only: bool,
+    ) -> list[MemoryKnowledgeFile]:
         files = []
         if not knowledge_dir.is_dir():
             return files
         for path in sorted(knowledge_dir.glob("*.md")):
+            if global_only and path.name != "global.md":
+                continue
             try:
                 content = path.read_text(encoding="utf-8").strip()
             except OSError:

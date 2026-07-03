@@ -40,7 +40,7 @@ class AgentPrompt:
             self.skill_catalog or "(none)",
         ]
         if self.memory_context:
-            sections.extend(["# Memory Knowledge", self.memory_context])
+            sections.extend(["# Global Memory", self.memory_context])
         if self.error_history:
             sections.extend(["# Recoverable Errors", "\n".join(self.error_history)])
         return "\n\n".join(sections)
@@ -49,7 +49,7 @@ class AgentPrompt:
         """把 Agent prompt 转换为与 Provider 无关的模型请求。"""
         system_sections = [self.system_prompt]
         if self.memory_context:
-            system_sections.extend(["# Memory Knowledge", self.memory_context])
+            system_sections.extend(["# Global Memory", self.memory_context])
         if self.tool_catalog:
             system_sections.extend(["# Available Tools", self.tool_catalog])
         if self.skill_catalog:
