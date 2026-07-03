@@ -13,6 +13,7 @@ from bamboo.factory.session import Session
 from bamboo.factory.task_factory import Task
 from bamboo.llms import LLMClient, LLMFactory
 from bamboo.llms.config import ModelConfig
+from bamboo.memory.manager import MemoryManager
 from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
 from bamboo.runtime.prompt import AgentPromptBuilder
 from bamboo.security import PermissionPolicy, PermissionResolver, ToolAuditLogger, create_permission_resolver
@@ -61,6 +62,7 @@ class RuntimeContextBuilder:
         context_compactor: ContextCompactor | None = None,
         skill_registry: SkillRegistry | None = None,
         subagent_registry: SubagentRegistry | None = None,
+        memory_manager: MemoryManager | None = None,
         compaction_policy: ContextBudgetPolicy | None = None,
         token_counter: TokenCounter | None = None,
         model_name: str | None = None,
@@ -76,10 +78,14 @@ class RuntimeContextBuilder:
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry or create_skill_registry()
         self.subagent_registry = subagent_registry
+        self.memory_manager = memory_manager or MemoryManager()
         self.prompt_builder = prompt_builder or AgentPromptBuilder(
             tool_registry=self.tool_registry,
             skill_registry=self.skill_registry,
+            memory_manager=self.memory_manager,
         )
+        if prompt_builder is not None and getattr(prompt_builder, "memory_manager", None) is None:
+            prompt_builder.memory_manager = self.memory_manager
         self.context_compactor = context_compactor
         self.compaction_policy = compaction_policy
         self.token_counter = token_counter
@@ -120,6 +126,7 @@ class RuntimeContextBuilder:
             tool_registry=self.tool_registry,
             prompt_builder=self.prompt_builder,
             context_compactor=context_compactor,
+            memory_manager=self.memory_manager,
             skill_registry=self.skill_registry,
             subagent_registry=self.subagent_registry or create_subagent_registry(task.run_params.project),
             mcp_manager=self.mcp_manager,

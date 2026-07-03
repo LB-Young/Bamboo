@@ -12,18 +12,17 @@
 
 ## P1：长期上下文和模型可靠性
 
-1. `P1-02-memory-knowledge-layer.md`
-2. `P1-03-memory-query-retrieval.md`
-3. `P1-04-knowledge-subagent.md`
-4. `P1-06-model-fallback-and-auxiliary-router.md`
-5. `P1-07-reactive-compact.md`
-6. `P1-08-provider-specific-prompt.md`
-7. `P1-09-agent-trace-events.md`
+1. `P1-03-memory-query-retrieval.md`
+2. `P1-04-knowledge-subagent.md`
+3. `P1-06-model-fallback-and-auxiliary-router.md`
+4. `P1-07-reactive-compact.md`
+5. `P1-08-provider-specific-prompt.md`
+6. `P1-09-agent-trace-events.md`
 
 ## P2：自动化扩展
 
-8. `P2-02-workflow-runner.md`
-9. `P2-03-cron-heartbeat.md`
+7. `P2-02-workflow-runner.md`
+8. `P2-03-cron-heartbeat.md`
 
 ## 实施原则
 

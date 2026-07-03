@@ -31,7 +31,7 @@ class MemoryScope:
         project_hash = get_memory_dir_name(project_root)
         return cls(
             kind="project",
-            root=get_memory_dir() / "projects" / project_hash,
+            root=get_memory_dir() / "projects",
             project_hash=project_hash,
             project_root=str(Path(project_root).expanduser().resolve(strict=False)),
         )

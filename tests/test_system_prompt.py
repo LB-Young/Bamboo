@@ -81,6 +81,11 @@ def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     assert (layout.root / "prompts" / "shared" / "00-language.md").is_file()
     assert (layout.root / "storage" / "skills").is_dir()
     assert (layout.root / "buildin_skills" / "skill-creator" / "SKILL.md").is_file()
+    assert (layout.root / "memory" / "dates" / "chat" / "knowledge" / "profile.md").is_file()
+    assert (layout.root / "memory" / "projects" / "knowledge" / "overview.md").is_file()
+    assert "# Profile" in (layout.root / "memory" / "dates" / "chat" / "knowledge" / "profile.md").read_text(
+        encoding="utf-8"
+    )
     assert not (layout.root / "prompts" / "__init__.py").exists()
     assert not (layout.root / "prompts" / "system_prompt.py").exists()
 

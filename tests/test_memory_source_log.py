@@ -36,7 +36,7 @@ def test_memory_scope_resolves_chat_and_project(tmp_path: Path) -> None:
     assert chat_scope.root.name == "dates"
     assert project_scope.kind == "project"
     assert project_scope.project_hash == get_memory_dir_name(project_root)
-    assert project_scope.root.name == project_scope.project_hash
+    assert project_scope.root.name == "projects"
 
 
 def test_append_turn_redacts_and_searches_source_log(tmp_path: Path) -> None:
@@ -73,7 +73,7 @@ def test_project_source_log_search_is_scope_isolated(tmp_path: Path) -> None:
     scope_a = MemoryScope.project(project_a)
     scope_b = MemoryScope.project(project_b)
 
-    store_a = SessionMemoryStore(memory_dir=scope_a.root, session_id="session-a")
+    store_a = SessionMemoryStore(memory_dir=scope_a.root / scope_a.project_hash, session_id="session-a")
     task_a = _task_with_messages(
         session_id="session-a",
         task_id="task-a",
@@ -83,7 +83,7 @@ def test_project_source_log_search_is_scope_isolated(tmp_path: Path) -> None:
     task_a.session.memory_store = store_a
     store_a.append_turn(task_a)
 
-    store_b = SessionMemoryStore(memory_dir=scope_b.root, session_id="session-b")
+    store_b = SessionMemoryStore(memory_dir=scope_b.root / scope_b.project_hash, session_id="session-b")
     task_b = _task_with_messages(
         session_id="session-b",
         task_id="task-b",

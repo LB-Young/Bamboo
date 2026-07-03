@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
+from bamboo.memory.manager import MemoryManager
 from bamboo.skills import SkillRegistry
 from bamboo.tools import ToolRegistry, get_tool_registry
 
@@ -23,6 +24,7 @@ class AgentPrompt:
     tool_catalog: str
     skill_catalog: str
     tools: list[dict]
+    memory_context: str = ""
     error_history: list[str] = field(default_factory=list)
 
     def render(self) -> str:
@@ -37,6 +39,8 @@ class AgentPrompt:
             "# Available Skills",
             self.skill_catalog or "(none)",
         ]
+        if self.memory_context:
+            sections.extend(["# Memory Knowledge", self.memory_context])
         if self.error_history:
             sections.extend(["# Recoverable Errors", "\n".join(self.error_history)])
         return "\n\n".join(sections)
@@ -44,6 +48,8 @@ class AgentPrompt:
     def to_llm_request(self) -> LLMRequest:
         """把 Agent prompt 转换为与 Provider 无关的模型请求。"""
         system_sections = [self.system_prompt]
+        if self.memory_context:
+            system_sections.extend(["# Memory Knowledge", self.memory_context])
         if self.tool_catalog:
             system_sections.extend(["# Available Tools", self.tool_catalog])
         if self.skill_catalog:
@@ -65,10 +71,12 @@ class AgentPromptBuilder:
         *,
         tool_registry: ToolRegistry | None = None,
         skill_registry: SkillRegistry | None = None,
+        memory_manager: MemoryManager | None = None,
     ) -> None:
         """初始化 Prompt Builder，并固定当前 Agent 可见的工具注册表。"""
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry
+        self.memory_manager = memory_manager
 
     def build(self, session: Session, *, error_history: list[str] | None = None) -> AgentPrompt:
         """构建一轮 Agent 循环的 prompt 快照。"""
@@ -88,6 +96,7 @@ class AgentPromptBuilder:
             messages=messages,
             tool_catalog=self._build_tool_catalog(),
             skill_catalog=self._build_skill_catalog(),
+            memory_context=self._build_memory_context(session),
             tools=tools,
             error_history=error_history or [],
         )
@@ -108,3 +117,9 @@ class AgentPromptBuilder:
         if self.skill_registry is None:
             return ""
         return self.skill_registry.render_catalog()
+
+    def _build_memory_context(self, session: Session) -> str:
+        """Render editable memory knowledge for the active session."""
+        if self.memory_manager is None:
+            return ""
+        return self.memory_manager.load_prompt_context(session).content

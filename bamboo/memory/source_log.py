@@ -28,10 +28,25 @@ def search_source_logs(query: str, scope: MemoryScope, *, limit: int = 10) -> li
     terms = _terms(query)
     if not terms or not scope.root.exists():
         return []
-    matches = _search_jsonl_files(scope.root.rglob("turns.jsonl"), terms, origin="turn")
+    roots = _source_roots(scope)
+    matches = _search_jsonl_files(_iter_jsonl(roots, "turns.jsonl"), terms, origin="turn")
     if not matches:
-        matches = _search_jsonl_files(scope.root.rglob("messages.jsonl"), terms, origin="message")
+        matches = _search_jsonl_files(_iter_jsonl(roots, "messages.jsonl"), terms, origin="message")
     return sorted(matches, key=lambda match: match.score, reverse=True)[:limit]
+
+
+def _source_roots(scope: MemoryScope) -> list[Path]:
+    if scope.kind == "project" and scope.project_hash:
+        return [scope.root / scope.project_hash]
+    return [scope.root]
+
+
+def _iter_jsonl(roots: list[Path], file_name: str) -> list[Path]:
+    paths: list[Path] = []
+    for root in roots:
+        if root.exists():
+            paths.extend(root.rglob(file_name))
+    return paths
 
 
 def _search_jsonl_files(paths: Any, terms: set[str], *, origin: str) -> list[SourceLogMatch]:

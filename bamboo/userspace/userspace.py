@@ -13,6 +13,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from bamboo.memory.manager import MemoryManager
+
 dirs: list[str] = [
     "configs",                  # 配置目录
     "prompts",                  # 可编辑系统提示词模板
@@ -84,6 +86,7 @@ def ensure_userspace() -> UserspaceLayout:
             copy_builtin_info(subdir, target)
         else:
             logger.info(f"Ensured directory: {target}")
+    MemoryManager(memory_root=bamboo_root_dir / "memory").ensure_base_knowledge_templates()
     return UserspaceLayout(root=bamboo_root_dir)
 
 
