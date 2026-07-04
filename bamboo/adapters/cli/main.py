@@ -75,7 +75,7 @@ async def _start_session(run_params: RunParams) -> object:
         runtime = TaskRuntime(event_bus=event_bus)
         task = runtime.create_task(run_params)
         task = await runtime.run_existing_task(task)
-        log.info(
+        log.debug(
             "task completed task_id={task_id} session_id={session_id}",
             task_id=task.task_id,
             session_id=task.session_id,
@@ -155,7 +155,7 @@ async def _start_interactive_session(run_params: RunParams) -> object:
                 )
                 console.print(f"[red]task failed[/red] {exc}")
                 continue
-            log.info(
+            log.debug(
                 "interactive turn completed task_id={task_id} session_id={session_id}",
                 task_id=task.task_id,
                 session_id=task.session_id,
