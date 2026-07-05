@@ -295,6 +295,41 @@ class SubagentFinishEvent(BaseEvent):
         }
 
 
+@dataclass(kw_only=True)
+class KnowledgeUpdateEvent(BaseEvent):
+    """Memory knowledge update event."""
+
+    type: str = "memory-knowledge-update"
+    scope: str = ""
+    file: str = ""
+    operation: str = ""
+    status: str = ""
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "scope": self.scope,
+            "file": self.file,
+            "operation": self.operation,
+            "status": self.status,
+            "reason": self.reason,
+        }
+
+
+@dataclass(kw_only=True)
+class KnowledgeUpdateErrorEvent(BaseEvent):
+    """Memory knowledge update error event."""
+
+    type: str = "memory-knowledge-error"
+    scope: str = ""
+    file: str = ""
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "scope": self.scope, "file": self.file, "reason": self.reason}
+
+
 # ─── Step 事件 ───────────────────────────────────────────────────────────────
 
 @dataclass(kw_only=True)
@@ -531,6 +566,7 @@ BambooEvent = (
     | ToolCallEvent | ToolResultEvent | ToolErrorEvent
     | PermissionRequestEvent | PermissionResultEvent | ToolAuditEvent
     | SubagentStartEvent | SubagentFinishEvent
+    | KnowledgeUpdateEvent | KnowledgeUpdateErrorEvent
     | StepStartEvent | StepFinishEvent
     | SessionCompactEvent | SessionStatusChangeEvent | AuditEvent
     | PlanStartEvent | PlanConfirmEvent | PlanStepExecuteEvent | PlanCancelEvent

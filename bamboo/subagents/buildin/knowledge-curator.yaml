@@ -1,0 +1,13 @@
+name: knowledge-curator
+description: Extract stable long-term memory updates from the completed turn and propose safe knowledge md appends.
+model: ""
+permission: read-only
+tools:
+  memory_retrieve: true
+  read: true
+  grep: false
+  glob: false
+  skill_load: false
+  bash: false
+  write: false
+  edit: false

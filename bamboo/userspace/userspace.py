@@ -96,6 +96,10 @@ def copy_builtin_info(subdir: str, target_dir: Path) -> None:
     src_dir = package_root / subdir
     if subdir == "buildin_skills":
         src_dir = package_root / "skills" / "buildin"
+    if subdir == "buildin_subagents":
+        src_dir = package_root / "subagents" / "buildin"
+    if subdir == "buildin_workflows":
+        src_dir = package_root / "workflows" / "buildin"
     if src_dir.exists():
         for source_path in src_dir.rglob("*"):
             if subdir == "prompts" and source_path.is_file() and source_path.suffix != ".md":
