@@ -602,17 +602,23 @@ subagent.*     started/finished/error
 
 建议设计：
 
-先实现轻量 workflow，再实现 cron：
+先实现轻量 workflow，再实现 cron。Workflow 和 Skill 保持同一种组织方式：每个 workflow 是一个目录，包含 `WORKFLOW.md` 入口文档和可选执行脚本；入口文档写清楚适用场景、依赖和工具调用方式。
 
 ```yaml
-workflows:
-  daily-review:
-    steps:
-      - agent: main
-        prompt: "总结今天项目变化"
-      - tool: write
-        args:
-          file_path: "daily.md"
+---
+name: daily-review
+description: Summarize a project day.
+usage: |
+  Call workflow_load first, then workflow_run with optional arguments.
+dependencies:
+  - bash tool
+run:
+  script: scripts/project_snapshot.sh
+  timeout: 60
+  risk: read
+---
+
+这里写 workflow 的场景、输入约定、输出含义和使用示例。
 ```
 
 Cron 配置：
@@ -630,11 +636,13 @@ jobs:
 
 落地步骤：
 
-1. `WorkflowRunner` 支持顺序步骤、失败策略、变量传递。
-2. `CronScheduler` 读取 `~/.bamboo/cron/jobs.yaml`。
-3. `session=isolated` 创建新 Task；`session=main` 写入主会话系统事件。
-4. 增加 retry/backoff 和 logs jsonl。
-5. cron 执行必须走权限策略，不能绕过工具审批。
+1. `workflow_load` 读取 `WORKFLOW.md`，让模型先理解场景、依赖和使用说明。
+2. `workflow_run` 执行 `WORKFLOW.md` 声明的 `run.command` 或 `run.script`。
+3. workflow 执行必须走工具权限策略，不能绕过审批和审计。
+4. `CronScheduler` 读取 `~/.bamboo/cron/jobs.yaml`。
+5. `session=isolated` 创建新 Task；`session=main` 写入主会话系统事件。
+6. 增加 retry/backoff 和 logs jsonl。
+7. cron 触发 workflow 时也必须走同一套工具权限策略。
 
 验收标准：
 
@@ -703,7 +711,7 @@ models:
 第三阶段（扩展生态）：
 
 1. SubagentRuntime。
-2. WorkflowRunner。
+2. Skill-like Workflow 工具。
 3. Cron/Heartbeat。
 4. MCP 接入。
 5. 评估与回放工具。

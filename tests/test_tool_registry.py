@@ -25,11 +25,13 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "task_stop",
         "todo_write",
         "web_fetch",
+        "workflow_load",
+        "workflow_run",
         "write",
     ]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
-    assert registry.summary()["by_source"] == {"buildin": 16}
-    assert registry.summary()["by_risk"] == {"execute": 1, "network": 1, "read": 9, "write": 5}
+    assert registry.summary()["by_source"] == {"buildin": 18}
+    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 10, "write": 5}
 
 
 def test_tool_registry_hides_disabled_tool() -> None:

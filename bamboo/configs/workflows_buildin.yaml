@@ -1,0 +1,8 @@
+# 内置 workflow 会在 `bamboo init` 时复制到：
+#   ~/.bamboo/buildin_workflows/
+#
+# 包内来源：
+#   bamboo/workflows/buildin/
+#
+# 当前内置：
+#   - daily-review

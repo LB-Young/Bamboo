@@ -1,0 +1,23 @@
+# 用户工作流放在 `~/.bamboo/workflows/<name>/WORKFLOW.md`。
+# 每个 workflow 目录可以包含执行脚本，例如 `scripts/*.sh`。
+#
+# 使用方式：
+#   1. 模型调用 `workflow_load` 读取 WORKFLOW.md。
+#   2. 模型按文档说明调用 `workflow_run` 执行声明的 command/script。
+#
+# `WORKFLOW.md` 使用 YAML frontmatter 声明可执行入口，正文写场景、依赖和调用方式。
+#
+# 示例：
+# ---
+# name: daily-review
+# description: Summarize project status.
+# usage: |
+#   Call workflow_load first, then workflow_run with optional arguments.
+# dependencies:
+#   - bash tool
+# run:
+#   script: scripts/project_snapshot.sh
+#   cwd: .
+#   timeout: 60
+#   risk: read
+# ---

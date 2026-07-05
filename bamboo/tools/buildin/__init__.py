@@ -17,6 +17,7 @@ def create_builtin_tools() -> list[Tool]:
     from bamboo.tools.buildin.task import TaskCreateTool, TaskGetTool, TaskListTool, TaskStopTool
     from bamboo.tools.buildin.todo import TodoWriteTool
     from bamboo.tools.buildin.web_fetch import WebFetchTool
+    from bamboo.tools.buildin.workflow import WorkflowLoadTool, WorkflowRunTool
     from bamboo.tools.buildin.write import WriteTool
 
     return [
@@ -35,6 +36,8 @@ def create_builtin_tools() -> list[Tool]:
         TaskStopTool(),
         TodoWriteTool(),
         WebFetchTool(),
+        WorkflowLoadTool(),
+        WorkflowRunTool(),
         WriteTool(),
     ]
 
