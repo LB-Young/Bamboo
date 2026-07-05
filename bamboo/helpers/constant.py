@@ -314,6 +314,53 @@ class TaskStopEvent(BaseEvent):
 
 
 @dataclass(kw_only=True)
+class CronJobStartEvent(BaseEvent):
+    """Cron job 开始执行事件。"""
+
+    type: str = "cron-job-start"
+    job_name: str = ""
+    run_id: str = ""
+    attempt: int = 1
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "job_name": self.job_name, "run_id": self.run_id, "attempt": self.attempt}
+
+
+@dataclass(kw_only=True)
+class CronJobCompleteEvent(BaseEvent):
+    """Cron job 执行完成事件。"""
+
+    type: str = "cron-job-complete"
+    job_name: str = ""
+    run_id: str = ""
+    status: str = ""
+    attempt: int = 1
+    error: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "job_name": self.job_name,
+            "run_id": self.run_id,
+            "status": self.status,
+            "attempt": self.attempt,
+            "error": self.error,
+        }
+
+
+@dataclass(kw_only=True)
+class CronHeartbeatEvent(BaseEvent):
+    """Cron heartbeat 事件。"""
+
+    type: str = "cron-heartbeat"
+    tick: int = 0
+    due_jobs: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "tick": self.tick, "due_jobs": self.due_jobs}
+
+
+@dataclass(kw_only=True)
 class SubagentStartEvent(BaseEvent):
     """子 Agent 启动事件。"""
 
@@ -639,4 +686,5 @@ BambooEvent = (
     | PlanStartEvent | PlanConfirmEvent | PlanStepExecuteEvent | PlanCancelEvent
     | TaskCreateEvent | TaskStatusChangeEvent
     | WorkflowRunStartEvent | WorkflowRunCompleteEvent | WorkflowBreakpointEvent
+    | CronJobStartEvent | CronJobCompleteEvent | CronHeartbeatEvent
 )

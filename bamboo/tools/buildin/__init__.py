@@ -6,6 +6,15 @@ from bamboo.tools.buildin.base import Tool, ToolResult
 def create_builtin_tools() -> list[Tool]:
     """创建 Bamboo 随包提供的全部内置工具实例。"""
     from bamboo.tools.buildin.bash import BashTool
+    from bamboo.tools.buildin.cron import (
+        CronAddTool,
+        CronDisableTool,
+        CronEnableTool,
+        CronGetTool,
+        CronListTool,
+        CronRunsTool,
+        CronTickTool,
+    )
     from bamboo.tools.buildin.edit import EditTool
     from bamboo.tools.buildin.glob import GlobTool
     from bamboo.tools.buildin.grep import GrepTool
@@ -22,6 +31,13 @@ def create_builtin_tools() -> list[Tool]:
 
     return [
         BashTool(),
+        CronAddTool(),
+        CronDisableTool(),
+        CronEnableTool(),
+        CronGetTool(),
+        CronListTool(),
+        CronRunsTool(),
+        CronTickTool(),
         EditTool(),
         GlobTool(),
         GrepTool(),

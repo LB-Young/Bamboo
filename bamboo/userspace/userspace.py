@@ -32,6 +32,7 @@ dirs: list[str] = [
     "storage/skills",           # Skill 状态、索引、校验和使用记录
     "memory",                   # 全局记忆
     "tasks",                    # 任务队列
+    "cron",                     # Cron job 配置和调度状态
     "logs",                     # 日志
     "workspace",                # 默认工作区
     "workspace/tmp",            # 临时文件
@@ -87,6 +88,7 @@ def ensure_userspace() -> UserspaceLayout:
         else:
             logger.info(f"Ensured directory: {target}")
     MemoryManager(memory_root=bamboo_root_dir / "memory").ensure_base_knowledge_templates()
+    _ensure_cron_jobs_template(bamboo_root_dir)
     return UserspaceLayout(root=bamboo_root_dir)
 
 
@@ -114,3 +116,18 @@ def copy_builtin_info(subdir: str, target_dir: Path) -> None:
         logger.info(f"Copied built-in {subdir} to {target_dir}")
     else:
         logger.warning(f"Built-in {subdir} not found in package.")
+
+
+def _ensure_cron_jobs_template(bamboo_root_dir: Path) -> None:
+    """Create the default cron jobs file without overwriting user jobs."""
+    cron_jobs_path = bamboo_root_dir / "cron" / "jobs.yaml"
+    if cron_jobs_path.exists():
+        return
+    cron_jobs_path.parent.mkdir(parents=True, exist_ok=True)
+    cron_jobs_path.write_text(
+        "# Bamboo cron jobs.\n"
+        "# Start scheduler with: bamboo cron start\n"
+        "# Run one tick with: bamboo cron tick\n"
+        "jobs: []\n",
+        encoding="utf-8",
+    )

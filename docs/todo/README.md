@@ -14,10 +14,7 @@
 - Provider Specific Prompt：已由 `ModelConfig.prompt_profile/capabilities`、provider prompt section 和 PromptBuilder 接入实现。
 - Agent Trace Events：已由 `parent_event_id`、EventBus pattern 订阅、LLM 脱敏事件、TraceRecorder 和事件 schema 文档实现。
 - Workflow Runner：已改为 skill-like workflow 文档包，通过 `workflow_load` / `workflow_run` 工具读取说明并执行声明脚本。
-
-## P2：自动化扩展
-
-1. `P2-03-cron-heartbeat.md`
+- Cron And Heartbeat：已由 `bamboo/cron`、`bamboo cron`、`~/.bamboo/cron/jobs.yaml`、retry 和 jsonl 执行日志实现。
 
 ## 实施原则
 

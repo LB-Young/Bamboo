@@ -1,0 +1,20 @@
+# Cron jobs are stored in ~/.bamboo/cron/jobs.yaml.
+# Start scheduler with: bamboo cron start
+# Run one tick with: bamboo cron tick
+#
+# Example:
+# jobs:
+#   - name: daily-report
+#     enabled: true
+#     schedule: "0 9 * * *"
+#     session: isolated
+#     project: "/path/to/project"
+#     prompt: "生成昨日项目报告"
+#     permission: default
+#     yes_all: false
+#     retry:
+#       max_attempts: 3
+#       backoff: exponential
+heartbeat:
+  enabled: true
+  interval_seconds: 30

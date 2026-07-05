@@ -11,6 +11,13 @@ def test_tool_registry_loads_builtin_tools() -> None:
     registry = create_tool_registry()
     assert registry.list_names() == [
         "bash",
+        "cron_add",
+        "cron_disable",
+        "cron_enable",
+        "cron_get",
+        "cron_list",
+        "cron_runs",
+        "cron_tick",
         "edit",
         "glob",
         "grep",
@@ -30,8 +37,8 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "write",
     ]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
-    assert registry.summary()["by_source"] == {"buildin": 18}
-    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 10, "write": 5}
+    assert registry.summary()["by_source"] == {"buildin": 25}
+    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 13, "write": 9}
 
 
 def test_tool_registry_hides_disabled_tool() -> None:

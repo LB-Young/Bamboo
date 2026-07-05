@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 
 from bamboo.adapters.cli.main import _start_interactive_session, _start_session
+from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
@@ -42,6 +43,8 @@ app = typer.Typer(
 )
 skill_app = typer.Typer(help="Manage Bamboo skills.", no_args_is_help=True)
 app.add_typer(skill_app, name="skill")
+cron_app = typer.Typer(help="Manage Bamboo cron jobs.", no_args_is_help=True)
+app.add_typer(cron_app, name="cron")
 
 
 @app.command()
@@ -131,6 +134,83 @@ def web(
 
     console.print(f"[green]Bamboo Web[/green] http://{host}:{port}")
     uvicorn.run("bamboo.adapters.web.app:app", host=host, port=port, reload=reload)
+
+
+@cron_app.command("start")
+def cron_start(
+    interval: float = typer.Option(30.0, "--interval", help="Heartbeat interval in seconds"),
+) -> None:
+    """启动 Cron heartbeat 调度器。"""
+    store = CronStore()
+    store.ensure()
+    scheduler = CronScheduler(store=store)
+    console.print(f"[green]cron heartbeat started[/green] interval={interval}s jobs={store.jobs_path}")
+    heartbeat = HeartbeatConfig(interval_seconds=interval)
+
+    async def _run() -> None:
+        await scheduler.run_forever(heartbeat=heartbeat)
+
+    anyio.run(_run)
+
+
+@cron_app.command("tick")
+def cron_tick() -> None:
+    """执行一次 Cron 调度检查并退出。"""
+    store = CronStore()
+    store.ensure()
+    records = anyio.run(CronScheduler(store=store).tick)
+    console.print(f"[green]cron tick complete[/green] jobs={len(records)}")
+
+
+@cron_app.command("list")
+def cron_list() -> None:
+    """列出 Cron jobs。"""
+    store = CronStore()
+    for job in store.load_jobs():
+        status = "enabled" if job.enabled else "disabled"
+        console.print(f"{job.name}\t{status}\t{job.schedule}\t{job.session}\t{job.prompt}")
+
+
+@cron_app.command("add")
+def cron_add(
+    name: str = typer.Argument(..., help="Cron job name"),
+    schedule: str = typer.Option(..., "--schedule", "-s", help="Five-field cron expression"),
+    prompt: str = typer.Option(..., "--prompt", "-p", help="Prompt to run"),
+    project: Path | None = typer.Option(None, "--project", help="Project path"),
+    session: str = typer.Option("isolated", "--session", help="isolated/main"),
+    replace: bool = typer.Option(False, "--replace", help="Replace existing job"),
+) -> None:
+    """注册一个 Cron job。"""
+    from bamboo.cron import CronJob
+
+    if session not in {"isolated", "main"}:
+        raise typer.BadParameter("session must be isolated/main")
+    store = CronStore()
+    store.register_job(
+        CronJob(
+            name=name,
+            schedule=schedule,
+            prompt=prompt,
+            project=str(project) if project else "",
+            session=session,  # type: ignore[arg-type]
+        ),
+        replace=replace,
+    )
+    console.print(f"[green]cron job registered[/green] {name}")
+
+
+@cron_app.command("enable")
+def cron_enable(name: str = typer.Argument(..., help="Cron job name")) -> None:
+    """启用 Cron job。"""
+    job = CronStore().set_enabled(name, True)
+    console.print(f"[green]cron job enabled[/green] {job.name}")
+
+
+@cron_app.command("disable")
+def cron_disable(name: str = typer.Argument(..., help="Cron job name")) -> None:
+    """禁用 Cron job。"""
+    job = CronStore().set_enabled(name, False)
+    console.print(f"[yellow]cron job disabled[/yellow] {job.name}")
 
 
 @skill_app.command("create")
