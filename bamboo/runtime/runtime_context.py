@@ -119,6 +119,7 @@ class RuntimeContextBuilder:
         model_config = llm_router.config_for(main_route)
         llm_client = llm_router.client_for(main_route)
         compaction_llm_client = llm_router.client_for(compaction_route)
+        self.prompt_builder.set_model_config(model_config)
         context_compactor = self.context_compactor or ContextCompactor(
             llm_client=compaction_llm_client,
             model_config=model_config,

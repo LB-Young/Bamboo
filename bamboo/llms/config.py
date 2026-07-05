@@ -18,18 +18,30 @@ class ModelConfigError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class ModelCapabilities:
+    """描述模型在 Runtime 中可用的能力开关。"""
+
+    tool_calling: bool = True
+    json_schema: bool = False
+    vision: bool = False
+    max_parallel_tools: int = 1
+
+
+@dataclass(frozen=True, slots=True)
 class ModelConfig:
     """保存一个模型名对应的平台连接参数和生成参数。"""
 
     name: str
     provider: str
     model: str
+    prompt_profile: str
     api_key: str = field(repr=False)
     base_url: str = ""
     timeout: float = 60.0
     temperature: float | None = None
     context_window: int = 128000
     max_tokens: int = 4096
+    capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     extra_headers: dict[str, str] = field(default_factory=dict)
     extra_body: dict[str, Any] = field(default_factory=dict)
 
@@ -91,6 +103,7 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
         raise ModelConfigError(f"Model '{name}' uses unsupported provider '{provider}'; supported: {supported}")
 
     model = _required_string(raw_config, "model", name)
+    prompt_profile = _optional_string(raw_config, "prompt_profile", name) or provider
     api_key = _optional_string(raw_config, "api_key", name)
     base_url = _optional_string(raw_config, "base_url", name)
     timeout = _positive_number(raw_config.get("timeout", 60.0), f"models.{name}.timeout")
@@ -110,6 +123,7 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
         temperature = float(temperature_value)
 
     extra_headers = _string_mapping(raw_config.get("extra_headers", {}), f"models.{name}.extra_headers")
+    capabilities = _parse_capabilities(raw_config.get("capabilities", {}), f"models.{name}.capabilities")
     extra_body = raw_config.get("extra_body", {})
     if not isinstance(extra_body, Mapping):
         raise ModelConfigError(f"models.{name}.extra_body must be a mapping")
@@ -118,12 +132,14 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
         name=name,
         provider=provider,
         model=model,
+        prompt_profile=prompt_profile,
         api_key=api_key,
         base_url=base_url,
         timeout=timeout,
         temperature=temperature,
         context_window=context_window,
         max_tokens=max_tokens,
+        capabilities=capabilities,
         extra_headers=extra_headers,
         extra_body=dict(extra_body),
     )
@@ -166,6 +182,29 @@ def _string_mapping(value: Any, field_name: str) -> dict[str, str]:
     if any(not isinstance(key, str) or not isinstance(item, str) for key, item in value.items()):
         raise ModelConfigError(f"{field_name} keys and values must be strings")
     return dict(value)
+
+
+def _parse_capabilities(value: Any, field_name: str) -> ModelCapabilities:
+    """解析模型能力配置，未声明时使用保守默认值。"""
+    if not isinstance(value, Mapping):
+        raise ModelConfigError(f"{field_name} must be a mapping")
+    return ModelCapabilities(
+        tool_calling=_optional_bool(value, "tool_calling", field_name, default=True),
+        json_schema=_optional_bool(value, "json_schema", field_name, default=False),
+        vision=_optional_bool(value, "vision", field_name, default=False),
+        max_parallel_tools=_positive_integer(
+            value.get("max_parallel_tools", 1),
+            f"{field_name}.max_parallel_tools",
+        ),
+    )
+
+
+def _optional_bool(config: Mapping[str, Any], field_name: str, parent_name: str, *, default: bool) -> bool:
+    """读取可选布尔能力开关。"""
+    value = config.get(field_name, default)
+    if not isinstance(value, bool):
+        raise ModelConfigError(f"{parent_name}.{field_name} must be a boolean")
+    return value
 
 
 def _resolve_environment_value(value: str, field_name: str, *, allow_empty: bool = False) -> str:

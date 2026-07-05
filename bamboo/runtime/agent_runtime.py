@@ -148,6 +148,7 @@ class AgentRuntime:
             fallback_to = self.llm_router.activate_fallback(self.main_route)
             self.model_name = fallback_to
             self.model_config = self.llm_router.config_for(self.main_route)
+            self.prompt_builder.set_model_config(self.model_config)
             self.llm_client = self.llm_router.client_for(self.main_route)
             task.metadata["fallback_used"] = "true"
             task.metadata["fallback_from"] = fallback_from

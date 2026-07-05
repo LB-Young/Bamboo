@@ -6,59 +6,95 @@ models:
   deepseek-chat:
     provider: deepseek
     model: deepseek-chat
+    prompt_profile: deepseek
     api_key: ""
     base_url: https://api.deepseek.com/v1
     timeout: 60
     temperature: 0.2
     context_window: 128000
     max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
 
   minimax-text:
     provider: minimax
     model: MiniMax-Text-01
+    prompt_profile: minimax
     api_key: ""
     base_url: https://api.minimax.io/v1
     timeout: 60
     temperature: 0.2
     context_window: 1000000
     max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
 
   gpt-default:
     provider: gpt
     model: gpt-4.1-mini
+    prompt_profile: gpt
     api_key: ""
     base_url: https://api.openai.com/v1
     timeout: 60
     temperature: 0.2
     context_window: 1047576
     max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: true
+      vision: false
+      max_parallel_tools: 1
 
   claude-default:
     provider: claude
     model: claude-sonnet-4-5
+    prompt_profile: claude
     api_key: ""
     base_url: https://api.anthropic.com/v1
     timeout: 60
     temperature: 0.2
     context_window: 200000
     max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
 
   ollama-local:
     provider: ollama
     model: qwen2.5:7b
+    prompt_profile: ollama
     api_key: ""
     base_url: http://localhost:11434/v1
     timeout: 120
     temperature: 0.2
     context_window: 32768
     max_tokens: 4096
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
 
   vllm-local:
     provider: vllm
     model: Qwen/Qwen2.5-7B-Instruct
+    prompt_profile: vllm
     api_key: ""
     base_url: http://localhost:8000/v1
     timeout: 120
     temperature: 0.2
     context_window: 32768
     max_tokens: 4096
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1

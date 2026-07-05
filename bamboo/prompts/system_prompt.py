@@ -102,6 +102,22 @@ def _read_prompt_sections(prompt_mode: PromptMode) -> list[str]:
     return sections
 
 
+def read_provider_prompt_sections(prompt_profile: str) -> list[str]:
+    """按模型 prompt_profile 读取 provider 专用 prompt 片段。"""
+    normalized_profile = prompt_profile.strip().lower()
+    if not normalized_profile:
+        return []
+    section_dir = _resolve_prompt_section_dir(f"provider/{normalized_profile}")
+    if not section_dir.is_dir():
+        return []
+    sections: list[str] = []
+    for section_path in sorted(section_dir.glob("*.md")):
+        content = section_path.read_text(encoding="utf-8").strip()
+        if content:
+            sections.append(content)
+    return sections
+
+
 def _resolve_prompt_section_dir(section_dir_name: str) -> Path:
     """优先返回用户空间中的 prompt section 目录，否则回退到包内默认目录。"""
     from bamboo.userspace.userspace import get_configs_dir

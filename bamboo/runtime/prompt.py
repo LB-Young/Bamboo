@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
+from bamboo.llms.config import ModelCapabilities, ModelConfig
 from bamboo.memory.manager import MemoryManager
+from bamboo.prompts import read_provider_prompt_sections
 from bamboo.skills import SkillRegistry
 from bamboo.tools import ToolRegistry, get_tool_registry
 
@@ -25,6 +27,8 @@ class AgentPrompt:
     skill_catalog: str
     tools: list[dict]
     memory_context: str = ""
+    provider_context: str = ""
+    model_capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     error_history: list[str] = field(default_factory=list)
 
     def render(self) -> str:
@@ -39,6 +43,8 @@ class AgentPrompt:
             "# Available Skills",
             self.skill_catalog or "(none)",
         ]
+        if self.provider_context:
+            sections.extend(["# Provider Prompt", self.provider_context])
         if self.memory_context:
             sections.extend(["# Global Memory", self.memory_context])
         if self.error_history:
@@ -50,6 +56,8 @@ class AgentPrompt:
         system_sections = [self.system_prompt]
         if self.memory_context:
             system_sections.extend(["# Global Memory", self.memory_context])
+        if self.provider_context:
+            system_sections.extend(["# Provider Prompt", self.provider_context])
         if self.tool_catalog:
             system_sections.extend(["# Available Tools", self.tool_catalog])
         if self.skill_catalog:
@@ -72,11 +80,17 @@ class AgentPromptBuilder:
         tool_registry: ToolRegistry | None = None,
         skill_registry: SkillRegistry | None = None,
         memory_manager: MemoryManager | None = None,
+        model_config: ModelConfig | None = None,
     ) -> None:
         """初始化 Prompt Builder，并固定当前 Agent 可见的工具注册表。"""
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry
         self.memory_manager = memory_manager
+        self.model_config = model_config
+
+    def set_model_config(self, model_config: ModelConfig) -> None:
+        """更新当前 prompt builder 使用的模型配置。"""
+        self.model_config = model_config
 
     def build(self, session: Session, *, error_history: list[str] | None = None) -> AgentPrompt:
         """构建一轮 Agent 循环的 prompt 快照。"""
@@ -97,12 +111,16 @@ class AgentPromptBuilder:
             tool_catalog=self._build_tool_catalog(),
             skill_catalog=self._build_skill_catalog(),
             memory_context=self._build_memory_context(session),
+            provider_context=self._build_provider_context(),
+            model_capabilities=self._model_capabilities(),
             tools=tools,
             error_history=error_history or [],
         )
 
     def _build_tool_catalog(self) -> str:
         """渲染简洁的内置工具目录。"""
+        if not self._model_capabilities().tool_calling:
+            return ""
         rows = []
         for tool in self.tool_registry.get_tools():
             rows.append(f"- `{tool.name}`: {tool.description}")
@@ -110,6 +128,8 @@ class AgentPromptBuilder:
 
     def _get_tool_schemas(self) -> list[dict]:
         """返回当前所有已启用工具的结构化调用 Schema。"""
+        if not self._model_capabilities().tool_calling:
+            return []
         return self.tool_registry.schemas()
 
     def _build_skill_catalog(self) -> str:
@@ -123,3 +143,38 @@ class AgentPromptBuilder:
         if self.memory_manager is None:
             return ""
         return self.memory_manager.load_prompt_context(session).content
+
+    def _build_provider_context(self) -> str:
+        """Render provider-specific prompt sections for the active model."""
+        if self.model_config is None:
+            return ""
+        sections = read_provider_prompt_sections(self.model_config.prompt_profile)
+        capability_section = self._build_capabilities_section(self.model_config)
+        if capability_section:
+            sections.append(capability_section)
+        return "\n\n".join(section for section in sections if section)
+
+    def _model_capabilities(self) -> ModelCapabilities:
+        """Return active model capabilities, preserving legacy defaults when unset."""
+        if self.model_config is None:
+            return ModelCapabilities()
+        return self.model_config.capabilities
+
+    @staticmethod
+    def _build_capabilities_section(model_config: ModelConfig) -> str:
+        """Render concise capability facts that affect model behavior."""
+        capabilities = model_config.capabilities
+        lines = [
+            "# Model Capabilities",
+            f"- Provider: `{model_config.provider}`",
+            f"- Prompt Profile: `{model_config.prompt_profile}`",
+            f"- Tool Calling: {'enabled' if capabilities.tool_calling else 'disabled'}",
+            f"- JSON Schema: {'enabled' if capabilities.json_schema else 'disabled'}",
+            f"- Vision: {'enabled' if capabilities.vision else 'disabled'}",
+            f"- Max Parallel Tools: {capabilities.max_parallel_tools}",
+        ]
+        if not capabilities.tool_calling:
+            lines.append("- Do not claim to call tools. Answer directly from visible context.")
+        elif capabilities.max_parallel_tools <= 1:
+            lines.append("- Use at most one tool call in a single assistant turn.")
+        return "\n".join(lines)
