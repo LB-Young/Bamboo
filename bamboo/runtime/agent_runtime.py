@@ -24,7 +24,7 @@ from bamboo.helpers.constant import (
     ToolErrorEvent,
     ToolResultEvent,
 )
-from bamboo.llms import LLMResponse, LLMToolCall
+from bamboo.llms import LLMError, LLMResponse, LLMToolCall
 from bamboo.runtime.prompt import AgentPrompt
 from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
@@ -72,6 +72,9 @@ class AgentRuntime:
         self.prompt_builder = runtime_context.prompt_builder
         self.recovery_policy = recovery_policy or AgentRecoveryPolicy()
         self.llm_factory = runtime_context.llm_factory
+        self.llm_router = runtime_context.llm_router
+        self.main_route = runtime_context.main_route
+        self.compaction_route = runtime_context.compaction_route
         self.model_name = runtime_context.model_name
         self.compaction_model_name = runtime_context.compaction_model_name
         self.model_config = runtime_context.model_config
@@ -128,8 +131,32 @@ class AgentRuntime:
         """调用主模型分析当前观察结果，并返回可供 Act 执行的模型决策。"""
         if task.metadata.pop("inject_agent_error_once", "") == "thinking":
             raise RuntimeError("Injected mock thinking error")
-        response = await self.llm_client.complete(observation.to_llm_request())
-        return response
+        request = observation.to_llm_request()
+        try:
+            return await self.llm_client.complete(request)
+        except LLMError as exc:
+            if not self.llm_router.can_fallback(self.main_route, exc):
+                raise
+            fallback_from = self.main_route.active_model_name
+            fallback_to = self.llm_router.activate_fallback(self.main_route)
+            self.model_name = fallback_to
+            self.model_config = self.llm_router.config_for(self.main_route)
+            self.llm_client = self.llm_router.client_for(self.main_route)
+            task.metadata["fallback_used"] = "true"
+            task.metadata["fallback_from"] = fallback_from
+            task.metadata["fallback_to"] = fallback_to
+            task.metadata["fallback_error_type"] = exc.error_type
+            task.metadata["fallback_error"] = str(exc)
+            await self.event_bus.emit(
+                AuditEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    action="llm_fallback_activated",
+                    result=f"{fallback_from} -> {fallback_to} ({exc.error_type})",
+                    approved=True,
+                )
+            )
+            return await self.llm_client.complete(request)
 
     async def _compact_context_if_needed(self, task: Task, prompt: AgentPrompt) -> AgentPrompt:
         """在模型调用前按上下文预算压缩 Session，并返回重建后的 Prompt。"""

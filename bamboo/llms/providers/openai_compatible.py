@@ -14,6 +14,8 @@ from bamboo.llms.base import (
     LLMResponse,
     LLMResponseError,
     LLMToolCall,
+    classify_http_error,
+    classify_transport_error,
 )
 from bamboo.llms.config import ModelConfig, ModelConfigError
 
@@ -50,11 +52,19 @@ class OpenAICompatibleClient(LLMClient):
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             detail = _response_error_detail(exc.response)
+            error_type, retryable = classify_http_error(exc.response.status_code, detail)
             raise LLMRequestError(
-                f"{self.config.provider} request failed with HTTP {exc.response.status_code}: {detail}"
+                f"{self.config.provider} request failed with HTTP {exc.response.status_code}: {detail}",
+                error_type=error_type,
+                retryable=retryable,
             ) from exc
         except httpx.HTTPError as exc:
-            raise LLMRequestError(f"{self.config.provider} request failed: {exc}") from exc
+            error_type, retryable = classify_transport_error(exc)
+            raise LLMRequestError(
+                f"{self.config.provider} request failed: {exc}",
+                error_type=error_type,
+                retryable=retryable,
+            ) from exc
 
         return self._parse_response(response)
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.session import Session
 from bamboo.factory.task_factory import Task
-from bamboo.llms import LLMClient, LLMFactory
+from bamboo.llms import LLMClient, LLMFactory, LLMRoute, LLMRouter
 from bamboo.llms.config import ModelConfig
 from bamboo.memory.manager import MemoryManager
 from bamboo.runtime.context_compactor import ContextBudgetPolicy, ContextCompactor, TokenCounter
@@ -31,6 +31,9 @@ class RuntimeContext:
     session: Session
     event_bus: EventBus
     llm_factory: LLMFactory
+    llm_router: LLMRouter
+    main_route: LLMRoute
+    compaction_route: LLMRoute
     model_name: str
     compaction_model_name: str
     model_config: ModelConfig
@@ -103,9 +106,19 @@ class RuntimeContextBuilder:
         self._ensure_mcp_tools(task)
         model_name = self.model_name or self._resolve_agent_model_name(task)
         compaction_model_name = self.compaction_model_name or self._resolve_compaction_model_name(task, model_name)
-        model_config = self.llm_factory.get_model_config(model_name)
-        llm_client = self.llm_factory.get_client(model_name)
-        compaction_llm_client = self.llm_factory.get_client(compaction_model_name)
+        llm_router = LLMRouter(self.llm_factory, config=task.config)
+        main_route = llm_router.main_route(
+            model_name,
+            fallback_model_name=self._resolve_agent_fallback_model_name(task, model_name),
+        )
+        compaction_route = llm_router.auxiliary_route(
+            "compaction",
+            model_name=compaction_model_name,
+            fallback_model_name=self._resolve_compaction_fallback_model_name(task, compaction_model_name),
+        )
+        model_config = llm_router.config_for(main_route)
+        llm_client = llm_router.client_for(main_route)
+        compaction_llm_client = llm_router.client_for(compaction_route)
         context_compactor = self.context_compactor or ContextCompactor(
             llm_client=compaction_llm_client,
             model_config=model_config,
@@ -118,6 +131,9 @@ class RuntimeContextBuilder:
             session=task.session,
             event_bus=self.event_bus,
             llm_factory=self.llm_factory,
+            llm_router=llm_router,
+            main_route=main_route,
+            compaction_route=compaction_route,
             model_name=model_name,
             compaction_model_name=compaction_model_name,
             model_config=model_config,
@@ -173,3 +189,31 @@ class RuntimeContextBuilder:
         if isinstance(configured_name, str) and configured_name and self.llm_factory.has_model(configured_name):
             return configured_name
         return agent_model_name
+
+    def _resolve_agent_fallback_model_name(self, task: Task, agent_model_name: str) -> str:
+        """读取主模型 fallback；无效或等于主模型时视为未配置。"""
+        main_agent_config = task.config.get("bamboo_main_agent", {})
+        configured_name = main_agent_config.get("fallback_model") if isinstance(main_agent_config, dict) else None
+        if (
+            isinstance(configured_name, str)
+            and configured_name
+            and configured_name != agent_model_name
+            and self.llm_factory.has_model(configured_name)
+        ):
+            return configured_name
+        return ""
+
+    def _resolve_compaction_fallback_model_name(self, task: Task, compaction_model_name: str) -> str:
+        """读取压缩模型 fallback；无效或等于压缩模型时视为未配置。"""
+        main_agent_config = task.config.get("bamboo_main_agent", {})
+        configured_name = (
+            main_agent_config.get("compaction_fallback_model") if isinstance(main_agent_config, dict) else None
+        )
+        if (
+            isinstance(configured_name, str)
+            and configured_name
+            and configured_name != compaction_model_name
+            and self.llm_factory.has_model(configured_name)
+        ):
+            return configured_name
+        return ""
