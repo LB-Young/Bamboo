@@ -73,6 +73,70 @@ class ReasoningFinishEvent(BaseEvent):
     message_id: Optional[str] = None
 
 
+# ─── LLM Trace 事件 ─────────────────────────────────────────────────────────
+
+@dataclass(kw_only=True)
+class LLMRequestEvent(BaseEvent):
+    """脱敏后的模型请求事件。"""
+
+    type: str = "llm-request"
+    role: str = "main"
+    model_name: str = ""
+    provider: str = ""
+    prompt_profile: str = ""
+    message_count: int = 0
+    tool_count: int = 0
+    system_prompt_chars: int = 0
+    input_chars: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "role": self.role,
+            "model_name": self.model_name,
+            "provider": self.provider,
+            "prompt_profile": self.prompt_profile,
+            "message_count": self.message_count,
+            "tool_count": self.tool_count,
+            "system_prompt_chars": self.system_prompt_chars,
+            "input_chars": self.input_chars,
+        }
+
+
+@dataclass(kw_only=True)
+class LLMResponseEvent(BaseEvent):
+    """脱敏后的模型响应事件。"""
+
+    type: str = "llm-response"
+    role: str = "main"
+    model_name: str = ""
+    provider: str = ""
+    response_model: str = ""
+    finish_reason: str = ""
+    output_chars: int = 0
+    tool_call_count: int = 0
+    usage: dict[str, int] = field(default_factory=dict)
+    success: bool = True
+    error_type: str = ""
+    error: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            **super().to_dict(),
+            "role": self.role,
+            "model_name": self.model_name,
+            "provider": self.provider,
+            "response_model": self.response_model,
+            "finish_reason": self.finish_reason,
+            "output_chars": self.output_chars,
+            "tool_call_count": self.tool_call_count,
+            "usage": self.usage,
+            "success": self.success,
+            "error_type": self.error_type,
+            "error": self.error,
+        }
+
+
 # ─── Tool 事件 ────────────────────────────────────────────────────────────────
 
 @dataclass(kw_only=True)
@@ -565,6 +629,7 @@ class TaskStatusChangeEvent(BaseEvent):
 BambooEvent = (
     TextStartEvent | TextDeltaEvent | TextFinishEvent
     | ReasoningStartEvent | ReasoningDeltaEvent | ReasoningFinishEvent
+    | LLMRequestEvent | LLMResponseEvent
     | ToolCallEvent | ToolResultEvent | ToolErrorEvent
     | PermissionRequestEvent | PermissionResultEvent | ToolAuditEvent
     | SubagentStartEvent | SubagentFinishEvent

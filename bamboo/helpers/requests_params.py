@@ -25,6 +25,7 @@ class RunParams:
     permission: str = "default"
     no_stream: bool = False
     yes_all: bool = False
+    debug_events: bool = False
     session_mode: SessionMode | str = SessionMode.chat
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -40,6 +41,7 @@ class RunParams:
         permission: str | None = None,
         no_stream: bool = False,
         yes_all: bool = False,
+        debug_events: bool = False,
         session_mode: SessionMode | str = SessionMode.chat,
     ) -> "RunParams":
         """根据 CLI 参数创建标准化运行参数。"""
@@ -52,6 +54,7 @@ class RunParams:
             permission=permission or "default",
             no_stream=no_stream,
             yes_all=yes_all,
+            debug_events=debug_events,
             session_mode=session_mode,
         )
 

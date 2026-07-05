@@ -50,6 +50,7 @@ class ChatRequest(BaseModel):
     project_path: str | None = None
     session_id: str | None = None
     record_dir: str | None = None
+    debug_events: bool = False
 
 
 def create_app() -> FastAPI:
@@ -141,22 +142,7 @@ def create_app() -> FastAPI:
         queue: asyncio.Queue[BaseEvent | None] = asyncio.Queue()
         unsubscribe = event_bus.subscribe(
             lambda event: queue.put_nowait(event),
-            event_types={
-                "task-create",
-                "task-status-change",
-                "session-status-change",
-                "step-start",
-                "step-finish",
-                "text-delta",
-                "text-finish",
-                "permission-request",
-                "permission-result",
-                "subagent-start",
-                "subagent-finish",
-                "tool-call",
-                "tool-result",
-                "tool-error",
-            },
+            patterns=_stream_event_patterns(debug_events=payload.debug_events),
             filter_fn=lambda event: event.session_id == task.session_id,
         )
 
@@ -253,6 +239,21 @@ def _resolve_project(path_str: str | None, *, strict: bool) -> Path:
 
 def _jsonl(payload: dict[str, Any]) -> bytes:
     return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def _stream_event_patterns(*, debug_events: bool) -> set[str] | str:
+    """返回 Web SSE 订阅的事件分类。"""
+    if debug_events:
+        return "*"
+    return {
+        "task.*",
+        "session.*",
+        "step.*",
+        "text.*",
+        "permission.*",
+        "subagent.*",
+        "tool.*",
+    }
 
 
 def _event_payload(event: BaseEvent) -> dict[str, Any]:

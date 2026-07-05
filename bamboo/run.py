@@ -26,6 +26,7 @@ PROVIDER_OPTION = typer.Option(None, "--provider", help="LLM provider: deepseek/
 PERMISSION_OPTION = typer.Option(None, "--permission", help="Permission mode: default/auto/bypass/yolo")
 NO_STREAM_OPTION = typer.Option(False, "--no-stream", help="Disable streaming")
 YES_ALL_OPTION = typer.Option(False, "--yes", "-y", help="Auto-confirm all permission prompts")
+DEBUG_EVENTS_OPTION = typer.Option(False, "--debug-events", help="Print raw EventBus events for this session")
 SESSION_MODE_OPTION = typer.Option(
     SessionMode.auto,
     "--session-mode",
@@ -54,6 +55,7 @@ def init() -> None:
 @app.command()
 def run(
     task: str = typer.Argument("", help="Task description to execute"),
+    debug_events: bool = DEBUG_EVENTS_OPTION,
 ) -> None:
     """运行一个命令行任务。"""
     # CLI 命令只负责组装参数；任务生命周期由 TaskRuntime 负责。
@@ -66,6 +68,7 @@ def run(
     run_params.permission = ""
     run_params.no_stream = False
     run_params.yes_all = False
+    run_params.debug_events = debug_events
     run_params.session_mode = SessionMode.chat
     run_params.task_id = str(uuid.uuid4())
     run_params.session_id = str(uuid.uuid4())
@@ -85,6 +88,7 @@ def main(
     permission: str | None = PERMISSION_OPTION,
     no_stream: bool = NO_STREAM_OPTION,
     yes_all: bool = YES_ALL_OPTION,
+    debug_events: bool = DEBUG_EVENTS_OPTION,
     session_mode: SessionMode = SESSION_MODE_OPTION,
 ) -> None:
     """启动 Bamboo 会话；无 --msg 时进入交互式命令行对话。"""
@@ -97,6 +101,7 @@ def main(
     run_params.permission = permission or "default"
     run_params.no_stream = no_stream
     run_params.yes_all = yes_all
+    run_params.debug_events = debug_events
     run_params.session_mode = session_mode
     run_params.task_id = str(uuid.uuid4())
     run_params.session_id = str(uuid.uuid4())
@@ -246,6 +251,7 @@ def debug_main(
     permission: str | None = None,
     no_stream: bool = False,
     yes_all: bool = False,
+    debug_events: bool = False,
     session_mode: SessionMode = SessionMode.auto,
 ) -> None:
     """直接调用主流程的调试入口。
@@ -263,6 +269,7 @@ def debug_main(
     run_params.permission = permission
     run_params.no_stream = no_stream
     run_params.yes_all = yes_all
+    run_params.debug_events = debug_events
     run_params.session_mode = session_mode
     run_params.task_id = str(uuid.uuid4())
     run_params.session_id = str(uuid.uuid4())

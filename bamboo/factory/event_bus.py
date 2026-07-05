@@ -7,6 +7,7 @@ CLI、Web、日志、审计等外部消费者都应通过订阅事件获取运�
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 
@@ -27,10 +28,15 @@ class Subscription:
     handler: EventHandler
     filter_fn: EventFilter | None = None
     event_types: set[str] | None = None
+    patterns: set[str] | None = None
 
     def matches(self, event: BaseEvent) -> bool:
         """判断当前订阅是否应该接收某个事件。"""
         if self.event_types is not None and event.type not in self.event_types:
+            return False
+        if self.patterns is not None and not any(
+            _event_type_matches_pattern(event.type, pattern) for pattern in self.patterns
+        ):
             return False
         if self.filter_fn is not None and not self.filter_fn(event):
             return False
@@ -51,17 +57,25 @@ class EventBus:
         handler: EventHandler,
         *,
         event_types: str | list[str] | set[str] | None = None,
+        patterns: str | list[str] | set[str] | None = None,
+        pattern: str | None = None,
         filter_fn: EventFilter | None = None,
     ) -> Callable[[], None]:
         """注册事件处理函数，并返回取消订阅函数。"""
         normalized_types = self._normalize_event_types(event_types)
+        normalized_patterns = self._normalize_patterns(patterns, pattern)
         subscription = Subscription(
             handler=handler,
             filter_fn=filter_fn,
             event_types=normalized_types,
+            patterns=normalized_patterns,
         )
         self._subscriptions.append(subscription)
-        self._logger.debug("subscribed event_types={types}", types=normalized_types)
+        self._logger.debug(
+            "subscribed event_types={types} patterns={patterns}",
+            types=normalized_types,
+            patterns=normalized_patterns,
+        )
         return lambda: self.unsubscribe(handler)
 
     def unsubscribe(self, handler: EventHandler) -> None:
@@ -97,7 +111,13 @@ class EventBus:
                 if isinstance(result, Exception):
                     self._logger.warning("event handler failed: {error}", error=result)
 
-    async def stream(self, session_id: str) -> AsyncIterator[BambooEvent]:
+    async def stream(
+        self,
+        session_id: str,
+        *,
+        patterns: str | list[str] | set[str] | None = None,
+        event_types: str | list[str] | set[str] | None = None,
+    ) -> AsyncIterator[BambooEvent]:
         """按 session_id 生成异步事件流。"""
         queue: asyncio.Queue[BambooEvent] = asyncio.Queue()
 
@@ -105,7 +125,12 @@ class EventBus:
             """把匹配事件放入队列。"""
             await queue.put(event)  # type: ignore[arg-type]
 
-        unsubscribe = self.subscribe(_enqueue, filter_fn=lambda event: event.session_id == session_id)
+        unsubscribe = self.subscribe(
+            _enqueue,
+            event_types=event_types,
+            patterns=patterns,
+            filter_fn=lambda event: event.session_id == session_id,
+        )
         try:
             while True:
                 yield await queue.get()
@@ -119,7 +144,13 @@ class EventBus:
         return sum(
             1
             for subscription in self._subscriptions
-            if subscription.event_types is None or event_type in subscription.event_types
+            if (
+                (subscription.event_types is None or event_type in subscription.event_types)
+                and (
+                    subscription.patterns is None
+                    or any(_event_type_matches_pattern(event_type, pattern) for pattern in subscription.patterns)
+                )
+            )
         )
 
     def _normalize_event_types(self, event_types: str | list[str] | set[str] | None) -> set[str] | None:
@@ -129,6 +160,31 @@ class EventBus:
         if isinstance(event_types, str):
             return {event_types}
         return set(event_types)
+
+    def _normalize_patterns(
+        self,
+        patterns: str | list[str] | set[str] | None,
+        pattern: str | None,
+    ) -> set[str] | None:
+        """把 pattern 参数标准化为集合。"""
+        normalized: set[str] = set()
+        if patterns is not None:
+            if isinstance(patterns, str):
+                normalized.add(patterns)
+            else:
+                normalized.update(patterns)
+        if pattern:
+            normalized.add(pattern)
+        return normalized or None
+
+
+def _event_type_matches_pattern(event_type: str, pattern: str) -> bool:
+    """支持 `tool.*` 同时匹配 `tool.call` 和当前兼容事件名 `tool-call`。"""
+    if pattern == "*":
+        return True
+    normalized_event_type = event_type.replace("-", ".")
+    normalized_pattern = pattern.replace("-", ".")
+    return fnmatch.fnmatchcase(normalized_event_type, normalized_pattern)
 
 
 _event_bus: EventBus | None = None

@@ -12,15 +12,12 @@
 - Model Fallback And Auxiliary Router：已由 `bamboo/llms/router.py`、结构化 LLM 错误和 AgentRuntime fallback 接入实现。
 - Reactive Compact：已由 `ContextCompactor.compact(force=True)`、`SessionCompactEvent.reason` 和 AgentRuntime reactive retry 实现。
 - Provider Specific Prompt：已由 `ModelConfig.prompt_profile/capabilities`、provider prompt section 和 PromptBuilder 接入实现。
-
-## P1：长期上下文和模型可靠性
-
-1. `P1-09-agent-trace-events.md`
+- Agent Trace Events：已由 `parent_event_id`、EventBus pattern 订阅、LLM 脱敏事件、TraceRecorder 和事件 schema 文档实现。
 
 ## P2：自动化扩展
 
-2. `P2-02-workflow-runner.md`
-3. `P2-03-cron-heartbeat.md`
+1. `P2-02-workflow-runner.md`
+2. `P2-03-cron-heartbeat.md`
 
 ## 实施原则
 

@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
     AuditEvent,
+    LLMRequestEvent,
+    LLMResponseEvent,
     PermissionRequestEvent,
     PermissionResultEvent,
     SessionCompactEvent,
@@ -140,7 +142,7 @@ class AgentRuntime:
     async def _complete_main_with_fallback(self, task: Task, request: LLMRequest) -> LLMResponse:
         """调用当前主模型；遇到可 fallback 错误时只切换一次并重试。"""
         try:
-            return await self.llm_client.complete(request)
+            return await self._call_llm_client(task, request, role="main")
         except LLMError as exc:
             if not self.llm_router.can_fallback(self.main_route, exc):
                 raise
@@ -164,7 +166,72 @@ class AgentRuntime:
                     approved=True,
                 )
             )
-            return await self.llm_client.complete(request)
+            return await self._call_llm_client(task, request, role="main")
+
+    async def _call_llm_client(self, task: Task, request: LLMRequest, *, role: str) -> LLMResponse:
+        """调用模型并发布脱敏 LLM trace 事件。"""
+        request_event = LLMRequestEvent(
+            session_id=task.session_id,
+            task_id=task.task_id,
+            role=role,
+            model_name=self.model_name,
+            provider=self.model_config.provider,
+            prompt_profile=self.model_config.prompt_profile,
+            message_count=len(request.messages),
+            tool_count=len(request.tools),
+            system_prompt_chars=len(request.system_prompt),
+            input_chars=len(request.system_prompt) + sum(len(message.content) for message in request.messages),
+        )
+        await self.event_bus.emit(request_event)
+        try:
+            response = await self.llm_client.complete(request)
+        except LLMError as exc:
+            await self.event_bus.emit(
+                LLMResponseEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    parent_event_id=request_event.event_id,
+                    role=role,
+                    model_name=self.model_name,
+                    provider=self.model_config.provider,
+                    success=False,
+                    error_type=exc.error_type,
+                    error=str(exc)[:500],
+                )
+            )
+            raise
+        except Exception as exc:
+            await self.event_bus.emit(
+                LLMResponseEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    parent_event_id=request_event.event_id,
+                    role=role,
+                    model_name=self.model_name,
+                    provider=self.model_config.provider,
+                    success=False,
+                    error_type=type(exc).__name__,
+                    error=str(exc)[:500],
+                )
+            )
+            raise
+        await self.event_bus.emit(
+            LLMResponseEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                parent_event_id=request_event.event_id,
+                role=role,
+                model_name=self.model_name,
+                provider=response.provider,
+                response_model=response.model,
+                finish_reason=response.finish_reason,
+                output_chars=len(response.content),
+                tool_call_count=len(response.tool_calls),
+                usage=dict(response.usage),
+                success=True,
+            )
+        )
+        return response
 
     async def _reactive_compact_and_retry(self, task: Task, exc: LLMContextLengthError) -> LLMResponse:
         """模型明确返回上下文过长时，强制压缩后重建 prompt 并重试一次。"""

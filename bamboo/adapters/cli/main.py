@@ -7,9 +7,10 @@ TaskRuntime，最后把运行时事件渲染到终端。
 from __future__ import annotations
 
 import anyio
+import json
 from rich.console import Console
 
-from bamboo.factory.event_bus import get_event_bus
+from bamboo.factory.event_bus import EventBus, get_event_bus
 from bamboo.helpers.constant import (
     PermissionRequestEvent,
     PermissionResultEvent,
@@ -35,6 +36,16 @@ from bamboo.adapters.cli.commands import expand_command_message
 
 console = Console()
 
+CLI_EVENT_PATTERNS = {
+    "task.*",
+    "session.*",
+    "step.*",
+    "text.*",
+    "permission.*",
+    "subagent.*",
+    "tool.*",
+}
+
 
 async def _start_session(run_params: RunParams) -> object:
     """启动一个 CLI 任务会话，并渲染当前 session 的事件流。"""
@@ -50,25 +61,10 @@ async def _start_session(run_params: RunParams) -> object:
     # 先订阅事件，再启动任务，确保 task-created 等早期事件不会丢失。
     unsubscribe = event_bus.subscribe(
         _render_cli_event,
-        event_types={
-            "task-create",
-            "task-status-change",
-            "session-status-change",
-            "step-start",
-            "step-finish",
-            "text-start",
-            "text-delta",
-            "text-finish",
-            "permission-request",
-            "permission-result",
-            "subagent-start",
-            "subagent-finish",
-            "tool-call",
-            "tool-result",
-            "tool-error",
-        },
+        patterns=CLI_EVENT_PATTERNS,
         filter_fn=lambda event: event.session_id == run_params.session_id,
     )
+    debug_unsubscribe = _subscribe_debug_events(event_bus, run_params)
 
     try:
         # CLI 层不直接运行 Agent，只把控制权交给 TaskRuntime。
@@ -84,6 +80,7 @@ async def _start_session(run_params: RunParams) -> object:
     finally:
         # 会话结束后解除订阅，避免后续任务重复渲染旧 handler。
         unsubscribe()
+        debug_unsubscribe()
 
 
 async def _start_interactive_session(run_params: RunParams) -> object:
@@ -92,25 +89,10 @@ async def _start_interactive_session(run_params: RunParams) -> object:
     event_bus = get_event_bus()
     unsubscribe = event_bus.subscribe(
         _render_cli_event,
-        event_types={
-            "task-create",
-            "task-status-change",
-            "session-status-change",
-            "step-start",
-            "step-finish",
-            "text-start",
-            "text-delta",
-            "text-finish",
-            "permission-request",
-            "permission-result",
-            "subagent-start",
-            "subagent-finish",
-            "tool-call",
-            "tool-result",
-            "tool-error",
-        },
+        patterns=CLI_EVENT_PATTERNS,
         filter_fn=lambda event: event.session_id == run_params.session_id,
     )
+    debug_unsubscribe = _subscribe_debug_events(event_bus, run_params)
 
     runtime = TaskRuntime(event_bus=event_bus)
     task = runtime.create_task(run_params)
@@ -162,6 +144,23 @@ async def _start_interactive_session(run_params: RunParams) -> object:
             )
     finally:
         unsubscribe()
+        debug_unsubscribe()
+
+
+def _subscribe_debug_events(event_bus: EventBus, run_params: RunParams):
+    """按需订阅并打印当前 session 的完整脱敏事件。"""
+    if not run_params.debug_events:
+        return lambda: None
+    return event_bus.subscribe(
+        _render_debug_event,
+        patterns="*",
+        filter_fn=lambda event: event.session_id == run_params.session_id,
+    )
+
+
+def _render_debug_event(event: BaseEvent) -> None:
+    """输出原始事件 JSON，供 CLI 调试 trace 使用。"""
+    console.print(f"[dim][event][/dim] {json.dumps(event.to_dict(), ensure_ascii=False)}")
 
 
 def _render_cli_event(event: BaseEvent) -> None:
