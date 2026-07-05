@@ -9,6 +9,7 @@ import httpx
 
 from bamboo.llms.base import (
     LLMClient,
+    LLMContextLengthError,
     LLMRequest,
     LLMRequestError,
     LLMResponse,
@@ -53,6 +54,10 @@ class OpenAICompatibleClient(LLMClient):
         except httpx.HTTPStatusError as exc:
             detail = _response_error_detail(exc.response)
             error_type, retryable = classify_http_error(exc.response.status_code, detail)
+            if error_type == "context_length":
+                raise LLMContextLengthError(
+                    f"{self.config.provider} request failed with HTTP {exc.response.status_code}: {detail}"
+                ) from exc
             raise LLMRequestError(
                 f"{self.config.provider} request failed with HTTP {exc.response.status_code}: {detail}",
                 error_type=error_type,

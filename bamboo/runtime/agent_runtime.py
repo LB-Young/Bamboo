@@ -24,7 +24,7 @@ from bamboo.helpers.constant import (
     ToolErrorEvent,
     ToolResultEvent,
 )
-from bamboo.llms import LLMError, LLMResponse, LLMToolCall
+from bamboo.llms import LLMContextLengthError, LLMError, LLMRequest, LLMResponse, LLMToolCall
 from bamboo.runtime.prompt import AgentPrompt
 from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
@@ -133,6 +133,13 @@ class AgentRuntime:
             raise RuntimeError("Injected mock thinking error")
         request = observation.to_llm_request()
         try:
+            return await self._complete_main_with_fallback(task, request)
+        except LLMContextLengthError as exc:
+            return await self._reactive_compact_and_retry(task, exc)
+
+    async def _complete_main_with_fallback(self, task: Task, request: LLMRequest) -> LLMResponse:
+        """调用当前主模型；遇到可 fallback 错误时只切换一次并重试。"""
+        try:
             return await self.llm_client.complete(request)
         except LLMError as exc:
             if not self.llm_router.can_fallback(self.main_route, exc):
@@ -157,6 +164,41 @@ class AgentRuntime:
                 )
             )
             return await self.llm_client.complete(request)
+
+    async def _reactive_compact_and_retry(self, task: Task, exc: LLMContextLengthError) -> LLMResponse:
+        """模型明确返回上下文过长时，强制压缩后重建 prompt 并重试一次。"""
+        before_prompt = self._observe(task)
+        before_budget = self.context_compactor.evaluate(before_prompt)
+        await self._transition(
+            task,
+            AgentState.COMPACTING,
+            f"reactive compact after context_length error: {exc}",
+        )
+        compacted = await self.context_compactor.compact(task.session, force=True)
+        await self._transition(task, AgentState.OBSERVING, "rebuild context after reactive compaction")
+        if not compacted:
+            task.metadata["reactive_compaction_failed"] = str(exc)
+            raise exc
+
+        rebuilt_prompt = self._observe(task)
+        rebuilt_budget = self.context_compactor.evaluate(rebuilt_prompt)
+        self.run_state.compaction_count += 1
+        task.metadata["context_compaction_count"] = str(self.run_state.compaction_count)
+        task.metadata["context_compaction_model"] = self.compaction_model_name
+        task.metadata["reactive_compaction_count"] = str(
+            int(task.metadata.get("reactive_compaction_count", "0")) + 1
+        )
+        await self.event_bus.emit(
+            SessionCompactEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                before_token_count=before_budget.input_tokens,
+                after_token_count=rebuilt_budget.input_tokens,
+                reason="reactive",
+            )
+        )
+        await self._transition(task, AgentState.THINKING, "retry model after reactive compaction")
+        return await self._complete_main_with_fallback(task, rebuilt_prompt.to_llm_request())
 
     async def _compact_context_if_needed(self, task: Task, prompt: AgentPrompt) -> AgentPrompt:
         """在模型调用前按上下文预算压缩 Session，并返回重建后的 Prompt。"""
@@ -192,6 +234,7 @@ class AgentRuntime:
                     task_id=task.task_id,
                     before_token_count=budget.input_tokens,
                     after_token_count=rebuilt_budget.input_tokens,
+                    reason="preemptive",
                 )
             )
             current_prompt = rebuilt_prompt

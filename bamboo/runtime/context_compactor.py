@@ -120,25 +120,34 @@ class ContextCompactor:
         """判断活跃历史中是否存在可压缩且不属于最近保留区的消息。"""
         return bool(self._select_messages(session))
 
-    async def compact(self, session: Session) -> bool:
-        """压缩选中的旧消息；摘要无收益或没有候选消息时返回 False。"""
+    async def compact(self, session: Session, *, force: bool = False) -> bool:
+        """压缩选中的旧消息；force 模式会在摘要无收益时降级停用低价值旧消息。"""
         selected_messages = self._select_messages(session)
+        if force and not selected_messages:
+            selected_messages = self._select_force_messages(session)
         if not selected_messages:
             return False
 
         source_text = self._render_messages(selected_messages)
-        response = await self.llm_client.complete(
-            LLMRequest(
-                system_prompt=(
-                    "Compress the conversation history into a concise factual summary. "
-                    "Preserve user requirements, decisions, errors, tool results and unresolved work. "
-                    "Do not answer the user or add new information."
+        try:
+            response = await self.llm_client.complete(
+                LLMRequest(
+                    system_prompt=(
+                        "Compress the conversation history into a concise factual summary. "
+                        "Preserve user requirements, decisions, errors, tool results and unresolved work. "
+                        "Do not answer the user or add new information."
+                    ),
+                    messages=[LLMMessage(role="user", content=source_text)],
                 ),
-                messages=[LLMMessage(role="user", content=source_text)],
             )
-        )
+        except Exception:
+            if force:
+                return self._drop_low_value_message(session)
+            raise
         summary = response.content.strip()
         if not summary or self.token_counter.count_text(summary) >= self.token_counter.count_text(source_text):
+            if force:
+                return self._drop_low_value_message(session)
             return False
 
         session.replace_messages_with_summary(
@@ -155,6 +164,38 @@ class ContextCompactor:
         if len(active_messages) <= preserve_count:
             return []
         return active_messages[:-preserve_count]
+
+    def _select_force_messages(self, session: Session) -> list[Message]:
+        """reactive compact 使用：至少保留最后一条活跃消息，尽量压缩其之前的历史。"""
+        active_messages = session.active_messages()
+        if len(active_messages) <= 1:
+            return []
+        return active_messages[:-1]
+
+    @staticmethod
+    def _drop_low_value_message(session: Session) -> bool:
+        """reactive compact 降级：停用最旧的普通 assistant 输出或成对工具结果。"""
+        active_messages = session.active_messages()
+        protected_id = active_messages[-1].message_id if active_messages else ""
+        for message in active_messages:
+            if message.message_id == protected_id:
+                continue
+            if message.role == "assistant" and not message.tool_calls and message.message_type == "normal":
+                message.metadata["reactive_compact_dropped"] = True
+                message.mark_as_compressed()
+                return True
+
+        for message in active_messages:
+            if message.message_id == protected_id or message.role != "tool":
+                continue
+            paired_assistant = _find_tool_call_assistant(session, message.tool_call_id)
+            if paired_assistant is not None:
+                paired_assistant.metadata["reactive_compact_dropped"] = True
+                paired_assistant.mark_as_compressed()
+            message.metadata["reactive_compact_dropped"] = True
+            message.mark_as_compressed()
+            return True
+        return False
 
     @staticmethod
     def _render_messages(messages: list[Message]) -> str:
@@ -177,3 +218,15 @@ class ContextCompactor:
                 sections.append(f"tool_call_id={message.tool_call_id}")
             rendered_messages.append("\n".join(section for section in sections if section))
         return "\n\n".join(rendered_messages)
+
+
+def _find_tool_call_assistant(session: Session, tool_call_id: str) -> Message | None:
+    """查找产生指定 tool_call_id 的 assistant 消息，便于降级时成对停用。"""
+    if not tool_call_id:
+        return None
+    for message in session.active_messages():
+        if message.role != "assistant":
+            continue
+        if any(tool_call.id == tool_call_id for tool_call in message.tool_calls):
+            return message
+    return None

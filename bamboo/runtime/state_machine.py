@@ -56,7 +56,13 @@ class AgentStateMachine:
                 AgentState.FAILED,
                 AgentState.CANCELLED,
             },
-            AgentState.THINKING: {AgentState.ACTING, AgentState.RECOVERING, AgentState.FAILED, AgentState.CANCELLED},
+            AgentState.THINKING: {
+                AgentState.ACTING,
+                AgentState.COMPACTING,
+                AgentState.RECOVERING,
+                AgentState.FAILED,
+                AgentState.CANCELLED,
+            },
             AgentState.ACTING: {
                 AgentState.OBSERVING,
                 AgentState.TOOL_CALLING,

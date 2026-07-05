@@ -9,18 +9,18 @@
 - Permission Policy：已由 `bamboo/security/permission_policy.py`、resolver、audit 和 AgentRuntime 接入实现。
 - Skills Hub / Guard：已由 `bamboo/skills/hub.py`、`guard.py`、CLI 和 lock/audit 实现。
 - Subagent Runtime：已由 `bamboo/runtime/subagent_runtime.py`、`bamboo/tools/buildin/subagent_run.py` 和内置 subagent 配置实现。
+- Model Fallback And Auxiliary Router：已由 `bamboo/llms/router.py`、结构化 LLM 错误和 AgentRuntime fallback 接入实现。
+- Reactive Compact：已由 `ContextCompactor.compact(force=True)`、`SessionCompactEvent.reason` 和 AgentRuntime reactive retry 实现。
 
 ## P1：长期上下文和模型可靠性
 
-1. `P1-06-model-fallback-and-auxiliary-router.md`
-2. `P1-07-reactive-compact.md`
-3. `P1-08-provider-specific-prompt.md`
-4. `P1-09-agent-trace-events.md`
+1. `P1-08-provider-specific-prompt.md`
+2. `P1-09-agent-trace-events.md`
 
 ## P2：自动化扩展
 
-5. `P2-02-workflow-runner.md`
-6. `P2-03-cron-heartbeat.md`
+3. `P2-02-workflow-runner.md`
+4. `P2-03-cron-heartbeat.md`
 
 ## 实施原则
 

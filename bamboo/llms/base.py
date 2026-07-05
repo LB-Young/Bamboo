@@ -39,6 +39,14 @@ class LLMRequestError(LLMError):
     """表示模型平台拒绝请求或网络调用失败。"""
 
 
+class LLMContextLengthError(LLMRequestError):
+    """表示请求超过模型上下文窗口。"""
+
+    def __init__(self, message: str) -> None:
+        """上下文过长需要由 Runtime 先压缩，而不是直接 fallback。"""
+        super().__init__(message, error_type="context_length", retryable=False)
+
+
 class LLMResponseError(LLMError):
     """表示模型平台返回了无法解析的响应。"""
 

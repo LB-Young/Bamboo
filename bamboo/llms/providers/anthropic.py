@@ -8,6 +8,7 @@ import httpx
 
 from bamboo.llms.base import (
     LLMClient,
+    LLMContextLengthError,
     LLMRequest,
     LLMRequestError,
     LLMResponse,
@@ -49,6 +50,10 @@ class AnthropicMessagesClient(LLMClient):
         except httpx.HTTPStatusError as exc:
             detail = _response_error_detail(exc.response)
             error_type, retryable = classify_http_error(exc.response.status_code, detail)
+            if error_type == "context_length":
+                raise LLMContextLengthError(
+                    f"claude request failed with HTTP {exc.response.status_code}: {detail}"
+                ) from exc
             raise LLMRequestError(
                 f"claude request failed with HTTP {exc.response.status_code}: {detail}",
                 error_type=error_type,

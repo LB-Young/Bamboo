@@ -1,5 +1,11 @@
 # 主 Agent 只配置 models.yaml 中注册过的模型名。
 model: deepseek-chat
 
+# 可选。主模型遇到 rate_limit/server_error/timeout 等可重试错误时，只切换一次。
+fallback_model: ""
+
 # 可选。留空时复用 model；填写时必须引用 models.yaml 中的注册名。
 compaction_model: ""
+
+# 可选。预留给 compaction 辅助模型路由使用。
+compaction_fallback_model: ""

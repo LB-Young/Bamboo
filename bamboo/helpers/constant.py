@@ -372,12 +372,14 @@ class SessionCompactEvent(BaseEvent):
     type: str = "session-compact"
     before_token_count: int = 0
     after_token_count: int = 0
+    reason: str = "preemptive"
 
     def to_dict(self) -> dict:
         return {
             **super().to_dict(),
             "before_token_count": self.before_token_count,
             "after_token_count": self.after_token_count,
+            "reason": self.reason,
         }
 
 
