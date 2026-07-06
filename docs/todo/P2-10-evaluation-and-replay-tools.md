@@ -2,11 +2,11 @@
 
 ## 排期信息
 
-- 建议顺序：6
+- 建议顺序：5
 - 建议阶段：P2 - 质量工程和高级运行时
 - 重要程度：中高
 - 优先级：P2
-- 依赖关系：建议在 `P2-09 Agent Trace Schema Docs` 后实施；现有 `--resume` / `replay` 初版能力可以作为输入基础。
+- 依赖关系：依赖已完成的 `docs/agent-trace-events.md`；现有 `--resume` / `replay` 初版能力可以作为输入基础。
 
 ## 功能定位
 

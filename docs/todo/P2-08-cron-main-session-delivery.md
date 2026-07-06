@@ -2,11 +2,11 @@
 
 ## 排期信息
 
-- 建议顺序：5
+- 建议顺序：4
 - 建议阶段：P1 - 核心用户能力
 - 重要程度：中高
 - 优先级：P1
-- 依赖关系：建议在 `P2-09 Agent Trace Schema Docs` 后实施，方便 Web/CLI 稳定消费 cron 投递事件。
+- 依赖关系：依赖已完成的 `docs/agent-trace-events.md`，方便 Web/CLI 稳定消费 cron 投递事件。
 
 ## 功能定位
 

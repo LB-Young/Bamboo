@@ -56,6 +56,9 @@ class ReasoningStartEvent(BaseEvent):
     type: str = "reasoning-start"
     message_id: Optional[str] = None
 
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "message_id": self.message_id}
+
 
 @dataclass(kw_only=True)
 class ReasoningDeltaEvent(BaseEvent):
@@ -71,6 +74,9 @@ class ReasoningFinishEvent(BaseEvent):
     type: str = "reasoning-finish"
     content: str = ""
     message_id: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return {**super().to_dict(), "content": self.content, "message_id": self.message_id}
 
 
 # ─── LLM Trace 事件 ─────────────────────────────────────────────────────────
@@ -679,6 +685,7 @@ BambooEvent = (
     | LLMRequestEvent | LLMResponseEvent
     | ToolCallEvent | ToolResultEvent | ToolErrorEvent
     | PermissionRequestEvent | PermissionResultEvent | ToolAuditEvent
+    | TodoUpdateEvent | TaskSnapshotEvent | TaskStopEvent
     | SubagentStartEvent | SubagentFinishEvent
     | KnowledgeUpdateEvent | KnowledgeUpdateErrorEvent
     | StepStartEvent | StepFinishEvent
