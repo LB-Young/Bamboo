@@ -34,9 +34,9 @@
 
 | 建议顺序 | 需求 | 功能说明 | 重要程度 | 优先级 | 依赖/备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
-| 2 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
-| 3 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
+| 1 | `P2-07-auxiliary-model-router-expansion.md` | 让不同后台任务使用不同模型：例如上下文压缩用长上下文模型、记忆整理用抽取模型、skill 匹配用便宜模型，并且各自 fallback 不互相污染。 | 中 | P2 | 这是“内部任务该找哪个模型”的问题，不是新增 provider，也不是主模型 fallback。 |
+| 2 | `P2-16-subagent-worktree-isolation.md` | 让会写代码的 subagent 先在隔离 worktree/tempdir 里改文件，返回 diff 和变更摘要，再由主 Agent 或用户决定是否合并。 | 中 | P2 | 解决子 Agent 直接修改主工作区、并行方案互相覆盖的问题。 |
+| 3 | `P2-17-plugin-manifest-installer.md` | 定义统一 plugin 包格式，一次性安装 skill、command、workflow、MCP 配置，并支持扫描、lock、审计和安全卸载。 | 中低 | P3 | 这是扩展分发机制，不是单个 skill installer。 |
 
 ## 建议阶段
 
