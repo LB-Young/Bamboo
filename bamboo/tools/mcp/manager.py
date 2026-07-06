@@ -18,6 +18,9 @@ class MCPManager:
         self.configs = configs
         self.clients: dict[str, MCPClient] = {}
         self.errors: dict[str, str] = {}
+        self.stop_errors: dict[str, str] = {}
+        self.started = False
+        self.stopped = False
 
     @classmethod
     def from_config(cls, document: dict[str, Any] | None) -> MCPManager:
@@ -56,14 +59,22 @@ class MCPManager:
 
     def start_all(self) -> None:
         """启动所有配置的 MCP server。"""
+        self.errors.clear()
+        self.stop_errors.clear()
+        self.stopped = False
         for config in self.configs:
             client = MCPClient(config)
             try:
                 client.start()
             except Exception as exc:
                 self.errors[config.name] = str(exc)
+                try:
+                    client.stop()
+                except Exception as stop_exc:
+                    self.stop_errors[config.name] = str(stop_exc)
                 continue
             self.clients[config.name] = client
+        self.started = bool(self.clients)
 
     def register_tools(self, registry: ToolRegistry) -> None:
         """把发现到的 MCP tools 注册为 Bamboo 原生工具。"""
@@ -74,7 +85,17 @@ class MCPManager:
             registry.register_mcp_tools(server, [MCPDiscoveredTool(tool, client) for tool in client.tools])
 
     def stop_all(self) -> None:
-        """停止所有 MCP server。"""
-        for client in list(self.clients.values()):
-            client.stop()
+        """停止所有 MCP server。该方法可重复调用。"""
+        for name, client in list(self.clients.items()):
+            try:
+                client.stop()
+            except Exception as exc:
+                self.stop_errors[name] = str(exc)
         self.clients.clear()
+        self.started = False
+        self.stopped = True
+
+    @property
+    def has_errors(self) -> bool:
+        """Return True when start or stop errors have been recorded."""
+        return bool(self.errors or self.stop_errors)

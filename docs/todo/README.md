@@ -18,10 +18,11 @@
 - OS Sandbox Runner：已由 `bamboo/security/sandbox.py`、`BashTool` sandbox 接入和 audit sandbox 元数据实现。
 - Readonly Tool Parallelism：已由 `AgentRuntime` 同轮 read-only tool calls 并发执行和稳定顺序写回实现。
 - Web Permission Approval Flow：已由 `WebPermissionResolver`、`POST /api/permissions/{request_id}` 和 Web 权限确认 UI 实现。
+- MCP Lifecycle Cleanup：已由 `RuntimeContextBuilder.close()`、`TaskRuntime` finally cleanup 和幂等 `MCPManager.stop_all()` 实现。
 
 ## 排期原则
 
-- 优先补齐安全和生命周期闭环：MCP 进程清理、trace schema 先做，否则后续能力难以稳定接入 UI、回放和审计。
+- 优先补齐 trace schema，否则后续能力难以稳定接入 UI、回放和审计。
 - 其次补齐用户高频能力：记忆更新、本地模型发现、cron 主会话投递。
 - 最后做高级扩展：评估工具、辅助模型细分、subagent worktree、plugin installer。
 - `P2-05 Session Resume And Replay` 的需求 md 已不存在，代码中已有 `--resume` / `replay` 相关实现入口；后续 replay 能力统一并入 `P2-10 Evaluation And Replay Tools` 扩展，不再单独排期。
@@ -30,23 +31,21 @@
 
 | 建议顺序 | 需求 | 功能说明 | 重要程度 | 优先级 | 依赖/备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `P2-15-mcp-lifecycle-cleanup.md` | 明确 MCP server 生命周期，确保任务完成、异常、取消时不会遗留 MCP 子进程，并能记录启动/停止错误。 | 极高 | P0 | 涉及外部进程泄漏和资源清理，应在继续扩展 MCP 前完成。 |
-| 2 | `P2-09-agent-trace-schema-docs.md` | 固化 EventBus/TraceRecorder 对外事件 schema，补文档和 schema 测试，让 Web、replay、外部工具能稳定消费事件。 | 高 | P0 | 是 replay/eval、Web 调试、cron 投递可观测性的基础。 |
-| 3 | `P2-04-prompt-section-object-model.md` | 把 prompt 从字符串拼接升级为显式 `PromptSection` 对象，记录 section 来源、优先级、hash 和 debug 元数据。 | 高 | P1 | 有助于调试 provider prompt、memory、skills 注入；不阻塞安全闭环。 |
-| 4 | `P2-06-memory-update-and-backfill-tools.md` | 新增 memory read/search/update/backfill 工具，让用户能通过对话修正知识，并把 source log 中的高价值信息回填到 knowledge md。 | 高 | P1 | 建议在 PromptSection 之后做，方便验证 memory 更新后 prompt 注入是否生效。 |
-| 5 | `P2-11-local-model-discovery.md` | 增加 Ollama `/api/tags`、vLLM `/v1/models` 发现能力，输出或可选写入 `models.yaml` 配置片段。 | 高 | P1 | 用户可见收益大，且与主运行时耦合低，适合独立交付。 |
-| 6 | `P2-08-cron-main-session-delivery.md` | 让 cron job 支持 `isolated` 和真实 `main` 投递，把定时任务结果追加到指定活跃会话并推送 Web/CLI。 | 中高 | P1 | 依赖 trace/schema 和 session 查找能力；否则 UI 侧难以稳定消费。 |
-| 7 | `P2-10-evaluation-and-replay-tools.md` | 建立 eval/replay 工具链，用 session trace 或 fixture 复现失败、比较模型/prompt/tool 行为变化并输出报告。 | 中高 | P2 | 建议在 trace schema 固化后做；可复用已有 `replay` 初版。 |
-| 8 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
-| 9 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
-| 10 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
+| 1 | `P2-09-agent-trace-schema-docs.md` | 固化 EventBus/TraceRecorder 对外事件 schema，补文档和 schema 测试，让 Web、replay、外部工具能稳定消费事件。 | 高 | P0 | 是 replay/eval、Web 调试、cron 投递可观测性的基础。 |
+| 2 | `P2-04-prompt-section-object-model.md` | 把 prompt 从字符串拼接升级为显式 `PromptSection` 对象，记录 section 来源、优先级、hash 和 debug 元数据。 | 高 | P1 | 有助于调试 provider prompt、memory、skills 注入；不阻塞安全闭环。 |
+| 3 | `P2-06-memory-update-and-backfill-tools.md` | 新增 memory read/search/update/backfill 工具，让用户能通过对话修正知识，并把 source log 中的高价值信息回填到 knowledge md。 | 高 | P1 | 建议在 PromptSection 之后做，方便验证 memory 更新后 prompt 注入是否生效。 |
+| 4 | `P2-11-local-model-discovery.md` | 增加 Ollama `/api/tags`、vLLM `/v1/models` 发现能力，输出或可选写入 `models.yaml` 配置片段。 | 高 | P1 | 用户可见收益大，且与主运行时耦合低，适合独立交付。 |
+| 5 | `P2-08-cron-main-session-delivery.md` | 让 cron job 支持 `isolated` 和真实 `main` 投递，把定时任务结果追加到指定活跃会话并推送 Web/CLI。 | 中高 | P1 | 依赖 trace/schema 和 session 查找能力；否则 UI 侧难以稳定消费。 |
+| 6 | `P2-10-evaluation-and-replay-tools.md` | 建立 eval/replay 工具链，用 session trace 或 fixture 复现失败、比较模型/prompt/tool 行为变化并输出报告。 | 中高 | P2 | 建议在 trace schema 固化后做；可复用已有 `replay` 初版。 |
+| 7 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
+| 8 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
+| 9 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
 
 ## 建议阶段
 
 ### P0：安全闭环和运行时基础
 
-1. `P2-15-mcp-lifecycle-cleanup.md`
-2. `P2-09-agent-trace-schema-docs.md`
+1. `P2-09-agent-trace-schema-docs.md`
 
 ### P1：核心用户能力
 

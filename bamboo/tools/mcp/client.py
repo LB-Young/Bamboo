@@ -106,14 +106,18 @@ class MCPClient:
         """停止 MCP server 进程。"""
         if self._process is None:
             return
-        if self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=5)
-        self._initialized = False
+        try:
+            if self._process.poll() is None:
+                self._process.terminate()
+                try:
+                    self._process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+                    self._process.wait(timeout=5)
+        finally:
+            self._process = None
+            self._initialized = False
+            self._tools = []
 
     def _send_request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         """发送 JSON-RPC request 并读取 response。"""

@@ -7,6 +7,8 @@ TaskRuntime 是一次任务执行的总控：创建任务、保存状态、发�
 # 延迟解析类型注解，避免运行时立即解析 `TaskFactory | None` 等类型表达式。
 from __future__ import annotations
 
+import inspect
+
 # Callable 用于描述可注入的 AgentRuntime 工厂函数类型。
 from collections.abc import Callable
 
@@ -143,6 +145,7 @@ class TaskRuntime:
         try:
             return await self._run_existing_task_with_trace(task, state)
         finally:
+            await self._cleanup_runtime_context(task)
             if trace_recorder is not None:
                 trace_recorder.close()
 
@@ -212,6 +215,23 @@ class TaskRuntime:
         if task.session.memory_store is None:
             return
         task.session.memory_store.append_turn(task)
+
+    async def _cleanup_runtime_context(self, task: Task) -> None:
+        """Release resources owned by the runtime context builder."""
+        close = getattr(self.runtime_context_builder, "close", None)
+        if not callable(close):
+            return
+        try:
+            result = close(task)
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:
+            self._log.warning(
+                "runtime context cleanup failed task_id={task_id} session_id={session_id}: {error}",
+                task_id=task.task_id,
+                session_id=task.session_id,
+                error=exc,
+            )
 
     async def _run_knowledge_subagent_if_enabled(self, task: Task) -> None:
         """Run optional post-task knowledge curation without affecting task success."""

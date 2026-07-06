@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.session import Session
 from bamboo.factory.task_factory import Task
+from bamboo.helpers.constant import AuditEvent
 from bamboo.llms import LLMClient, LLMFactory, LLMRoute, LLMRouter
 from bamboo.llms.config import ModelConfig
 from bamboo.memory.manager import MemoryManager
@@ -50,6 +51,22 @@ class RuntimeContext:
     permission_resolver: PermissionResolver | None = None
     audit_logger: ToolAuditLogger | None = None
     trace_recorder: object | None = None
+    mcp_manager_owned: bool = False
+
+    async def close(self) -> None:
+        """Release resources owned by this runtime context."""
+        if self.mcp_manager is None or not self.mcp_manager_owned:
+            return
+        self.mcp_manager.stop_all()
+        await self.event_bus.emit(
+            AuditEvent(
+                session_id=self.task.session_id,
+                task_id=self.task.task_id,
+                action="mcp_runtime_context_closed",
+                result=_mcp_cleanup_result(self.mcp_manager),
+                approved=not self.mcp_manager.stop_errors,
+            )
+        )
 
 
 class RuntimeContextBuilder:
@@ -99,6 +116,7 @@ class RuntimeContextBuilder:
         self.audit_logger = audit_logger or ToolAuditLogger()
         self.mcp_enabled = mcp_enabled
         self.mcp_manager: MCPManager | None = None
+        self._owns_mcp_manager = False
         self._mcp_loaded = False
 
     def build(self, task: Task) -> RuntimeContext:
@@ -150,6 +168,7 @@ class RuntimeContextBuilder:
             permission_policy=self.permission_policy,
             permission_resolver=self.permission_resolver or create_permission_resolver(task.run_params),
             audit_logger=self.audit_logger,
+            mcp_manager_owned=self._owns_mcp_manager,
         )
 
     def _ensure_mcp_tools(self, task: Task) -> None:
@@ -159,17 +178,43 @@ class RuntimeContextBuilder:
         if not self.mcp_enabled:
             self._mcp_loaded = True
             self.mcp_manager = MCPManager.from_config({})
+            self._owns_mcp_manager = False
             return
         mcp_document = task.config.get("mcp", {})
         manager = MCPManager.from_config(mcp_document if isinstance(mcp_document, dict) else {})
         if not manager.configs:
             self._mcp_loaded = True
             self.mcp_manager = manager
+            self._owns_mcp_manager = False
             return
         manager.start_all()
         manager.register_tools(self.tool_registry)
         self.mcp_manager = manager
+        self._owns_mcp_manager = True
         self._mcp_loaded = True
+
+    async def close(self, task: Task | None = None) -> None:
+        """Close resources owned by this builder and reset lazy runtime state."""
+        if self.mcp_manager is None or not self._owns_mcp_manager:
+            self._mcp_loaded = False
+            self.mcp_manager = None
+            self._owns_mcp_manager = False
+            return
+        manager = self.mcp_manager
+        manager.stop_all()
+        if task is not None:
+            await self.event_bus.emit(
+                AuditEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    action="mcp_runtime_builder_closed",
+                    result=_mcp_cleanup_result(manager),
+                    approved=not manager.stop_errors,
+                )
+            )
+        self._mcp_loaded = False
+        self.mcp_manager = None
+        self._owns_mcp_manager = False
 
     def _resolve_agent_model_name(self, task: Task) -> str:
         """根据任务覆盖、主 Agent 配置和默认模型确定执行模型名。"""
@@ -218,3 +263,13 @@ class RuntimeContextBuilder:
         ):
             return configured_name
         return ""
+
+
+def _mcp_cleanup_result(manager: MCPManager) -> str:
+    """Render a concise cleanup summary for audit events."""
+    parts = [f"stopped={manager.stopped}", f"start_errors={len(manager.errors)}", f"stop_errors={len(manager.stop_errors)}"]
+    if manager.errors:
+        parts.append(f"start_error_servers={','.join(sorted(manager.errors))}")
+    if manager.stop_errors:
+        parts.append(f"stop_error_servers={','.join(sorted(manager.stop_errors))}")
+    return " ".join(parts)
