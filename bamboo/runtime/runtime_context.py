@@ -35,6 +35,7 @@ class RuntimeContext:
     llm_router: LLMRouter
     main_route: LLMRoute
     compaction_route: LLMRoute
+    auxiliary_routes: dict[str, LLMRoute]
     model_name: str
     compaction_model_name: str
     model_config: ModelConfig
@@ -52,6 +53,28 @@ class RuntimeContext:
     audit_logger: ToolAuditLogger | None = None
     trace_recorder: object | None = None
     mcp_manager_owned: bool = False
+
+    def route_for_role(self, role: str) -> LLMRoute:
+        """Return an auxiliary model route by role, falling back to main-compatible routing."""
+        normalized = role.strip().lower().replace("-", "_")
+        route = self.auxiliary_routes.get(normalized)
+        if route is not None:
+            return route
+        route = self.llm_router.route_for_role(normalized, default_model_name=self.model_name)
+        self.auxiliary_routes[normalized] = route
+        return route
+
+    def client_for_role(self, role: str) -> LLMClient:
+        """Return the active LLM client for an auxiliary role."""
+        return self.llm_router.client_for(self.route_for_role(role))
+
+    def config_for_role(self, role: str) -> ModelConfig:
+        """Return the active model config for an auxiliary role."""
+        return self.llm_router.config_for(self.route_for_role(role))
+
+    def model_name_for_role(self, role: str) -> str:
+        """Return the active model name for an auxiliary role."""
+        return self.route_for_role(role).active_model_name
 
     async def close(self) -> None:
         """Release resources owned by this runtime context."""
@@ -123,17 +146,17 @@ class RuntimeContextBuilder:
         """根据 Task 配置创建 AgentRuntime 可直接使用的上下文。"""
         self._ensure_mcp_tools(task)
         model_name = self.model_name or self._resolve_agent_model_name(task)
-        compaction_model_name = self.compaction_model_name or self._resolve_compaction_model_name(task, model_name)
         llm_router = LLMRouter(self.llm_factory, config=task.config)
         main_route = llm_router.main_route(
             model_name,
             fallback_model_name=self._resolve_agent_fallback_model_name(task, model_name),
         )
-        compaction_route = llm_router.auxiliary_route(
-            "compaction",
-            model_name=compaction_model_name,
-            fallback_model_name=self._resolve_compaction_fallback_model_name(task, compaction_model_name),
-        )
+        if self.compaction_model_name:
+            compaction_route = llm_router.auxiliary_route("compaction", model_name=self.compaction_model_name)
+        else:
+            compaction_route = llm_router.route_for_role("compaction", default_model_name=model_name)
+        auxiliary_routes = {"compaction": compaction_route}
+        compaction_model_name = compaction_route.active_model_name
         model_config = llm_router.config_for(main_route)
         llm_client = llm_router.client_for(main_route)
         compaction_llm_client = llm_router.client_for(compaction_route)
@@ -141,6 +164,8 @@ class RuntimeContextBuilder:
         context_compactor = self.context_compactor or ContextCompactor(
             llm_client=compaction_llm_client,
             model_config=model_config,
+            llm_router=llm_router,
+            route=compaction_route,
             token_counter=self.token_counter,
             policy=self.compaction_policy,
         )
@@ -153,6 +178,7 @@ class RuntimeContextBuilder:
             llm_router=llm_router,
             main_route=main_route,
             compaction_route=compaction_route,
+            auxiliary_routes=auxiliary_routes,
             model_name=model_name,
             compaction_model_name=compaction_model_name,
             model_config=model_config,
@@ -226,16 +252,6 @@ class RuntimeContextBuilder:
             return configured_name
         return self.llm_factory.default_model_name
 
-    def _resolve_compaction_model_name(self, task: Task, agent_model_name: str) -> str:
-        """读取可选压缩模型名；缺失时复用执行模型。"""
-        main_agent_config = task.config.get("bamboo_main_agent", {})
-        configured_name = (
-            main_agent_config.get("compaction_model") if isinstance(main_agent_config, dict) else None
-        )
-        if isinstance(configured_name, str) and configured_name and self.llm_factory.has_model(configured_name):
-            return configured_name
-        return agent_model_name
-
     def _resolve_agent_fallback_model_name(self, task: Task, agent_model_name: str) -> str:
         """读取主模型 fallback；无效或等于主模型时视为未配置。"""
         main_agent_config = task.config.get("bamboo_main_agent", {})
@@ -248,22 +264,6 @@ class RuntimeContextBuilder:
         ):
             return configured_name
         return ""
-
-    def _resolve_compaction_fallback_model_name(self, task: Task, compaction_model_name: str) -> str:
-        """读取压缩模型 fallback；无效或等于压缩模型时视为未配置。"""
-        main_agent_config = task.config.get("bamboo_main_agent", {})
-        configured_name = (
-            main_agent_config.get("compaction_fallback_model") if isinstance(main_agent_config, dict) else None
-        )
-        if (
-            isinstance(configured_name, str)
-            and configured_name
-            and configured_name != compaction_model_name
-            and self.llm_factory.has_model(configured_name)
-        ):
-            return configured_name
-        return ""
-
 
 def _mcp_cleanup_result(manager: MCPManager) -> str:
     """Render a concise cleanup summary for audit events."""

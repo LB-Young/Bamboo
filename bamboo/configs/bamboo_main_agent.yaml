@@ -9,3 +9,28 @@ compaction_model: ""
 
 # 可选。预留给 compaction 辅助模型路由使用。
 compaction_fallback_model: ""
+
+# 可选。按后台任务配置辅助模型；未配置的 role 默认复用主模型。
+# 这些配置不会新增 provider，只引用 models.yaml 中已有的模型注册名。
+auxiliary_models:
+  compaction:
+    model: ""
+    fallbacks: []
+  memory:
+    model: ""
+    fallbacks: []
+  knowledge_curator:
+    model: ""
+    fallbacks: []
+  skills_hub:
+    model: ""
+    fallbacks: []
+  web_extract:
+    model: ""
+    fallbacks: []
+  session_search:
+    model: ""
+    fallbacks: []
+  vision:
+    model: ""
+    fallbacks: []

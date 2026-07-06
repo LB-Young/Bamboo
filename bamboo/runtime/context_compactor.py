@@ -11,6 +11,7 @@ from bamboo.factory.message import Message
 from bamboo.factory.session import Session
 from bamboo.llms import LLMClient, LLMMessage, LLMRequest
 from bamboo.llms.config import ModelConfig
+from bamboo.llms.router import LLMRoute, LLMRouter
 from bamboo.runtime.prompt import AgentPrompt
 
 
@@ -91,12 +92,16 @@ class ContextCompactor:
         *,
         llm_client: LLMClient,
         model_config: ModelConfig,
+        llm_router: LLMRouter | None = None,
+        route: LLMRoute | None = None,
         token_counter: TokenCounter | None = None,
         policy: ContextBudgetPolicy | None = None,
     ) -> None:
         """初始化模型依赖、Token 统计器和压缩策略。"""
         self.llm_client = llm_client
         self.model_config = model_config
+        self.llm_router = llm_router
+        self.route = route
         self.token_counter = token_counter or HeuristicTokenCounter()
         self.policy = policy or ContextBudgetPolicy()
 
@@ -130,16 +135,7 @@ class ContextCompactor:
 
         source_text = self._render_messages(selected_messages)
         try:
-            response = await self.llm_client.complete(
-                LLMRequest(
-                    system_prompt=(
-                        "Compress the conversation history into a concise factual summary. "
-                        "Preserve user requirements, decisions, errors, tool results and unresolved work. "
-                        "Do not answer the user or add new information."
-                    ),
-                    messages=[LLMMessage(role="user", content=source_text)],
-                ),
-            )
+            response = await self._complete_with_fallback(source_text)
         except Exception:
             if force:
                 return self._drop_low_value_message(session)
@@ -156,6 +152,24 @@ class ContextCompactor:
             agent_name="context-compactor",
         )
         return True
+
+    async def _complete_with_fallback(self, source_text: str):
+        request = LLMRequest(
+            system_prompt=(
+                "Compress the conversation history into a concise factual summary. "
+                "Preserve user requirements, decisions, errors, tool results and unresolved work. "
+                "Do not answer the user or add new information."
+            ),
+            messages=[LLMMessage(role="user", content=source_text)],
+        )
+        try:
+            return await self.llm_client.complete(request)
+        except Exception as exc:
+            if self.llm_router is None or self.route is None or not self.llm_router.can_fallback(self.route, exc):
+                raise
+            self.llm_router.activate_fallback(self.route)
+            self.llm_client = self.llm_router.client_for(self.route)
+            return await self.llm_client.complete(request)
 
     def _select_messages(self, session: Session) -> list[Message]:
         """选择最近保留区之前的所有活跃消息作为本轮压缩候选。"""

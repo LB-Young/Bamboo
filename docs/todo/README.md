@@ -23,10 +23,11 @@
 - Local Model Discovery：已由 Ollama `/api/tags`、vLLM `/v1/models` 显式发现、配置片段渲染、确认写入和备份机制实现。
 - Cron Main Session Delivery：已由 cron `delivery=main` 目标 session 查找、恢复 follow-up 执行、Web/CLI cron 事件订阅和 session trace 事件持久化实现。
 - Evaluation And Replay Tools：已由标准 eval case、replay fixture、live runner、报告渲染、`bamboo eval run/export` 和 `docs/eval.md` 实现。
+- Auxiliary Model Router Expansion：已由 `LLMRouter.route_for_role()`、`RuntimeContext.client_for_role()`、role 级辅助模型配置和 compaction 独立 fallback 实现。
 
 ## 排期原则
 
-- 优先补齐高级运行时能力：辅助模型细分和 subagent worktree。
+- 优先补齐高级运行时能力：subagent worktree 隔离。
 - 最后做生态扩展：plugin installer。
 - `P2-05 Session Resume And Replay` 的需求 md 已不存在，代码中已有 `--resume` / `replay` 相关实现入口；replay fixture 能力已并入 Evaluation And Replay Tools，不再单独排期。
 
@@ -34,16 +35,14 @@
 
 | 建议顺序 | 需求 | 功能说明 | 重要程度 | 优先级 | 依赖/备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `P2-07-auxiliary-model-router-expansion.md` | 让不同后台任务使用不同模型：例如上下文压缩用长上下文模型、记忆整理用抽取模型、skill 匹配用便宜模型，并且各自 fallback 不互相污染。 | 中 | P2 | 这是“内部任务该找哪个模型”的问题，不是新增 provider，也不是主模型 fallback。 |
-| 2 | `P2-16-subagent-worktree-isolation.md` | 让会写代码的 subagent 先在隔离 worktree/tempdir 里改文件，返回 diff 和变更摘要，再由主 Agent 或用户决定是否合并。 | 中 | P2 | 解决子 Agent 直接修改主工作区、并行方案互相覆盖的问题。 |
-| 3 | `P2-17-plugin-manifest-installer.md` | 定义统一 plugin 包格式，一次性安装 skill、command、workflow、MCP 配置，并支持扫描、lock、审计和安全卸载。 | 中低 | P3 | 这是扩展分发机制，不是单个 skill installer。 |
+| 1 | `P2-16-subagent-worktree-isolation.md` | 让会写代码的 subagent 先在隔离 worktree/tempdir 里改文件，返回 diff 和变更摘要，再由主 Agent 或用户决定是否合并。 | 中 | P2 | 解决子 Agent 直接修改主工作区、并行方案互相覆盖的问题。 |
+| 2 | `P2-17-plugin-manifest-installer.md` | 定义统一 plugin 包格式，一次性安装 skill、command、workflow、MCP 配置，并支持扫描、lock、审计和安全卸载。 | 中低 | P3 | 这是扩展分发机制，不是单个 skill installer。 |
 
 ## 建议阶段
 
 ### P2：质量工程和高级运行时
 
-1. `P2-07-auxiliary-model-router-expansion.md`
-2. `P2-16-subagent-worktree-isolation.md`
+1. `P2-16-subagent-worktree-isolation.md`
 
 ### P3：生态和分发
 
