@@ -7,7 +7,9 @@ from bamboo.security.permission_resolver import (
     ConsolePermissionResolver,
     NonInteractivePermissionResolver,
     PermissionResolver,
+    WebPermissionResolver,
     create_permission_resolver,
+    permission_request_id,
 )
 from bamboo.security.sandbox import SandboxConfig, SandboxExecutionResult, SandboxResult, run_sandboxed
 
@@ -26,7 +28,9 @@ __all__ = [
     "ToolAuditRecord",
     "ConsolePermissionResolver",
     "NonInteractivePermissionResolver",
+    "WebPermissionResolver",
     "create_permission_resolver",
     "inspect_command",
+    "permission_request_id",
     "run_sandboxed",
 ]

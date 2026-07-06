@@ -398,6 +398,11 @@ textarea {
   color: var(--danger);
 }
 
+.tool-row.awaiting-permission .tool-status {
+  background: #eef4ff;
+  color: #175cd3;
+}
+
 .tool-preview {
   min-width: 0;
   overflow: hidden;
@@ -407,6 +412,47 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   background: transparent;
+}
+
+.permission-actions {
+  min-height: 42px;
+  padding: 8px 10px 10px 44px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fbfcfd;
+}
+
+.permission-detail {
+  min-width: 0;
+  flex: 1;
+  color: #475467;
+  font-size: 12px;
+}
+
+.permission-actions button {
+  min-width: 54px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  color: white;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.permission-actions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.permission-allow {
+  background: var(--accent);
+}
+
+.permission-deny {
+  background: var(--danger);
 }
 
 .tool-output {

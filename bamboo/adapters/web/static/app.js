@@ -219,6 +219,14 @@ function handleEvent(event) {
     showToolCall(event);
     return;
   }
+  if (event.type === "permission_request") {
+    showPermissionRequest(event);
+    return;
+  }
+  if (event.type === "permission_result") {
+    updatePermissionResult(event);
+    return;
+  }
   if (event.type === "tool_result") {
     updateToolResult(event);
     return;
@@ -284,9 +292,79 @@ function showToolCall(event) {
   scrollToBottom();
 }
 
+function showPermissionRequest(event) {
+  const refs = ensureToolRow(event);
+  refs.row.classList.remove("done", "failed");
+  refs.row.classList.add("awaiting-permission");
+  refs.status.textContent = "待确认";
+  refs.input.textContent = `${event.risk || "unknown"} · ${event.reason || "需要确认"}`;
+  refs.row.querySelector(".permission-actions")?.remove();
+
+  const actions = document.createElement("div");
+  actions.className = "permission-actions";
+
+  const detail = document.createElement("span");
+  detail.className = "permission-detail";
+  detail.textContent = `${event.name || "tool"} 请求 ${event.risk || "unknown"} 权限`;
+
+  const allow = document.createElement("button");
+  allow.type = "button";
+  allow.className = "permission-allow";
+  allow.textContent = "允许";
+  allow.addEventListener("click", () => submitPermission(event, "allow", actions));
+
+  const deny = document.createElement("button");
+  deny.type = "button";
+  deny.className = "permission-deny";
+  deny.textContent = "拒绝";
+  deny.addEventListener("click", () => submitPermission(event, "deny", actions));
+
+  actions.append(detail, allow, deny);
+  refs.row.appendChild(actions);
+  scrollToBottom();
+}
+
+async function submitPermission(event, decision, actions) {
+  const requestId = event.request_id;
+  if (!requestId) return;
+  actions.querySelectorAll("button").forEach((button) => {
+    button.disabled = true;
+  });
+  try {
+    const res = await fetch(`/api/permissions/${encodeURIComponent(requestId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    if (!res.ok) throw new Error("permission submit failed");
+    const refs = ensureToolRow(event);
+    refs.status.textContent = decision === "allow" ? "已允许" : "已拒绝";
+  } catch (err) {
+    console.error(err);
+    actions.querySelectorAll("button").forEach((button) => {
+      button.disabled = false;
+    });
+    showSystem("权限审批提交失败。");
+  }
+}
+
+function updatePermissionResult(event) {
+  const refs = ensureToolRow(event);
+  refs.row.querySelector(".permission-actions")?.remove();
+  refs.row.classList.remove("awaiting-permission");
+  if (event.approved) {
+    refs.row.classList.add("running");
+    refs.status.textContent = "已批准";
+  } else {
+    refs.row.classList.add("failed");
+    refs.status.textContent = "已拒绝";
+    refs.input.textContent = event.reason || "用户拒绝权限";
+  }
+}
+
 function updateToolResult(event) {
   const refs = ensureToolRow(event);
-  refs.row.classList.remove("running", "failed");
+  refs.row.classList.remove("running", "failed", "awaiting-permission");
   refs.row.classList.add("done");
   refs.status.textContent = "完成";
   refs.input.textContent = summarizeToolOutput(event.output || "");
@@ -295,7 +373,7 @@ function updateToolResult(event) {
 
 function updateToolError(event) {
   const refs = ensureToolRow(event);
-  refs.row.classList.remove("running", "done");
+  refs.row.classList.remove("running", "done", "awaiting-permission");
   refs.row.classList.add("failed");
   refs.status.textContent = "失败";
   refs.input.textContent = event.error || "工具执行失败";

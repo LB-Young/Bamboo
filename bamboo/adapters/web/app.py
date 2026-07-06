@@ -37,6 +37,8 @@ from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
 from bamboo.helpers.utils import BaseEvent
 from bamboo.runtime import TaskRuntime
+from bamboo.runtime.runtime_context import RuntimeContextBuilder
+from bamboo.security import WebPermissionResolver
 
 from bamboo.adapters.cli.commands import expand_command_message
 from .session_utils import list_sessions, load_session, resolve_session_record, serialize_messages
@@ -53,10 +55,15 @@ class ChatRequest(BaseModel):
     debug_events: bool = False
 
 
+class PermissionApprovalRequest(BaseModel):
+    decision: str
+
+
 def create_app() -> FastAPI:
     setup_logging()
     app = FastAPI(title="Bamboo Web")
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.state.permission_resolver = WebPermissionResolver()
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
@@ -103,6 +110,14 @@ def create_app() -> FastAPI:
             "messages": serialize_messages(session),
         }
 
+    @app.post("/api/permissions/{request_id}")
+    async def submit_permission(request_id: str, payload: PermissionApprovalRequest) -> dict[str, Any]:
+        decision = payload.decision.strip().lower()
+        if decision not in {"allow", "deny"}:
+            raise HTTPException(status_code=400, detail="decision must be allow or deny")
+        accepted = await app.state.permission_resolver.submit(request_id, decision)
+        return {"accepted": accepted, "request_id": request_id, "decision": decision}
+
     @app.post("/api/chat/stream")
     async def chat_stream(payload: ChatRequest) -> StreamingResponse:
         message = payload.message.strip()
@@ -116,6 +131,11 @@ def create_app() -> FastAPI:
         message = expanded.message
         event_bus = EventBus()
         runtime = TaskRuntime(event_bus=event_bus)
+        runtime.runtime_context_builder = RuntimeContextBuilder(
+            event_bus=event_bus,
+            llm_factory=runtime.llm_factory,
+            permission_resolver=app.state.permission_resolver,
+        )
 
         if payload.session_id:
             task = _restore_task(
@@ -132,7 +152,7 @@ def create_app() -> FastAPI:
                 message=message,
                 project=str(project),
                 permission="default",
-                yes_all=True,
+                yes_all=False,
                 session_mode=SessionMode.project if mode == "project" else SessionMode.chat,
                 task_id=str(uuid.uuid4()),
                 session_id=str(uuid.uuid4()),
@@ -209,7 +229,7 @@ def _restore_task(
         message="",
         project=str(project_path),
         permission="default",
-        yes_all=True,
+        yes_all=False,
         session_mode=SessionMode.project if mode == "project" else SessionMode.chat,
         session_id=session.session_id,
     )
@@ -271,7 +291,10 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
     if isinstance(event, PermissionRequestEvent):
         return {
             "type": "permission_request",
+            "request_id": _permission_event_id(event),
             "id": event.tool_call_id,
+            "session_id": event.session_id,
+            "task_id": event.task_id,
             "name": event.tool_name,
             "risk": event.risk_level,
             "reason": event.reason,
@@ -280,7 +303,10 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
     if isinstance(event, PermissionResultEvent):
         return {
             "type": "permission_result",
+            "request_id": _permission_event_id(event),
             "id": event.tool_call_id,
+            "session_id": event.session_id,
+            "task_id": event.task_id,
             "name": event.tool_name,
             "decision": event.decision,
             "approved": event.approved,
@@ -333,6 +359,10 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
     if isinstance(event, _SyntheticError):
         return {"type": "error", "message": event.message}
     return {"type": "event", "event": event.to_dict()}
+
+
+def _permission_event_id(event: PermissionRequestEvent | PermissionResultEvent) -> str:
+    return f"{event.session_id}:{event.task_id}:{event.tool_call_id}"
 
 
 class _SyntheticError(BaseEvent):
