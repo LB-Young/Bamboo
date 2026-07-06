@@ -16,6 +16,7 @@
 - Workflow Runner：已改为 skill-like workflow 文档包，通过 `workflow_load` / `workflow_run` 工具读取说明并执行声明脚本。
 - Cron And Heartbeat：已由 `bamboo/cron`、`bamboo cron`、`~/.bamboo/cron/jobs.yaml`、retry 和 jsonl 执行日志实现。
 - OS Sandbox Runner：已由 `bamboo/security/sandbox.py`、`BashTool` sandbox 接入和 audit sandbox 元数据实现。
+- Readonly Tool Parallelism：已由 `AgentRuntime` 同轮 read-only tool calls 并发执行和稳定顺序写回实现。
 
 ## 当前剩余条目
 
@@ -28,7 +29,6 @@
 - `P2-10-evaluation-and-replay-tools.md`：建立评估和失败样本回放工具链。
 - `P2-11-local-model-discovery.md`：实现 Ollama/vLLM 显式模型发现和配置片段生成。
 - `P2-13-web-permission-approval-flow.md`：补齐 Web UI 的权限确认回传闭环。
-- `P2-14-readonly-tool-parallelism.md`：在 AgentRuntime 内部并发执行同轮只读工具调用，不新增 batch tool。
 - `P2-15-mcp-lifecycle-cleanup.md`：明确 MCP manager 生命周期，避免 server 进程泄漏。
 - `P2-16-subagent-worktree-isolation.md`：给可写子 Agent 增加 worktree/tempdir 隔离。
 - `P2-17-plugin-manifest-installer.md`：定义 Bamboo plugin manifest 和安装/卸载链路。

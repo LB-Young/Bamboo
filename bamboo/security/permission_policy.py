@@ -55,10 +55,8 @@ class PermissionPolicy:
     READ_ONLY_MODES = {"deny", "read-only", "readonly"}
     DEFAULT_MODES = {"", "default", "auto", "strict"}
 
-    def evaluate(self, request: PermissionRequest, run_params: RunParams) -> PermissionResult:
-        """Evaluate a tool call against the current permission mode."""
-        mode = (run_params.permission or "default").strip().lower()
-
+    def assess_risk(self, request: PermissionRequest) -> PermissionResult:
+        """Classify a tool call's effective risk without applying run mode approval."""
         risk_level = request.risk_level or "read"
         reason = request.reason or f"tool risk={risk_level}"
         requires_confirmation = risk_level in {"write", "execute", "network", "unknown"}
@@ -88,6 +86,22 @@ class PermissionPolicy:
                 reason or "destructive tool calls are always blocked",
                 requires_confirmation=False,
             )
+        return PermissionResult(
+            PermissionDecision.ALLOW,
+            risk_level,
+            reason,
+            requires_confirmation=requires_confirmation,
+        )
+
+    def evaluate(self, request: PermissionRequest, run_params: RunParams) -> PermissionResult:
+        """Evaluate a tool call against the current permission mode."""
+        mode = (run_params.permission or "default").strip().lower()
+        assessed = self.assess_risk(request)
+        risk_level = assessed.risk_level
+        reason = assessed.reason
+        requires_confirmation = assessed.requires_confirmation
+        if assessed.decision == PermissionDecision.DENY:
+            return assessed
 
         if mode in self.BYPASS_MODES:
             return PermissionResult(PermissionDecision.ALLOW, risk_level, f"{mode} permission mode")

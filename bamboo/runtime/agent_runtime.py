@@ -6,8 +6,10 @@ LLMFactory 调用 models.yaml 中注册的模型。
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
@@ -50,6 +52,23 @@ class AgentRunState:
     iteration: int = 0
     compaction_count: int = 0
     recoverable_errors: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class _DeferredSessionMessage:
+    role: str
+    content: str
+    agent_name: str = ""
+    tool_call_id: str = ""
+    tool_name: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class _ToolCallOutcome:
+    messages: list[_DeferredSessionMessage] = field(default_factory=list)
+    events: list[ToolResultEvent | ToolErrorEvent] = field(default_factory=list)
+    compact_tool_results: bool = False
 
 
 class AgentRuntimeError(RuntimeError):
@@ -323,8 +342,11 @@ class AgentRuntime:
                 tool_calls=list(decision.tool_calls),
             )
             await self._transition(task, AgentState.TOOL_CALLING, "execute model tool calls")
-            for tool_call in decision.tool_calls:
-                await self._execute_tool_call(task, tool_call)
+            if self._can_parallelize_tool_calls(task, decision.tool_calls):
+                await self._execute_tool_calls_parallel(task, decision.tool_calls)
+            else:
+                for tool_call in decision.tool_calls:
+                    await self._execute_tool_call(task, tool_call)
             current_count = int(task.metadata.get("tool_call_count", "0"))
             task.metadata["tool_call_count"] = str(current_count + len(decision.tool_calls))
             return False
@@ -360,8 +382,21 @@ class AgentRuntime:
         task.metadata["llm_provider"] = decision.provider
         return True
 
+    async def _execute_tool_calls_parallel(self, task: Task, tool_calls: list[LLMToolCall]) -> None:
+        """Execute same-turn read-only tool calls concurrently and write results in model order."""
+        outcomes = await asyncio.gather(
+            *(self._run_tool_call(task, tool_call) for tool_call in tool_calls),
+        )
+        for outcome in outcomes:
+            await self._flush_tool_call_outcome(task, outcome)
+
     async def _execute_tool_call(self, task: Task, tool_call: LLMToolCall) -> None:
         """执行一条模型 Tool Call，并把结果或错误写回 Session 与 EventBus。"""
+        outcome = await self._run_tool_call(task, tool_call)
+        await self._flush_tool_call_outcome(task, outcome)
+
+    async def _run_tool_call(self, task: Task, tool_call: LLMToolCall) -> _ToolCallOutcome:
+        """Execute one tool call and return deferred session/event writes."""
         await self.event_bus.emit(
             ToolCallEvent(
                 session_id=task.session_id,
@@ -374,8 +409,7 @@ class AgentRuntime:
 
         tool = self.tool_registry.get(tool_call.name)
         if tool is None:
-            await self._record_tool_error(task, tool_call, f"Tool is unavailable: {tool_call.name}")
-            return
+            return self._tool_error_outcome(task, tool_call, f"Tool is unavailable: {tool_call.name}")
         bind_runtime_context = getattr(tool, "bind_runtime_context", None)
         if callable(bind_runtime_context):
             bind_runtime_context(runtime_context=self.runtime_context, task=task)
@@ -389,8 +423,7 @@ class AgentRuntime:
                 success=False,
                 error=permission.reason,
             )
-            await self._record_tool_error(task, tool_call, f"Tool call denied: {permission.reason}")
-            return
+            return self._tool_error_outcome(task, tool_call, f"Tool call denied: {permission.reason}")
 
         started_at = time.perf_counter()
         try:
@@ -405,8 +438,7 @@ class AgentRuntime:
                 error=str(exc),
                 duration_ms=duration_ms,
             )
-            await self._record_tool_error(task, tool_call, f"Tool execution raised: {exc}")
-            return
+            return self._tool_error_outcome(task, tool_call, f"Tool execution raised: {exc}")
 
         duration_ms = int((time.perf_counter() - started_at) * 1000)
         if not result.success:
@@ -421,8 +453,7 @@ class AgentRuntime:
                 output_preview=result.content,
                 sandbox=result.metadata.get("sandbox", {}) if result.metadata else {},
             )
-            await self._record_tool_error(task, tool_call, error)
-            return
+            return self._tool_error_outcome(task, tool_call, error)
 
         await self._audit_tool_call(
             task,
@@ -434,37 +465,93 @@ class AgentRuntime:
             sandbox=result.metadata.get("sandbox", {}) if result.metadata else {},
         )
         budgeted_result = self.tool_result_budgeter.prepare_for_session(result.content)
-        task.session.add_message(
-            "tool",
-            budgeted_result.context_content,
-            agent_name=tool_call.name,
-            tool_call_id=tool_call.id,
-            tool_name=tool_call.name,
-            metadata={
-                "tool_result_budget": budgeted_result.metadata,
-            },
-        )
-        self.tool_result_budgeter.compact_old_tool_results(task.session)
-        await self.event_bus.emit(
-            ToolResultEvent(
-                session_id=task.session_id,
-                task_id=task.task_id,
-                tool_name=tool_call.name,
-                tool_call_id=tool_call.id,
-                output=result.content,
-                context_output=budgeted_result.context_content,
-                truncated=budgeted_result.truncated,
-                original_length=budgeted_result.original_length,
-                context_length=budgeted_result.context_length,
-                original_tokens=budgeted_result.original_tokens,
-                context_tokens=budgeted_result.context_tokens,
-            )
+        return _ToolCallOutcome(
+            messages=[
+                _DeferredSessionMessage(
+                    role="tool",
+                    content=budgeted_result.context_content,
+                    agent_name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                    tool_name=tool_call.name,
+                    metadata={
+                        "tool_result_budget": budgeted_result.metadata,
+                    },
+                )
+            ],
+            events=[
+                ToolResultEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    tool_name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                    output=result.content,
+                    context_output=budgeted_result.context_content,
+                    truncated=budgeted_result.truncated,
+                    original_length=budgeted_result.original_length,
+                    context_length=budgeted_result.context_length,
+                    original_tokens=budgeted_result.original_tokens,
+                    context_tokens=budgeted_result.context_tokens,
+                )
+            ],
+            compact_tool_results=True,
         )
 
-    async def _authorize_tool_call(self, task: Task, tool_call: LLMToolCall) -> PermissionResult:
-        """Run permission policy and emit permission lifecycle events."""
+    async def _flush_tool_call_outcome(self, task: Task, outcome: _ToolCallOutcome) -> None:
+        """Write deferred tool messages and events in a stable order."""
+        for message in outcome.messages:
+            task.session.add_message(
+                message.role,
+                message.content,
+                agent_name=message.agent_name,
+                tool_call_id=message.tool_call_id,
+                tool_name=message.tool_name,
+                metadata=message.metadata,
+            )
+        if outcome.compact_tool_results:
+            self.tool_result_budgeter.compact_old_tool_results(task.session)
+        for event in outcome.events:
+            await self.event_bus.emit(event)
+
+    def _tool_error_outcome(self, task: Task, tool_call: LLMToolCall, error: str) -> _ToolCallOutcome:
+        """Build deferred writes for a tool error."""
+        return _ToolCallOutcome(
+            messages=[
+                _DeferredSessionMessage(
+                    role="tool",
+                    content=f"[tool-error]\n{error}",
+                    agent_name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                    tool_name=tool_call.name,
+                )
+            ],
+            events=[
+                ToolErrorEvent(
+                    session_id=task.session_id,
+                    task_id=task.task_id,
+                    tool_name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                    error=error,
+                )
+            ],
+        )
+
+    def _can_parallelize_tool_calls(self, task: Task, tool_calls: list[LLMToolCall]) -> bool:
+        """Return True only when every same-turn tool call has effective read risk."""
+        if len(tool_calls) < 2:
+            return False
+        return all(self._assess_tool_call_risk(task, tool_call).risk_level == "read" for tool_call in tool_calls)
+
+    def _assess_tool_call_risk(self, task: Task, tool_call: LLMToolCall) -> PermissionResult:
+        """Assess effective risk with the same request data used by authorization."""
+        request = self._build_permission_request(task, tool_call)
+        if self.permission_policy is None:
+            return PermissionResult(PermissionDecision.ALLOW, request.risk_level, "permission policy disabled")
+        return self.permission_policy.assess_risk(request)
+
+    def _build_permission_request(self, task: Task, tool_call: LLMToolCall) -> PermissionRequest:
+        """Build a permission request for policy assessment and authorization."""
         metadata = self.tool_registry.get_metadata(tool_call.name)
-        request = PermissionRequest(
+        return PermissionRequest(
             session_id=task.session_id,
             task_id=task.task_id,
             tool_call_id=tool_call.id,
@@ -473,6 +560,10 @@ class AgentRuntime:
             risk_level=metadata.risk_level if metadata is not None else "read",
             source=metadata.source if metadata is not None else "unknown",
         )
+
+    async def _authorize_tool_call(self, task: Task, tool_call: LLMToolCall) -> PermissionResult:
+        """Run permission policy and emit permission lifecycle events."""
+        request = self._build_permission_request(task, tool_call)
         policy_result = (
             self.permission_policy.evaluate(request, task.run_params)
             if self.permission_policy is not None
@@ -552,25 +643,6 @@ class AgentRuntime:
                 reason=permission.reason,
                 error=error,
                 duration_ms=duration_ms,
-            )
-        )
-
-    async def _record_tool_error(self, task: Task, tool_call: LLMToolCall, error: str) -> None:
-        """记录可反馈给模型的工具错误，并发布 ToolErrorEvent。"""
-        task.session.add_message(
-            "tool",
-            f"[tool-error]\n{error}",
-            agent_name=tool_call.name,
-            tool_call_id=tool_call.id,
-            tool_name=tool_call.name,
-        )
-        await self.event_bus.emit(
-            ToolErrorEvent(
-                session_id=task.session_id,
-                task_id=task.task_id,
-                tool_name=tool_call.name,
-                tool_call_id=tool_call.id,
-                error=error,
             )
         )
 
