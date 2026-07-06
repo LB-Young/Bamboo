@@ -2,6 +2,11 @@
 default_model: deepseek-chat
 
 # Agent 只使用模型注册名；Provider、实际模型 ID 和连接参数统一在这里维护。
+# 本地模型可用显式发现命令生成配置片段，不会在启动时自动探测：
+#   bamboo models discover ollama
+#   bamboo models discover vllm
+# 如需写入用户配置，先检查输出，再运行：
+#   bamboo models discover ollama --write
 models:
   deepseek-chat:
     provider: deepseek

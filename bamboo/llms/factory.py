@@ -8,6 +8,7 @@ from typing import Any
 from bamboo.helpers.config import BambooConfig
 from bamboo.llms.base import LLMClient
 from bamboo.llms.config import ModelCatalog, ModelConfig, ModelConfigError
+from bamboo.llms.local_discovery import LocalDiscoveryResult, create_local_discovery
 from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient, OllamaClient, VLLMClient
 
 ProviderBuilder = Callable[[ModelConfig], LLMClient]
@@ -100,3 +101,13 @@ class LLMFactory:
         client = builder(config.resolve_environment())
         self._clients[selected_name] = client
         return client
+
+    async def discover_local_models(
+        self,
+        provider: str,
+        *,
+        base_url: str | None = None,
+        timeout: float = 5.0,
+    ) -> LocalDiscoveryResult:
+        """Explicitly discover local Ollama/vLLM models without touching runtime startup."""
+        return await create_local_discovery(provider, base_url=base_url, timeout=timeout).discover()

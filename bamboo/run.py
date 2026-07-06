@@ -53,6 +53,8 @@ skill_app = typer.Typer(help="Manage Bamboo skills.", no_args_is_help=True)
 app.add_typer(skill_app, name="skill")
 cron_app = typer.Typer(help="Manage Bamboo cron jobs.", no_args_is_help=True)
 app.add_typer(cron_app, name="cron")
+models_app = typer.Typer(help="Discover and manage Bamboo model registrations.", no_args_is_help=True)
+app.add_typer(models_app, name="models")
 
 
 @app.command()
@@ -283,6 +285,54 @@ def cron_disable(name: str = typer.Argument(..., help="Cron job name")) -> None:
     """禁用 Cron job。"""
     job = CronStore().set_enabled(name, False)
     console.print(f"[yellow]cron job disabled[/yellow] {job.name}")
+
+
+@models_app.command("discover")
+def models_discover(
+    provider: str = typer.Argument(..., help="Local provider: ollama/vllm"),
+    base_url: str | None = typer.Option(None, "--base-url", help="Override local server base URL"),
+    timeout: float = typer.Option(5.0, "--timeout", help="Discovery request timeout in seconds"),
+    write: bool = typer.Option(False, "--write", help="Write discovered models to ~/.bamboo/configs/models.yaml"),
+    set_default: bool = typer.Option(False, "--set-default", help="Set the first written model as default"),
+    replace: bool = typer.Option(False, "--replace", help="Replace existing registrations with the same name"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation when writing models.yaml"),
+) -> None:
+    """显式发现本地 Ollama/vLLM 模型，并可选写入 models.yaml。"""
+    from bamboo.adapters.cli.models import discover_local_models, format_discovery_result, write_discovery_result
+
+    normalized = provider.strip().lower()
+    if normalized not in {"ollama", "vllm"}:
+        raise typer.BadParameter("provider must be ollama/vllm")
+
+    async def _discover():
+        return await discover_local_models(normalized, base_url=base_url, timeout=timeout)
+
+    result = anyio.run(_discover)
+    console.print(format_discovery_result(result))
+    if not result.ok:
+        raise typer.Exit(1)
+    if not write:
+        return
+    config_path = get_configs_dir() / "models.yaml"
+    if not yes:
+        confirmed = typer.confirm(f"Write {len(result.models)} discovered model(s) to {config_path}?", default=False)
+        if not confirmed:
+            console.print("[yellow]models.yaml unchanged[/yellow]")
+            return
+    write_result = write_discovery_result(
+        result,
+        config_path=config_path,
+        set_default=set_default,
+        replace=replace,
+    )
+    console.print(f"[green]models.yaml updated[/green] {write_result.path}")
+    if write_result.backup_path is not None:
+        console.print(f"[dim]backup[/dim] {write_result.backup_path}")
+    if write_result.added:
+        console.print(f"[dim]added[/dim] {', '.join(write_result.added)}")
+    if write_result.skipped:
+        console.print(f"[yellow]skipped existing[/yellow] {', '.join(write_result.skipped)}")
+    console.print(f"[dim]default_model[/dim] {write_result.default_model}")
 
 
 @skill_app.command("create")
