@@ -23,7 +23,11 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "glob",
         "grep",
         "lsp",
+        "memory_backfill",
+        "memory_read",
         "memory_retrieve",
+        "memory_search",
+        "memory_update",
         "read",
         "skill_load",
         "subagent_run",
@@ -38,8 +42,8 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "write",
     ]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
-    assert registry.summary()["by_source"] == {"buildin": 26}
-    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 13, "unknown": 1, "write": 9}
+    assert registry.summary()["by_source"] == {"buildin": 30}
+    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 15, "unknown": 1, "write": 11}
 
 
 def test_tool_registry_hides_disabled_tool() -> None:

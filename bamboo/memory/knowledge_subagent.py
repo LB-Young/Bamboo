@@ -208,17 +208,13 @@ class KnowledgeSubagent:
         return {"chat"}
 
     def _append_update(self, task: Task, update: KnowledgeUpdateRequest) -> None:
-        target_dir = self._target_dir(task, update.scope)
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / update.file
-        if not self.memory_manager.ensure_knowledge_templates(self._scope_for_update(task, update.scope), target_dir):
-            raise ValueError("failed to ensure knowledge templates")
-        existing = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
-        separator = "" if existing.endswith("\n") or not existing else "\n"
-        new_content = f"{existing}{separator}{update.content}\n"
-        temp_path = target_path.with_suffix(target_path.suffix + ".tmp")
-        temp_path.write_text(new_content, encoding="utf-8")
-        temp_path.replace(target_path)
+        self.memory_manager.update_knowledge(
+            task.session,
+            scope_name=update.scope,
+            file_name=update.file,
+            operation="append",
+            content=update.content,
+        )
 
     def _target_dir(self, task: Task, scope: str) -> Path:
         memory_scope = self.memory_manager.resolve_scope(task.session)

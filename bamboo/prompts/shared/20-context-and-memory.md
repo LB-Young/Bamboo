@@ -5,3 +5,6 @@
 - 当上下文不足以判断时，先读取必要信息或明确说明缺口。
 - 如果回答依赖过往偏好、项目决策、已知问题、工作流或未解决问题，优先调用 `memory_retrieve` 并使用 `source="knowledge"`。
 - 只有当 knowledge 没有命中，或需要精确追溯过去对话证据时，才调用 `memory_retrieve` 并使用 `source="source_log"`。
+- 当用户明确要求“记住”、“忘记”、“修正记忆”或更新长期知识时，必须调用 `memory_update`；成功写入后再说明已更新。
+- 需要查看完整可编辑知识文件时使用 `memory_read`，只搜索 knowledge 时使用 `memory_search`。
+- 需要把历史 source log 中的稳定信息沉淀到 knowledge md 时使用 `memory_backfill`，不要把大段工具输出原样写入记忆。

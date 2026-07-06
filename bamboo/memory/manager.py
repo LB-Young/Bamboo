@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from bamboo.factory.session import Session
 from bamboo.memory.get_memory_path import get_memory_dir
 from bamboo.memory.scope import MemoryScope
+from bamboo.memory.source_log import search_source_logs
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 CHAT_TEMPLATE_NAMES = (
@@ -28,6 +30,8 @@ PROJECT_TEMPLATE_NAMES = (
     "workflows.md",
     "open_questions.md",
 )
+
+KnowledgeUpdateOperation = Literal["append", "replace", "remove_matching"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +59,32 @@ class MemoryPromptContext:
         for file in self.files:
             parts.append(f"## {file.relative_path}\n\n{file.content}")
         return "\n\n".join(parts)
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryUpdateResult:
+    """Result of one memory knowledge file update."""
+
+    scope: str
+    file: str
+    path: Path
+    operation: str
+    changed: bool
+    source_refs: tuple[str, ...] = ()
+    removed_count: int = 0
+
+    @property
+    def metadata(self) -> dict[str, object]:
+        """Return JSON-serializable update metadata."""
+        return {
+            "scope": self.scope,
+            "file": self.file,
+            "path": str(self.path),
+            "operation": self.operation,
+            "changed": self.changed,
+            "source_refs": list(self.source_refs),
+            "removed_count": self.removed_count,
+        }
 
 
 class MemoryManager:
@@ -158,6 +188,155 @@ class MemoryManager:
             files.extend(self._load_knowledge_files(knowledge_dir, label=label, global_only=False))
         return files
 
+    def allowed_scope_names(self, session: Session) -> set[str]:
+        """Return editable memory scopes allowed for the current session."""
+        scope = self.resolve_scope(session)
+        if scope.kind == "project":
+            return {"project-global", "project-current"}
+        return {"chat"}
+
+    def resolve_knowledge_scope_name(self, session: Session, scope_name: str = "auto") -> str:
+        """Resolve tool scope name into a concrete editable scope."""
+        normalized = scope_name or "auto"
+        if normalized == "auto":
+            return "project-current" if self.resolve_scope(session).kind == "project" else "chat"
+        if normalized not in self.allowed_scope_names(session):
+            raise ValueError(f"scope not allowed for current session: {normalized}")
+        return normalized
+
+    def knowledge_dir_for_name(self, session: Session, scope_name: str = "auto") -> Path:
+        """Return the knowledge directory for a concrete tool scope."""
+        resolved = self.resolve_knowledge_scope_name(session, scope_name)
+        memory_scope = self.resolve_scope(session)
+        if resolved == "chat":
+            return self.memory_root / "dates" / "chat" / "knowledge"
+        if resolved == "project-global":
+            return self.memory_root / "projects" / "knowledge"
+        if resolved == "project-current":
+            if not memory_scope.project_hash:
+                raise ValueError("current project scope is unavailable")
+            return self.memory_root / "projects" / memory_scope.project_hash / "knowledge"
+        raise ValueError(f"unsupported knowledge scope: {resolved}")
+
+    def read_knowledge(self, session: Session, *, scope_name: str = "auto", file_name: str = "") -> list[MemoryKnowledgeFile]:
+        """Safely read one or more knowledge files for the current session."""
+        scope = self._scope_for_name(session, scope_name)
+        directory = self.knowledge_dir_for_name(session, scope_name)
+        if not self.ensure_knowledge_templates(scope, directory):
+            raise ValueError("failed to ensure knowledge templates")
+        if file_name:
+            path = self._safe_knowledge_path(session, scope_name=scope_name, file_name=file_name)
+            content = path.read_text(encoding="utf-8") if path.exists() else ""
+            return [
+                MemoryKnowledgeFile(
+                    path=path,
+                    relative_path=f"{self.resolve_knowledge_scope_name(session, scope_name)}/{path.name}",
+                    content=content,
+                )
+            ]
+        files: list[MemoryKnowledgeFile] = []
+        label = self.resolve_knowledge_scope_name(session, scope_name)
+        if not directory.is_dir():
+            return files
+        for path in sorted(directory.glob("*.md")):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            files.append(MemoryKnowledgeFile(path=path, relative_path=f"{label}/{path.name}", content=content))
+        return files
+
+    def update_knowledge(
+        self,
+        session: Session,
+        *,
+        scope_name: str = "auto",
+        file_name: str,
+        operation: KnowledgeUpdateOperation = "append",
+        content: str = "",
+        match_text: str = "",
+        source_ref: str = "",
+    ) -> MemoryUpdateResult:
+        """Atomically update one editable knowledge markdown file."""
+        if operation not in {"append", "replace", "remove_matching"}:
+            raise ValueError(f"unsupported memory update operation: {operation}")
+        path = self._safe_knowledge_path(session, scope_name=scope_name, file_name=file_name)
+        scope = self._scope_for_name(session, scope_name)
+        if not self.ensure_knowledge_templates(scope, path.parent):
+            raise ValueError("failed to ensure knowledge templates")
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        changed = True
+        removed_count = 0
+        source_refs = tuple(ref for ref in [source_ref.strip()] if ref)
+        if operation == "append":
+            entry = self._prepare_knowledge_entry(content, source_ref=source_ref)
+            separator = "" if existing.endswith("\n") or not existing else "\n"
+            new_content = f"{existing}{separator}{entry}\n"
+        elif operation == "replace":
+            new_content = self._prepare_replace_content(content, source_ref=source_ref)
+        else:
+            if not match_text.strip():
+                raise ValueError("match_text is required for remove_matching")
+            lines = existing.splitlines()
+            remaining = [line for line in lines if match_text not in line]
+            removed_count = len(lines) - len(remaining)
+            changed = removed_count > 0
+            new_content = "\n".join(remaining).strip()
+            if new_content:
+                new_content += "\n"
+        if changed:
+            self._atomic_write(path, new_content)
+        return MemoryUpdateResult(
+            scope=self.resolve_knowledge_scope_name(session, scope_name),
+            file=path.name,
+            path=path,
+            operation=operation,
+            changed=changed,
+            source_refs=source_refs,
+            removed_count=removed_count,
+        )
+
+    def backfill_from_source_logs(
+        self,
+        session: Session,
+        *,
+        query: str,
+        scope_name: str = "auto",
+        file_name: str = "global.md",
+        limit: int = 5,
+    ) -> MemoryUpdateResult:
+        """Append concise knowledge candidates from source log search results."""
+        memory_scope = self.resolve_scope(session)
+        matches = search_source_logs(query, memory_scope, limit=max(1, min(limit, 10)))
+        if not matches:
+            raise ValueError("no source log matches found")
+        entries = []
+        refs = []
+        for match in matches:
+            ref = f"{match.session_id}/{match.task_id}".strip("/")
+            refs.append(ref)
+            summary = self._summarize_source_log_content(match.content)
+            if not summary:
+                continue
+            entries.append(f"- {summary} source: {ref}")
+        if not entries:
+            raise ValueError("no backfill candidates generated")
+        result = self.update_knowledge(
+            session,
+            scope_name=scope_name,
+            file_name=file_name,
+            operation="append",
+            content="\n".join(entries),
+        )
+        return MemoryUpdateResult(
+            scope=result.scope,
+            file=result.file,
+            path=result.path,
+            operation="backfill",
+            changed=result.changed,
+            source_refs=tuple(refs),
+        )
+
     def _load_knowledge_files(
         self,
         knowledge_dir: Path,
@@ -202,3 +381,56 @@ class MemoryManager:
         if "source:" not in cleaned:
             return ""
         return cleaned
+
+    def _scope_for_name(self, session: Session, scope_name: str) -> MemoryScope:
+        resolved = self.resolve_knowledge_scope_name(session, scope_name)
+        if resolved == "chat":
+            return MemoryScope(kind="chat", root=self.memory_root / "dates")
+        memory_scope = self.resolve_scope(session)
+        return MemoryScope(
+            kind="project",
+            root=self.memory_root / "projects",
+            project_hash=memory_scope.project_hash if resolved == "project-current" else "",
+            project_root=memory_scope.project_root,
+        )
+
+    def _safe_knowledge_path(self, session: Session, *, scope_name: str, file_name: str) -> Path:
+        if not file_name or Path(file_name).is_absolute() or ".." in Path(file_name).parts or not file_name.endswith(".md"):
+            raise ValueError("invalid knowledge file path")
+        resolved = self.resolve_knowledge_scope_name(session, scope_name)
+        allowed = CHAT_TEMPLATE_NAMES if resolved == "chat" else PROJECT_TEMPLATE_NAMES
+        if file_name not in allowed:
+            raise ValueError(f"knowledge file not allowed: {file_name}")
+        directory = self.knowledge_dir_for_name(session, resolved)
+        path = (directory / file_name).resolve(strict=False)
+        directory_resolved = directory.resolve(strict=False)
+        if directory_resolved not in path.parents and path != directory_resolved:
+            raise ValueError("knowledge file escapes memory directory")
+        return path
+
+    def _prepare_knowledge_entry(self, content: str, *, source_ref: str = "") -> str:
+        cleaned = content.strip()
+        if not cleaned:
+            raise ValueError("knowledge content is empty")
+        if source_ref and "source:" not in cleaned:
+            cleaned = f"{cleaned.rstrip()} source: {source_ref}"
+        return cleaned
+
+    def _prepare_replace_content(self, content: str, *, source_ref: str = "") -> str:
+        cleaned = self._prepare_knowledge_entry(content, source_ref=source_ref)
+        return cleaned if cleaned.endswith("\n") else f"{cleaned}\n"
+
+    def _atomic_write(self, path: Path, content: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_suffix(path.suffix + ".tmp")
+        temp_path.write_text(content, encoding="utf-8")
+        temp_path.replace(path)
+
+    def _summarize_source_log_content(self, content: str) -> str:
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
+        if not lines:
+            return ""
+        summary = " ".join(lines)
+        if len(summary) > 280:
+            summary = summary[:277].rstrip() + "..."
+        return summary.replace("\n", " ")
