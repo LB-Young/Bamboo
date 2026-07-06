@@ -4,19 +4,33 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from bamboo.cron.models import CronJob, CronRunRecord, HeartbeatConfig, ScheduledRun
+from bamboo.cron.models import CronDeliveryMode, CronJob, CronRunRecord, HeartbeatConfig, ScheduledRun
 from bamboo.cron.store import CronStore, utc_now_iso
 from bamboo.factory.event_bus import EventBus, get_event_bus
+from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import CronHeartbeatEvent, CronJobCompleteEvent, CronJobStartEvent, SessionMode
 from bamboo.helpers.requests_params import RunParams
+from bamboo.memory.session_store import find_latest_session_record, find_session_record, load_session_record
 from bamboo.runtime import TaskRuntime
 
 RuntimeFactory = Callable[[], TaskRuntime]
 SleepFn = Callable[[float], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class CronExecution:
+    """Resolved execution target for one cron attempt."""
+
+    delivery: CronDeliveryMode
+    run_params: RunParams
+    task: Task | None = None
+    target_record_dir: Path | None = None
+    target_session_id: str = ""
 
 
 class CronScheduler:
@@ -77,30 +91,48 @@ class CronScheduler:
 
     async def _run_job_once(self, job: CronJob, attempt: int) -> CronRunRecord:
         run_id = str(uuid4())
-        run_params = _run_params_for_job(job)
         started_at = utc_now_iso()
-        await self.event_bus.emit(
-            CronJobStartEvent(
-                session_id=run_params.session_id,
-                task_id=run_params.task_id,
-                job_name=job.name,
-                run_id=run_id,
-                attempt=attempt,
-            )
-        )
         status = "completed"
         error = ""
+        execution: CronExecution | None = None
         try:
-            await self.runtime_factory().run(run_params)
+            runtime = self.runtime_factory()
+            execution = _execution_for_job(job, runtime)
         except Exception as exc:
             status = "failed"
             error = str(exc)
+            execution = _failed_execution_for_job(job)
+        run_params = execution.run_params
+        start_event = CronJobStartEvent(
+            session_id=run_params.session_id,
+            task_id=run_params.task_id,
+            job_name=job.name,
+            run_id=run_id,
+            attempt=attempt,
+            delivery=execution.delivery,
+            target_session_id=execution.target_session_id,
+            target_record_dir=str(execution.target_record_dir or ""),
+        )
+        await self.event_bus.emit(start_event)
+        _append_cron_event(execution, start_event)
+        if not error:
+            try:
+                if execution.task is not None:
+                    await runtime.run_existing_task(execution.task)
+                else:
+                    await runtime.run(run_params)
+            except Exception as exc:
+                status = "failed"
+                error = str(exc)
         finished_at = utc_now_iso()
         record = CronRunRecord(
             run_id=run_id,
             job_name=job.name,
             task_id=run_params.task_id,
             session_id=run_params.session_id,
+            delivery=execution.delivery,
+            target_session_id=execution.target_session_id,
+            target_record_dir=str(execution.target_record_dir or ""),
             status=status,
             attempt=attempt,
             started_at=started_at,
@@ -108,17 +140,20 @@ class CronScheduler:
             error=error,
         )
         self.store.append_run(record)
-        await self.event_bus.emit(
-            CronJobCompleteEvent(
-                session_id=run_params.session_id,
-                task_id=run_params.task_id,
-                job_name=job.name,
-                run_id=run_id,
-                status=status,
-                attempt=attempt,
-                error=error,
-            )
+        complete_event = CronJobCompleteEvent(
+            session_id=run_params.session_id,
+            task_id=run_params.task_id,
+            job_name=job.name,
+            run_id=run_id,
+            status=status,
+            attempt=attempt,
+            error=error,
+            delivery=execution.delivery,
+            target_session_id=execution.target_session_id,
+            target_record_dir=str(execution.target_record_dir or ""),
         )
+        await self.event_bus.emit(complete_event)
+        _append_cron_event(execution, complete_event)
         return record
 
 
@@ -211,23 +246,121 @@ def _normalize_minute(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(second=0, microsecond=0)
 
 
-def _run_params_for_job(job: CronJob) -> RunParams:
-    session_id = str(uuid4()) if job.session == "isolated" else (job.session_id or f"cron-main-{job.name}")
-    project = job.project or str(Path.cwd())
+def _execution_for_job(job: CronJob, runtime: TaskRuntime) -> CronExecution:
+    delivery = _delivery_for_job(job)
+    if delivery == "main":
+        return _main_execution_for_job(job, runtime)
+    return CronExecution(delivery="isolated", run_params=_run_params_for_job(job, delivery="isolated"))
+
+
+def _main_execution_for_job(job: CronJob, runtime: TaskRuntime) -> CronExecution:
+    project = Path(job.project).expanduser() if job.project else None
+    mode = "project" if project is not None else "auto"
+    record_dir = _target_record_dir_for_job(job, mode=mode, project=project)
+    if record_dir is None:
+        target = job.session_id or "latest"
+        raise ValueError(f"cron main delivery target session not found: {target}")
+    session = load_session_record(record_dir)
+    run_params = _run_params_for_job(
+        job,
+        delivery="main",
+        session_id=session.session_id,
+        project=str(session.context.project_root),
+        session_mode=SessionMode.project if session.context.metadata.get("prompt_mode") == "project" else SessionMode.chat,
+    )
+    if job.model:
+        run_params.model = job.model
+    else:
+        run_params.model = session.model
+    if job.provider:
+        run_params.provider = job.provider
+    else:
+        run_params.provider = session.provider
+    previous = Task(
+        platform="cron",
+        session_id=session.session_id,
+        task_id=run_params.task_id,
+        user_query="",
+        session=session,
+        config=runtime.task_factory.config,
+        run_params=run_params,
+        memory_dir=session.memory_store.memory_dir if session.memory_store else record_dir.parent,
+    )
+    task = runtime.create_followup_task(previous, job.prompt)
+    return CronExecution(
+        delivery="main",
+        run_params=task.run_params,
+        task=task,
+        target_record_dir=record_dir,
+        target_session_id=session.session_id,
+    )
+
+
+def _target_record_dir_for_job(job: CronJob, *, mode: str, project: Path | None) -> Path | None:
+    if job.record_dir:
+        candidate = Path(job.record_dir).expanduser()
+        if job.session_id:
+            return find_session_record(job.session_id, mode=mode, project_path=project, record_dir=candidate)
+        return candidate if (candidate / "session.json").is_file() else None
+    if job.session_id:
+        return find_session_record(job.session_id, mode=mode, project_path=project)
+    latest = find_latest_session_record(mode=mode, project_path=project)
+    return latest.record_dir if latest is not None else None
+
+
+def _failed_execution_for_job(job: CronJob) -> CronExecution:
+    delivery = _delivery_for_job(job)
+    return CronExecution(
+        delivery=delivery,
+        run_params=_run_params_for_job(
+            job,
+            delivery=delivery,
+            session_id=job.session_id or "cron",
+        ),
+        target_session_id=job.session_id,
+        target_record_dir=Path(job.record_dir).expanduser() if job.record_dir else None,
+    )
+
+
+def _run_params_for_job(
+    job: CronJob,
+    *,
+    delivery: CronDeliveryMode,
+    session_id: str | None = None,
+    project: str | None = None,
+    session_mode: SessionMode | None = None,
+    ) -> RunParams:
+    resolved_session_id = session_id or (str(uuid4()) if delivery == "isolated" else (job.session_id or "cron"))
+    resolved_project = project or job.project or str(Path.cwd())
     return RunParams(
         platform="cron",
         message=job.prompt,
-        project=project,
+        project=resolved_project,
         model=job.model,
         provider=job.provider,
         permission=job.permission,
         no_stream=job.no_stream,
         yes_all=job.yes_all,
         debug_events=job.debug_events,
-        session_mode=SessionMode.project if job.project else SessionMode.chat,
+        session_mode=session_mode or (SessionMode.project if job.project else SessionMode.chat),
         task_id=str(uuid4()),
-        session_id=session_id,
+        session_id=resolved_session_id,
     )
+
+
+def _delivery_for_job(job: CronJob) -> CronDeliveryMode:
+    return job.delivery or job.session
+
+
+def _append_cron_event(execution: CronExecution, event: CronJobStartEvent | CronJobCompleteEvent) -> None:
+    if execution.delivery != "main" or execution.target_record_dir is None:
+        return
+    try:
+        session = load_session_record(execution.target_record_dir)
+        if session.memory_store is not None:
+            session.memory_store.append_event(event)
+    except Exception:
+        return
 
 
 def _retry_delay(job: CronJob, attempt: int) -> float:

@@ -52,8 +52,8 @@
 | --- | --- | --- | --- |
 | `audit` | `AuditEvent` | audit | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, action, tool_name, params, result, approved` |
 | `cron-heartbeat` | `CronHeartbeatEvent` | cron | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, tick, due_jobs` |
-| `cron-job-complete` | `CronJobCompleteEvent` | cron | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, job_name, run_id, status, attempt, error` |
-| `cron-job-start` | `CronJobStartEvent` | cron | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, job_name, run_id, attempt` |
+| `cron-job-complete` | `CronJobCompleteEvent` | cron | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, job_name, run_id, status, attempt, error, delivery, target_session_id, target_record_dir` |
+| `cron-job-start` | `CronJobStartEvent` | cron | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, job_name, run_id, attempt, delivery, target_session_id, target_record_dir` |
 | `llm-request` | `LLMRequestEvent` | llm | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, role, model_name, provider, prompt_profile, message_count, tool_count, system_prompt_chars, input_chars` |
 | `llm-response` | `LLMResponseEvent` | llm | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, role, model_name, provider, response_model, finish_reason, output_chars, tool_call_count, usage, success, error_type, error` |
 | `memory-knowledge-error` | `KnowledgeUpdateErrorEvent` | memory | `type, session_id, timestamp, event_id, parent_event_id, step_id, task_id, plat_info, scope, file, reason` |

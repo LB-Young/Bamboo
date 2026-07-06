@@ -29,6 +29,8 @@ from bamboo.helpers.constant import (
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
+    CronJobCompleteEvent,
+    CronJobStartEvent,
 )
 from bamboo.helpers.logging import get_logger
 from bamboo.helpers.requests_params import RunParams
@@ -47,6 +49,7 @@ CLI_EVENT_PATTERNS = {
     "permission.*",
     "subagent.*",
     "tool.*",
+    "cron.*",
 }
 
 
@@ -356,3 +359,12 @@ def _render_cli_event(event: BaseEvent) -> None:
 
     if isinstance(event, StepFinishEvent):
         console.print(f"[dim]step finish[/dim] {event.summary}")
+        return
+
+    if isinstance(event, CronJobStartEvent):
+        console.print(f"[dim]cron start[/dim] {event.job_name} delivery={event.delivery}")
+        return
+
+    if isinstance(event, CronJobCompleteEvent):
+        color = "green" if event.status == "completed" else "red"
+        console.print(f"[{color}]cron {event.status}[/{color}] {event.job_name} {event.error}")

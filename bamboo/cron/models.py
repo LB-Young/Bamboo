@@ -8,6 +8,7 @@ from typing import Literal
 
 
 CronSessionMode = Literal["isolated", "main"]
+CronDeliveryMode = Literal["isolated", "main"]
 CronBackoffMode = Literal["none", "linear", "exponential"]
 
 
@@ -30,6 +31,7 @@ class CronJob:
     prompt: str
     enabled: bool = True
     session: CronSessionMode = "isolated"
+    delivery: CronDeliveryMode = "isolated"
     project: str = ""
     model: str = ""
     provider: str = ""
@@ -38,6 +40,7 @@ class CronJob:
     no_stream: bool = False
     debug_events: bool = False
     session_id: str = ""
+    record_dir: str = ""
     retry: CronRetryPolicy = field(default_factory=CronRetryPolicy)
     metadata: dict[str, str] = field(default_factory=dict)
 
@@ -50,10 +53,13 @@ class CronRunRecord:
     job_name: str
     task_id: str
     session_id: str
+    delivery: CronDeliveryMode
     status: str
     attempt: int
     started_at: str
     finished_at: str
+    target_session_id: str = ""
+    target_record_dir: str = ""
     error: str = ""
 
 

@@ -327,9 +327,20 @@ class CronJobStartEvent(BaseEvent):
     job_name: str = ""
     run_id: str = ""
     attempt: int = 1
+    delivery: str = "isolated"
+    target_session_id: str = ""
+    target_record_dir: str = ""
 
     def to_dict(self) -> dict:
-        return {**super().to_dict(), "job_name": self.job_name, "run_id": self.run_id, "attempt": self.attempt}
+        return {
+            **super().to_dict(),
+            "job_name": self.job_name,
+            "run_id": self.run_id,
+            "attempt": self.attempt,
+            "delivery": self.delivery,
+            "target_session_id": self.target_session_id,
+            "target_record_dir": self.target_record_dir,
+        }
 
 
 @dataclass(kw_only=True)
@@ -342,6 +353,9 @@ class CronJobCompleteEvent(BaseEvent):
     status: str = ""
     attempt: int = 1
     error: str = ""
+    delivery: str = "isolated"
+    target_session_id: str = ""
+    target_record_dir: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -351,6 +365,9 @@ class CronJobCompleteEvent(BaseEvent):
             "status": self.status,
             "attempt": self.attempt,
             "error": self.error,
+            "delivery": self.delivery,
+            "target_session_id": self.target_session_id,
+            "target_record_dir": self.target_record_dir,
         }
 
 

@@ -149,6 +149,9 @@ def _parse_job(value: Any) -> CronJob:
     session = str(value.get("session") or "isolated")
     if session not in {"isolated", "main"}:
         raise ValueError("cron job session must be isolated/main")
+    delivery = str(value.get("delivery") or session)
+    if delivery not in {"isolated", "main"}:
+        raise ValueError("cron job delivery must be isolated/main")
     name = str(value.get("name") or "").strip()
     schedule = str(value.get("schedule") or "").strip()
     prompt = str(value.get("prompt") or "").strip()
@@ -164,6 +167,7 @@ def _parse_job(value: Any) -> CronJob:
         prompt=prompt,
         enabled=bool(value.get("enabled", True)),
         session=session,  # type: ignore[arg-type]
+        delivery=delivery,  # type: ignore[arg-type]
         project=str(value.get("project") or ""),
         model=str(value.get("model") or ""),
         provider=str(value.get("provider") or ""),
@@ -172,6 +176,7 @@ def _parse_job(value: Any) -> CronJob:
         no_stream=bool(value.get("no_stream", False)),
         debug_events=bool(value.get("debug_events", False)),
         session_id=str(value.get("session_id") or ""),
+        record_dir=str(value.get("record_dir") or ""),
         retry=retry,
         metadata=_metadata(value.get("metadata", {})),
     )

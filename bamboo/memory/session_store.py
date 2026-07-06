@@ -406,6 +406,17 @@ def find_session_record(
     return None
 
 
+def find_latest_session_record(
+    *,
+    mode: str = "auto",
+    project_path: Path | None = None,
+    memory_root: Path | None = None,
+) -> SessionRecord | None:
+    """Find the most recently updated persisted session record."""
+    records = list_session_records(mode=mode, project_path=project_path, limit=1, memory_root=memory_root)
+    return records[0] if records else None
+
+
 def load_session_record(record_dir: Path):
     """Restore a Session object from a persisted session record directory."""
     from bamboo.factory.context import Context

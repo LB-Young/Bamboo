@@ -252,13 +252,19 @@ def cron_add(
     prompt: str = typer.Option(..., "--prompt", "-p", help="Prompt to run"),
     project: Path | None = typer.Option(None, "--project", help="Project path"),
     session: str = typer.Option("isolated", "--session", help="isolated/main"),
+    delivery: str | None = typer.Option(None, "--delivery", help="Delivery mode: isolated/main"),
+    session_id: str = typer.Option("", "--session-id", help="Target session id for main delivery"),
+    record_dir: Path | None = typer.Option(None, "--record-dir", help="Target session record directory"),
     replace: bool = typer.Option(False, "--replace", help="Replace existing job"),
 ) -> None:
     """注册一个 Cron job。"""
     from bamboo.cron import CronJob
 
+    resolved_delivery = delivery or session
     if session not in {"isolated", "main"}:
         raise typer.BadParameter("session must be isolated/main")
+    if resolved_delivery not in {"isolated", "main"}:
+        raise typer.BadParameter("delivery must be isolated/main")
     store = CronStore()
     store.register_job(
         CronJob(
@@ -267,6 +273,9 @@ def cron_add(
             prompt=prompt,
             project=str(project) if project else "",
             session=session,  # type: ignore[arg-type]
+            delivery=resolved_delivery,  # type: ignore[arg-type]
+            session_id=session_id,
+            record_dir=str(record_dir) if record_dir else "",
         ),
         replace=replace,
     )

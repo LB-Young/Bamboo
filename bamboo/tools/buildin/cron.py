@@ -19,7 +19,11 @@ def _job_payload(job: CronJob) -> dict[str, Any]:
 def _job_line(job: CronJob) -> str:
     status = "enabled" if job.enabled else "disabled"
     project = f" project={job.project}" if job.project else ""
-    return f"{job.name} [{status}] {job.schedule} session={job.session}{project} prompt={job.prompt}"
+    target = f" target_session={job.session_id}" if job.session_id else ""
+    return (
+        f"{job.name} [{status}] {job.schedule} session={job.session} "
+        f"delivery={job.delivery}{project}{target} prompt={job.prompt}"
+    )
 
 
 class CronAddTool(Tool):
@@ -39,6 +43,9 @@ class CronAddTool(Tool):
                 "prompt": {"type": "string", "description": "Prompt to execute when the job is due."},
                 "project": {"type": "string", "description": "Optional project path."},
                 "session": {"type": "string", "enum": ["isolated", "main"], "description": "Session mode."},
+                "delivery": {"type": "string", "enum": ["isolated", "main"], "description": "Delivery mode."},
+                "session_id": {"type": "string", "description": "Target session id for main delivery."},
+                "record_dir": {"type": "string", "description": "Target session record directory for main delivery."},
                 "enabled": {"type": "boolean", "description": "Whether the job starts enabled."},
                 "permission": {"type": "string", "description": "Permission mode for job runs."},
                 "yes_all": {"type": "boolean", "description": "Auto-approve tool permissions during job runs."},
@@ -56,6 +63,9 @@ class CronAddTool(Tool):
         prompt: str,
         project: str = "",
         session: str = "isolated",
+        delivery: str = "",
+        session_id: str = "",
+        record_dir: str = "",
         enabled: bool = True,
         permission: str = "default",
         yes_all: bool = False,
@@ -69,6 +79,9 @@ class CronAddTool(Tool):
             return ToolResult(content=f"Invalid cron schedule: {exc}", success=False, error="invalid_schedule")
         if session not in {"isolated", "main"}:
             return ToolResult(content="session must be isolated/main", success=False, error="invalid_session")
+        delivery = delivery or session
+        if delivery not in {"isolated", "main"}:
+            return ToolResult(content="delivery must be isolated/main", success=False, error="invalid_delivery")
         if backoff not in {"none", "linear", "exponential"}:
             return ToolResult(content="backoff must be none/linear/exponential", success=False, error="invalid_backoff")
         if max_attempts <= 0:
@@ -80,7 +93,10 @@ class CronAddTool(Tool):
             prompt=prompt.strip(),
             enabled=enabled,
             session=session,  # type: ignore[arg-type]
+            delivery=delivery,  # type: ignore[arg-type]
             project=str(Path(project).expanduser()) if project else "",
+            session_id=session_id,
+            record_dir=str(Path(record_dir).expanduser()) if record_dir else "",
             permission=permission or "default",
             yes_all=yes_all,
             retry=CronRetryPolicy(max_attempts=max_attempts, backoff=backoff),  # type: ignore[arg-type]

@@ -14,11 +14,13 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from bamboo.factory.event_bus import EventBus
+from bamboo.factory.event_bus import get_event_bus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
     PermissionRequestEvent,
     PermissionResultEvent,
+    CronJobCompleteEvent,
+    CronJobStartEvent,
     SessionMode,
     SessionStatusChangeEvent,
     StepFinishEvent,
@@ -129,7 +131,7 @@ def create_app() -> FastAPI:
         if expanded.error:
             raise HTTPException(status_code=400, detail=expanded.error)
         message = expanded.message
-        event_bus = EventBus()
+        event_bus = get_event_bus()
         runtime = TaskRuntime(event_bus=event_bus)
         runtime.runtime_context_builder = RuntimeContextBuilder(
             event_bus=event_bus,
@@ -273,6 +275,7 @@ def _stream_event_patterns(*, debug_events: bool) -> set[str] | str:
         "permission.*",
         "subagent.*",
         "tool.*",
+        "cron.*",
     }
 
 
@@ -356,6 +359,26 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
         return {"type": "task", "task_id": event.task_id, "title": event.title}
     if isinstance(event, TaskStatusChangeEvent):
         return {"type": "task_status", "from": event.from_status, "to": event.to_status}
+    if isinstance(event, CronJobStartEvent):
+        return {
+            "type": "cron_start",
+            "job_name": event.job_name,
+            "run_id": event.run_id,
+            "attempt": event.attempt,
+            "delivery": event.delivery,
+            "target_session_id": event.target_session_id,
+        }
+    if isinstance(event, CronJobCompleteEvent):
+        return {
+            "type": "cron_complete",
+            "job_name": event.job_name,
+            "run_id": event.run_id,
+            "status": event.status,
+            "attempt": event.attempt,
+            "error": event.error,
+            "delivery": event.delivery,
+            "target_session_id": event.target_session_id,
+        }
     if isinstance(event, _SyntheticError):
         return {"type": "error", "message": event.message}
     return {"type": "event", "event": event.to_dict()}
