@@ -29,6 +29,7 @@ packages = [
     "bamboo",
     "bamboo.core",
     "bamboo.cron",
+    "bamboo.eval",
     "bamboo.commands",
     "bamboo.adapters",
     "bamboo.adapters.cli",

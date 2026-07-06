@@ -55,6 +55,8 @@ cron_app = typer.Typer(help="Manage Bamboo cron jobs.", no_args_is_help=True)
 app.add_typer(cron_app, name="cron")
 models_app = typer.Typer(help="Discover and manage Bamboo model registrations.", no_args_is_help=True)
 app.add_typer(models_app, name="models")
+eval_app = typer.Typer(help="Run Bamboo eval and replay cases.", no_args_is_help=True)
+app.add_typer(eval_app, name="eval")
 
 
 @app.command()
@@ -188,6 +190,49 @@ def replay(
             console.print(f"[bold]assistant[/bold] {turn['assistant_answer']}")
         if turn.get("error"):
             console.print(f"[red]error[/red] {turn['error']}")
+
+
+@eval_app.command("run")
+def eval_run(
+    case_dir: Path = typer.Argument(..., help="Eval case directory containing input.yaml and expected.yaml"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw eval report JSON"),
+) -> None:
+    """运行一个 eval/replay case。"""
+    from bamboo.eval import EvalRunner, load_eval_case, render_report
+
+    case = load_eval_case(case_dir)
+
+    async def _run():
+        return await EvalRunner().run_case(case)
+
+    report = anyio.run(_run)
+    console.print(render_report(report, json_output=json_output))
+    if not report.passed:
+        raise typer.Exit(1)
+
+
+@eval_app.command("export")
+def eval_export(
+    session_id: str = typer.Argument(..., help="Persisted session id to export"),
+    case_dir: Path = typer.Argument(..., help="Target eval case directory"),
+    mode: SessionMode = SESSION_MODE_OPTION,
+    project: Path | None = PROJECT_OPTION,
+    record_dir: Path | None = RECORD_DIR_OPTION,
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing case files"),
+) -> None:
+    """把已有 session trace 导出为 replay eval fixture。"""
+    from bamboo.eval import export_replay_case
+
+    case = export_replay_case(
+        session_id=session_id,
+        case_dir=case_dir,
+        mode=mode.value if isinstance(mode, SessionMode) else str(mode),
+        project_path=project if mode == SessionMode.project else None,
+        record_dir=record_dir,
+        overwrite=overwrite,
+    )
+    console.print(f"[green]eval case exported[/green] {case.case_dir}")
+    console.print(f"[dim]fixture[/dim] {case.input.fixture}")
 
 
 @app.command()

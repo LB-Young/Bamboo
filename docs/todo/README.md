@@ -22,29 +22,28 @@
 - Memory Update And Backfill Tools：已由 `MemoryManager` 安全读写/回填接口、`memory_read` / `memory_search` / `memory_update` / `memory_backfill` 工具和 prompt 使用规则实现。
 - Local Model Discovery：已由 Ollama `/api/tags`、vLLM `/v1/models` 显式发现、配置片段渲染、确认写入和备份机制实现。
 - Cron Main Session Delivery：已由 cron `delivery=main` 目标 session 查找、恢复 follow-up 执行、Web/CLI cron 事件订阅和 session trace 事件持久化实现。
+- Evaluation And Replay Tools：已由标准 eval case、replay fixture、live runner、报告渲染、`bamboo eval run/export` 和 `docs/eval.md` 实现。
 
 ## 排期原则
 
-- 优先补齐质量工程能力：评估工具和 replay。
-- 最后做高级扩展：辅助模型细分、subagent worktree、plugin installer。
-- `P2-05 Session Resume And Replay` 的需求 md 已不存在，代码中已有 `--resume` / `replay` 相关实现入口；后续 replay 能力统一并入 `P2-10 Evaluation And Replay Tools` 扩展，不再单独排期。
+- 优先补齐高级运行时能力：辅助模型细分和 subagent worktree。
+- 最后做生态扩展：plugin installer。
+- `P2-05 Session Resume And Replay` 的需求 md 已不存在，代码中已有 `--resume` / `replay` 相关实现入口；replay fixture 能力已并入 Evaluation And Replay Tools，不再单独排期。
 
 ## 当前剩余条目
 
 | 建议顺序 | 需求 | 功能说明 | 重要程度 | 优先级 | 依赖/备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `P2-10-evaluation-and-replay-tools.md` | 建立 eval/replay 工具链，用 session trace 或 fixture 复现失败、比较模型/prompt/tool 行为变化并输出报告。 | 中高 | P2 | 建议在 trace schema 固化后做；可复用已有 `replay` 初版。 |
-| 2 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
-| 3 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
-| 4 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
+| 1 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
+| 2 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
+| 3 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
 
 ## 建议阶段
 
 ### P2：质量工程和高级运行时
 
-1. `P2-10-evaluation-and-replay-tools.md`
-2. `P2-07-auxiliary-model-router-expansion.md`
-3. `P2-16-subagent-worktree-isolation.md`
+1. `P2-07-auxiliary-model-router-expansion.md`
+2. `P2-16-subagent-worktree-isolation.md`
 
 ### P3：生态和分发
 
