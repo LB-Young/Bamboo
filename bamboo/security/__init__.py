@@ -9,7 +9,7 @@ from bamboo.security.permission_resolver import (
     PermissionResolver,
     create_permission_resolver,
 )
-from bamboo.security.sandbox import SandboxConfig, SandboxResult
+from bamboo.security.sandbox import SandboxConfig, SandboxExecutionResult, SandboxResult, run_sandboxed
 
 __all__ = [
     "CommandRisk",
@@ -20,6 +20,7 @@ __all__ = [
     "PermissionResolver",
     "PermissionResult",
     "SandboxConfig",
+    "SandboxExecutionResult",
     "SandboxResult",
     "ToolAuditLogger",
     "ToolAuditRecord",
@@ -27,4 +28,5 @@ __all__ = [
     "NonInteractivePermissionResolver",
     "create_permission_resolver",
     "inspect_command",
+    "run_sandboxed",
 ]

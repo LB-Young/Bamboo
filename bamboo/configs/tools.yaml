@@ -1,0 +1,15 @@
+sandbox:
+  # Disabled by default. PermissionPolicy still runs before sandbox execution.
+  enabled: false
+  # If false, a missing OS sandbox runner fails the command. If true, Bamboo
+  # runs the command unsandboxed and records fail_open in audit metadata.
+  fail_open: false
+  network_enabled: false
+  writable_roots: []
+  env_allowlist:
+    - PATH
+    - HOME
+    - USER
+    - LANG
+    - LC_ALL
+    - TMPDIR

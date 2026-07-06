@@ -419,6 +419,7 @@ class AgentRuntime:
                 error=error,
                 duration_ms=duration_ms,
                 output_preview=result.content,
+                sandbox=result.metadata.get("sandbox", {}) if result.metadata else {},
             )
             await self._record_tool_error(task, tool_call, error)
             return
@@ -430,6 +431,7 @@ class AgentRuntime:
             success=True,
             duration_ms=duration_ms,
             output_preview=result.content,
+            sandbox=result.metadata.get("sandbox", {}) if result.metadata else {},
         )
         budgeted_result = self.tool_result_budgeter.prepare_for_session(result.content)
         task.session.add_message(
@@ -516,6 +518,7 @@ class AgentRuntime:
         error: str = "",
         duration_ms: int | None = None,
         output_preview: str = "",
+        sandbox: dict | None = None,
     ) -> None:
         """Persist and emit a tool audit record."""
         record = ToolAuditRecord(
@@ -532,6 +535,7 @@ class AgentRuntime:
             error=error,
             duration_ms=duration_ms,
             output_preview=output_preview,
+            sandbox=dict(sandbox or {}),
         )
         if self.audit_logger is not None:
             self.audit_logger.append(record)

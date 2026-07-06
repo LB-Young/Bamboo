@@ -32,6 +32,7 @@ class ToolAuditRecord:
     error: str = ""
     duration_ms: int | None = None
     output_preview: str = ""
+    sandbox: dict[str, Any] = field(default_factory=dict)
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 

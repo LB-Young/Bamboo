@@ -15,6 +15,7 @@
 - Agent Trace Events：已由 `parent_event_id`、EventBus pattern 订阅、LLM 脱敏事件和 TraceRecorder 实现基础链路。
 - Workflow Runner：已改为 skill-like workflow 文档包，通过 `workflow_load` / `workflow_run` 工具读取说明并执行声明脚本。
 - Cron And Heartbeat：已由 `bamboo/cron`、`bamboo cron`、`~/.bamboo/cron/jobs.yaml`、retry 和 jsonl 执行日志实现。
+- OS Sandbox Runner：已由 `bamboo/security/sandbox.py`、`BashTool` sandbox 接入和 audit sandbox 元数据实现。
 
 ## 当前剩余条目
 
@@ -26,7 +27,6 @@
 - `P2-09-agent-trace-schema-docs.md`：维护稳定事件 schema 文档和 schema 测试。
 - `P2-10-evaluation-and-replay-tools.md`：建立评估和失败样本回放工具链。
 - `P2-11-local-model-discovery.md`：实现 Ollama/vLLM 显式模型发现和配置片段生成。
-- `P2-12-os-sandbox-runner.md`：把 OS sandbox 从占位接口落到 bash/外部进程执行链路。
 - `P2-13-web-permission-approval-flow.md`：补齐 Web UI 的权限确认回传闭环。
 - `P2-14-readonly-tool-parallelism.md`：在 AgentRuntime 内部并发执行同轮只读工具调用，不新增 batch tool。
 - `P2-15-mcp-lifecycle-cleanup.md`：明确 MCP manager 生命周期，避免 server 进程泄漏。
