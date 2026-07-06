@@ -12,9 +12,26 @@
 - Model Fallback And Auxiliary Router：已由 `bamboo/llms/router.py`、结构化 LLM 错误和 AgentRuntime fallback 接入实现。
 - Reactive Compact：已由 `ContextCompactor.compact(force=True)`、`SessionCompactEvent.reason` 和 AgentRuntime reactive retry 实现。
 - Provider Specific Prompt：已由 `ModelConfig.prompt_profile/capabilities`、provider prompt section 和 PromptBuilder 接入实现。
-- Agent Trace Events：已由 `parent_event_id`、EventBus pattern 订阅、LLM 脱敏事件、TraceRecorder 和事件 schema 文档实现。
+- Agent Trace Events：已由 `parent_event_id`、EventBus pattern 订阅、LLM 脱敏事件和 TraceRecorder 实现基础链路。
 - Workflow Runner：已改为 skill-like workflow 文档包，通过 `workflow_load` / `workflow_run` 工具读取说明并执行声明脚本。
 - Cron And Heartbeat：已由 `bamboo/cron`、`bamboo cron`、`~/.bamboo/cron/jobs.yaml`、retry 和 jsonl 执行日志实现。
+
+## 当前剩余条目
+
+- `P2-04-prompt-section-object-model.md`：把当前 prompt 字符串拼接升级为显式 `PromptSection` 对象和 hash/debug 元数据。
+- `P2-05-session-resume-and-replay.md`：实现 `--resume` 和 `replay`，从持久化 session 恢复或离线回放。
+- `P2-06-memory-update-and-backfill-tools.md`：补齐 memory 读/查/改/回填工具和 source log backfill 链路。
+- `P2-07-auxiliary-model-router-expansion.md`：把辅助模型路由从 compaction 扩展到 memory/skills_hub/web_extract 等角色。
+- `P2-08-cron-main-session-delivery.md`：让 `session=main` 的 cron 结果投递到真实活跃会话。
+- `P2-09-agent-trace-schema-docs.md`：维护稳定事件 schema 文档和 schema 测试。
+- `P2-10-evaluation-and-replay-tools.md`：建立评估和失败样本回放工具链。
+- `P2-11-local-model-discovery.md`：实现 Ollama/vLLM 显式模型发现和配置片段生成。
+- `P2-12-os-sandbox-runner.md`：把 OS sandbox 从占位接口落到 bash/外部进程执行链路。
+- `P2-13-web-permission-approval-flow.md`：补齐 Web UI 的权限确认回传闭环。
+- `P2-14-readonly-tool-parallelism.md`：在 AgentRuntime 内部并发执行同轮只读工具调用，不新增 batch tool。
+- `P2-15-mcp-lifecycle-cleanup.md`：明确 MCP manager 生命周期，避免 server 进程泄漏。
+- `P2-16-subagent-worktree-isolation.md`：给可写子 Agent 增加 worktree/tempdir 隔离。
+- `P2-17-plugin-manifest-installer.md`：定义 Bamboo plugin manifest 和安装/卸载链路。
 
 ## 实施原则
 
