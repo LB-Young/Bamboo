@@ -28,6 +28,7 @@ bamboo = "bamboo.run:app"
 packages = [
     "bamboo",
     "bamboo.core",
+    "bamboo.cron",
     "bamboo.commands",
     "bamboo.adapters",
     "bamboo.adapters.cli",
@@ -42,6 +43,7 @@ packages = [
     "bamboo.tools",
     "bamboo.tools.buildin",
     "bamboo.tools.mcp",
+    "bamboo.workflows",
     "bamboo.skills",
     "bamboo.skills.buildin",
 ]
@@ -58,6 +60,8 @@ bamboo = [
     "subagents/buildin/*.yaml",
     "skills/buildin/*/SKILL.md",
     "skills/buildin/*/experiences/*.md",
+    "workflows/buildin/*/WORKFLOW.md",
+    "workflows/buildin/*/scripts/*",
 ]
 
 [project.optional-dependencies]

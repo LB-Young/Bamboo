@@ -91,6 +91,65 @@ def test_permission_policy_allows_read_and_requires_yes_for_write() -> None:
     assert read.risk_level == "read"
 
 
+def test_permission_policy_classifies_browser_actions() -> None:
+    policy = PermissionPolicy()
+    base_params = RunParams(permission="default", yes_all=False)
+
+    screenshot = policy.evaluate(
+        PermissionRequest(
+            session_id="s1",
+            task_id="t1",
+            tool_call_id="c1",
+            tool_name="browser",
+            arguments={"action": "screenshot"},
+            risk_level="unknown",
+        ),
+        base_params,
+    )
+    opened = policy.evaluate(
+        PermissionRequest(
+            session_id="s1",
+            task_id="t1",
+            tool_call_id="c2",
+            tool_name="browser",
+            arguments={"action": "open"},
+            risk_level="unknown",
+        ),
+        base_params,
+    )
+    clicked = policy.evaluate(
+        PermissionRequest(
+            session_id="s1",
+            task_id="t1",
+            tool_call_id="c3",
+            tool_name="browser",
+            arguments={"action": "click"},
+            risk_level="unknown",
+        ),
+        base_params,
+    )
+    evaluated = policy.evaluate(
+        PermissionRequest(
+            session_id="s1",
+            task_id="t1",
+            tool_call_id="c4",
+            tool_name="browser",
+            arguments={"action": "eval"},
+            risk_level="unknown",
+        ),
+        base_params,
+    )
+
+    assert screenshot.allowed
+    assert screenshot.risk_level == "read"
+    assert opened.decision == PermissionDecision.ASK
+    assert opened.risk_level == "network"
+    assert clicked.decision == PermissionDecision.ASK
+    assert clicked.risk_level == "write"
+    assert evaluated.decision == PermissionDecision.ASK
+    assert evaluated.risk_level == "unknown"
+
+
 def test_tool_audit_logger_writes_redacted_jsonl(tmp_path) -> None:
     audit_path = tmp_path / "audit" / "tool_calls.jsonl"
     logger = ToolAuditLogger(audit_path)

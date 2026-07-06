@@ -15,7 +15,7 @@ from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
-from bamboo.userspace.userspace import ensure_userspace
+from bamboo.userspace.userspace import ensure_userspace, get_configs_dir
 
 setup_logging()
 
@@ -50,7 +50,14 @@ app.add_typer(cron_app, name="cron")
 @app.command()
 def init() -> None:
     """初始化 Bamboo 用户目录。"""
-    layout = ensure_userspace()
+    bamboo_root = get_configs_dir()
+    overwrite = False
+    if bamboo_root.exists():
+        overwrite = typer.confirm(f"{bamboo_root} already exists. Overwrite it?", default=False)
+        if not overwrite:
+            console.print(f"[yellow]init cancelled[/yellow] existing directory kept: {bamboo_root}")
+            raise typer.Exit(0)
+    layout = ensure_userspace(overwrite=overwrite)
     console.print(f"[green]✓ 用户目录已就绪：{layout.root}[/green]")
     console.print("\n接下来请编辑配置文件，填写你的 LLM API Key等信息。")
 

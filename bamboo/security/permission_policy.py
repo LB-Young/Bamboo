@@ -76,6 +76,11 @@ class PermissionPolicy:
                     requires_confirmation=True,
                 )
 
+        if request.tool_name == "browser":
+            risk_level = _risk_from_browser_action(str(request.arguments.get("action", "")))
+            reason = f"browser action={request.arguments.get('action', '') or 'unknown'} risk={risk_level}"
+            requires_confirmation = risk_level in {"write", "network", "unknown"}
+
         if risk_level == "destructive":
             return PermissionResult(
                 PermissionDecision.DENY,
@@ -118,4 +123,15 @@ def _risk_from_command(risk: CommandRisk) -> str:
         return "network"
     if risk == CommandRisk.DESTRUCTIVE:
         return "destructive"
+    return "unknown"
+
+
+def _risk_from_browser_action(action: str) -> str:
+    normalized = action.strip().lower()
+    if normalized in {"extract_text", "screenshot", "wait_for", "close"}:
+        return "read"
+    if normalized == "open":
+        return "network"
+    if normalized in {"click", "type", "press"}:
+        return "write"
     return "unknown"

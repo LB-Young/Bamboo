@@ -75,9 +75,11 @@ def get_skill_storage_dir() -> Path:
     return get_userspace_dir() / "storage" / "skills"
 
 
-def ensure_userspace() -> UserspaceLayout:
+def ensure_userspace(*, overwrite: bool = False) -> UserspaceLayout:
     """确保 Bamboo 用户空间目录存在，并复制内置资源。"""
     bamboo_root_dir = get_configs_dir()
+    if overwrite and bamboo_root_dir.exists():
+        shutil.rmtree(bamboo_root_dir)
 
     for subdir in dirs:
         target = bamboo_root_dir / subdir
