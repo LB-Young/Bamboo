@@ -1,5 +1,17 @@
 # P2-15 MCP Lifecycle Cleanup
 
+## 排期信息
+
+- 建议顺序：2
+- 建议阶段：P0 - 安全闭环和运行时基础
+- 重要程度：极高
+- 优先级：P0
+- 依赖关系：依赖现有 `MCPManager`、`RuntimeContextBuilder` 和 `TaskRuntime` 生命周期。
+
+## 功能定位
+
+这是 MCP 外部进程的生命周期治理能力。当前 MCP 可以启动和注册工具，但任务完成、异常或取消时还没有统一 cleanup hook，存在 server 进程遗留的风险。该需求需要明确 MCP 是 task 级拥有还是进程级复用，并保证 start/stop 都可观测、可重复、可清理。
+
 ## 当前状态
 
 部分完成。

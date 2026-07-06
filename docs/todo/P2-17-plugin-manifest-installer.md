@@ -1,5 +1,17 @@
 # P2-17 Plugin Manifest Installer
 
+## 排期信息
+
+- 建议顺序：11
+- 建议阶段：P3 - 生态和分发
+- 重要程度：中低
+- 优先级：P3
+- 依赖关系：依赖现有 skills、commands、workflows、MCP 配置和 Skill Guard 扫描能力。
+
+## 功能定位
+
+这是 Bamboo 扩展能力的打包、安装和卸载机制。当前各类扩展能力已经分散存在，但没有统一 plugin manifest 和 installer。该需求完成后，可以用一个 plugin 包组合发布 skills、commands、workflows、MCP 配置片段，并通过 quarantine、扫描、lock/audit 控制安装风险。
+
 ## 当前状态
 
 未完成。

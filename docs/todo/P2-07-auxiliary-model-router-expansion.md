@@ -1,5 +1,17 @@
 # P2-07 Auxiliary Model Router Expansion
 
+## 排期信息
+
+- 建议顺序：9
+- 建议阶段：P2 - 质量工程和高级运行时
+- 重要程度：中
+- 优先级：P2
+- 依赖关系：依赖现有 `LLMRouter`、main fallback、compaction route；建议等 memory/skills/web_extract 真实调用点更稳定后实施。
+
+## 功能定位
+
+这是辅助模型角色的路由扩展能力。当前 auxiliary route 主要服务 compaction，未来 memory、skills_hub、web_extract、vision 等任务可能需要独立模型和 fallback。该需求完成后，每个辅助任务可以单独配置模型链路，互不污染 fallback 状态。
+
 ## 当前状态
 
 部分完成。

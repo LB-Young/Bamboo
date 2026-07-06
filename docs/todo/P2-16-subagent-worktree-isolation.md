@@ -1,5 +1,17 @@
 # P2-16 Subagent Worktree Isolation
 
+## 排期信息
+
+- 建议顺序：10
+- 建议阶段：P2 - 质量工程和高级运行时
+- 重要程度：中
+- 优先级：P2
+- 依赖关系：依赖现有 `SubagentRuntime`、subagent registry、权限收窄和工具注册体系。
+
+## 功能定位
+
+这是可写子 Agent 的工作区隔离能力。当前 subagent 已经可以同进程执行并收窄工具权限，但可写子 Agent 仍会直接作用于主工作区。该需求完成后，写权限 subagent 默认进入 worktree/tempdir 隔离空间，完成后返回 diff/summary，是否合并由主流程或用户决定。
+
 ## 当前状态
 
 未完成。

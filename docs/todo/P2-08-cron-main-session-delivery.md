@@ -1,5 +1,17 @@
 # P2-08 Cron Main Session Delivery
 
+## 排期信息
+
+- 建议顺序：7
+- 建议阶段：P1 - 核心用户能力
+- 重要程度：中高
+- 优先级：P1
+- 依赖关系：建议在 `P2-09 Agent Trace Schema Docs` 后实施，方便 Web/CLI 稳定消费 cron 投递事件。
+
+## 功能定位
+
+这是定时任务结果投递到真实会话的能力。当前 cron 可以创建和执行任务，但 `session=main` 还只是固定 session id，不能把结果投递回一个活跃主会话。该需求完成后，cron 可以区分 isolated 执行和 main 会话投递，Web/CLI 用户能看到定时任务输出。
+
 ## 当前状态
 
 部分完成。

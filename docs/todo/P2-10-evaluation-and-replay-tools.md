@@ -1,5 +1,17 @@
 # P2-10 Evaluation And Replay Tools
 
+## 排期信息
+
+- 建议顺序：8
+- 建议阶段：P2 - 质量工程和高级运行时
+- 重要程度：中高
+- 优先级：P2
+- 依赖关系：建议在 `P2-09 Agent Trace Schema Docs` 后实施；现有 `--resume` / `replay` 初版能力可以作为输入基础。
+
+## 功能定位
+
+这是失败复现、行为回归和模型/prompt 对比的质量工程能力。当前已有 session trace 持久化和 replay 初步入口，但缺少标准 case 格式、runner、报告和 fixture 沉淀。该需求完成后，可以把真实失败样本保存为可重复执行的评估或回放用例。
+
 ## 当前状态
 
 未完成。

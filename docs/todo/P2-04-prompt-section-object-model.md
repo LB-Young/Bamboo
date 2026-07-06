@@ -1,5 +1,17 @@
 # P2-04 Prompt Section Object Model
 
+## 排期信息
+
+- 建议顺序：4
+- 建议阶段：P1 - 核心用户能力
+- 重要程度：高
+- 优先级：P1
+- 依赖关系：依赖现有 `bamboo/prompts`、provider prompt、`AgentPromptBuilder` 和 session/task metadata。
+
+## 功能定位
+
+这是 prompt 构建链路的可调试对象模型。当前 prompt 已经支持基础分段和 provider 注入，但最终仍偏字符串拼接，难以追踪每段来源、优先级、hash 和缓存属性。该需求完成后，后续 memory、skills、provider prompt 的注入都能用统一 section 元数据调试和验证。
+
 ## 当前状态
 
 部分完成。

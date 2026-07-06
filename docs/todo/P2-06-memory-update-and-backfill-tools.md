@@ -1,5 +1,17 @@
 # P2-06 Memory Update And Backfill Tools
 
+## 排期信息
+
+- 建议顺序：5
+- 建议阶段：P1 - 核心用户能力
+- 重要程度：高
+- 优先级：P1
+- 依赖关系：建议在 `P2-04 Prompt Section Object Model` 之后实施，便于验证 memory 更新后 prompt 注入是否生效。
+
+## 功能定位
+
+这是记忆系统从“可检索”升级到“可维护”的工具能力。当前已有 knowledge/source log 检索和 KnowledgeSubagent 后处理，但用户还不能稳定通过对话读取、搜索、修正、忘记或回填知识。该需求完成后，chat/project/project-specific 记忆可以被工具安全更新，并保留来源线索。
+
 ## 当前状态
 
 部分完成。

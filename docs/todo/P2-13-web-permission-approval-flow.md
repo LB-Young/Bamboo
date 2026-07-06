@@ -1,5 +1,17 @@
 # P2-13 Web Permission Approval Flow
 
+## 排期信息
+
+- 建议顺序：1
+- 建议阶段：P0 - 安全闭环和运行时基础
+- 重要程度：极高
+- 优先级：P0
+- 依赖关系：依赖现有 `PermissionPolicy`、`PermissionRequestEvent`、`PermissionResultEvent` 和 Web SSE 基础能力。
+
+## 功能定位
+
+这是 Web 模式的权限闭环能力。当前 runtime 已经能判定 `write/network/unknown` 工具需要用户确认，但 Web 端还缺少“展示审批 -> 用户选择 -> 回传 runtime -> 工具继续或拒绝”的完整链路。该需求完成后，Web UI 才能在不牺牲安全边界的情况下执行需要确认的工具。
+
 ## 当前状态
 
 部分完成。
