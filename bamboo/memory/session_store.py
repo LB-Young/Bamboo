@@ -3,17 +3,32 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from bamboo.memory.get_memory_path import get_memory_dir, get_memory_dir_name
 from bamboo.helpers.redact import redact_sensitive_text
 
 
 def utc_now() -> str:
     """返回 UTC ISO 时间戳。"""
     return datetime.now(UTC).isoformat()
+
+
+@dataclass(frozen=True, slots=True)
+class SessionRecord:
+    """One persisted session record directory."""
+
+    session_id: str
+    mode: str
+    label: str
+    created_at: str
+    updated_at: str
+    record_dir: Path
+    memory_dir: Path
+    project_root: Path
 
 
 class SessionMemoryStore:
@@ -344,3 +359,243 @@ class SessionMemoryStore:
 def current_time_record_name() -> str:
     """返回用于 chat 记录目录名的当前时间。"""
     return datetime.now().strftime("%H-%M-%S-%f")
+
+
+def list_session_records(
+    *,
+    mode: str = "auto",
+    project_path: Path | None = None,
+    limit: int = 200,
+    memory_root: Path | None = None,
+) -> list[SessionRecord]:
+    """List persisted session records under Bamboo memory."""
+    root = memory_root or get_memory_dir()
+    candidates = _session_record_candidates(root=root, mode=mode, project_path=project_path)
+    records: list[SessionRecord] = []
+    for record_dir in candidates:
+        record = _load_record_metadata(record_dir)
+        if record is None:
+            continue
+        if project_path is not None:
+            saved_project = record.project_root.expanduser().resolve(strict=False)
+            requested_project = project_path.expanduser().resolve(strict=False)
+            if saved_project != requested_project:
+                continue
+        records.append(record)
+    records.sort(key=lambda item: item.updated_at or item.created_at, reverse=True)
+    return records[:limit]
+
+
+def find_session_record(
+    session_id: str,
+    *,
+    mode: str = "auto",
+    project_path: Path | None = None,
+    record_dir: str | Path | None = None,
+    memory_root: Path | None = None,
+) -> Path | None:
+    """Find a persisted session record directory by session_id."""
+    if record_dir:
+        candidate = Path(record_dir).expanduser()
+        record = _load_record_metadata(candidate)
+        if record is not None and record.session_id == session_id:
+            return candidate
+    for record in list_session_records(mode=mode, project_path=project_path, limit=1000, memory_root=memory_root):
+        if record.session_id == session_id:
+            return record.record_dir
+    return None
+
+
+def load_session_record(record_dir: Path):
+    """Restore a Session object from a persisted session record directory."""
+    from bamboo.factory.context import Context
+    from bamboo.factory.session import Session
+
+    meta = _read_json(record_dir / "session.json") or {}
+    session_id = str(meta.get("session_id") or record_dir.name)
+    memory_dir = Path(str(meta.get("memory_dir") or record_dir.parent)).expanduser()
+    project_root = Path(str(meta.get("project_root") or Path.cwd())).expanduser()
+    system_prompt = _read_text(record_dir / "system_prompt.md")
+    context = Context(
+        session_id=session_id,
+        project_root=project_root,
+        memory_dir=memory_dir,
+        system_prompt=system_prompt,
+        metadata=dict(meta.get("metadata") or {}),
+    )
+    store = SessionMemoryStore(memory_dir=memory_dir, session_id=session_id, record_dir=record_dir)
+    session = Session(
+        session_id=session_id,
+        model=str(meta.get("model") or ""),
+        provider=str(meta.get("provider") or ""),
+        context=context,
+        memory_store=store,
+    )
+    session.messages = _load_messages(record_dir / "messages.jsonl")
+    return session
+
+
+def build_replay_summary(record_dir: Path) -> dict[str, Any]:
+    """Build a replay-friendly summary without calling models or tools."""
+    meta = _read_json(record_dir / "session.json") or {}
+    messages = _read_jsonl(record_dir / "messages.jsonl")
+    events = _read_jsonl(record_dir / "events.jsonl")
+    tasks = _read_jsonl(record_dir / "tasks.jsonl")
+    turns = _read_jsonl(record_dir / "turns.jsonl")
+    tool_calls = [event for event in events if event.get("type") == "tool-call"]
+    tool_results = [event for event in events if event.get("type") in {"tool-result", "tool-error"}]
+    llm_requests = [event for event in events if event.get("type") == "llm-request"]
+    llm_responses = [event for event in events if event.get("type") == "llm-response"]
+    return {
+        "session": meta,
+        "record_dir": str(record_dir),
+        "message_count": len(messages),
+        "event_count": len(events),
+        "task_count": len(tasks),
+        "turn_count": len(turns),
+        "tool_call_count": len(tool_calls),
+        "tool_result_count": len(tool_results),
+        "llm_request_count": len(llm_requests),
+        "llm_response_count": len(llm_responses),
+        "messages": messages,
+        "events": events,
+        "tasks": tasks,
+        "turns": turns,
+    }
+
+
+def _session_record_candidates(*, root: Path, mode: str, project_path: Path | None) -> list[Path]:
+    if not root.exists():
+        return []
+    if mode == "project" and project_path is not None:
+        base = root / "projects" / get_memory_dir_name(project_path)
+        return _record_dirs_under(base)
+    if mode == "chat":
+        dates_root = root / "dates"
+        bases = sorted((path for path in dates_root.glob("*") if path.is_dir()), reverse=True) if dates_root.exists() else []
+        candidates: list[Path] = []
+        for base in bases:
+            candidates.extend(_record_dirs_under(base))
+        return candidates
+    return [path.parent for path in root.rglob("session.json") if path.is_file()]
+
+
+def _record_dirs_under(base: Path) -> list[Path]:
+    if not base.is_dir():
+        return []
+    candidates = [base] if (base / "session.json").is_file() else []
+    candidates.extend(path for path in base.iterdir() if path.is_dir() and (path / "session.json").is_file())
+    return candidates
+
+
+def _load_record_metadata(record_dir: Path) -> SessionRecord | None:
+    meta = _read_json(record_dir / "session.json")
+    if not meta:
+        return None
+    session_id = str(meta.get("session_id") or record_dir.name)
+    memory_dir = Path(str(meta.get("memory_dir") or record_dir.parent)).expanduser()
+    project_root = Path(str(meta.get("project_root") or "")).expanduser()
+    created_at = str(meta.get("created_at") or "")
+    updated_at = str(meta.get("updated_at") or created_at)
+    return SessionRecord(
+        session_id=session_id,
+        mode=str(meta.get("mode") or ""),
+        label=_session_label(record_dir, fallback=session_id),
+        created_at=created_at,
+        updated_at=updated_at,
+        record_dir=record_dir,
+        memory_dir=memory_dir,
+        project_root=project_root,
+    )
+
+
+def _session_label(record_dir: Path, *, fallback: str) -> str:
+    for payload in _read_jsonl(record_dir / "messages.jsonl"):
+        if payload.get("role") == "user":
+            text = str(payload.get("content") or "").strip()
+            if text:
+                return text[:72]
+    return fallback
+
+
+def _load_messages(path: Path):
+    from bamboo.factory.message import Message
+    from bamboo.llms import LLMToolCall
+
+    messages: list[Message] = []
+    for payload in _read_jsonl(path):
+        role = payload.get("role")
+        content = payload.get("content")
+        if role not in {"system", "user", "assistant", "tool"} or not isinstance(content, str):
+            continue
+        messages.append(
+            Message(
+                role=role,
+                content=content,
+                agent_name=str(payload.get("agent_name") or ""),
+                message_id=str(payload.get("message_id") or ""),
+                created_at=str(payload.get("time") or payload.get("created_at") or utc_now()),
+                message_type=str(payload.get("message_type") or "normal"),
+                active_for_prompt=bool(payload.get("active_for_prompt", True)),
+                compressed=bool(payload.get("compressed", False)),
+                origin_message_ids=list(payload.get("origin_message_ids") or []),
+                metadata=dict(payload.get("metadata") or {}),
+                tool_calls=_restore_tool_calls(payload.get("tool_calls") or [], LLMToolCall),
+                tool_call_id=str(payload.get("tool_call_id") or ""),
+                tool_name=str(payload.get("tool_name") or ""),
+            )
+        )
+    return messages
+
+
+def _restore_tool_calls(raw_tool_calls: Any, llm_tool_call_type: Any) -> list[Any]:
+    if not isinstance(raw_tool_calls, list):
+        return []
+    calls: list[Any] = []
+    for item in raw_tool_calls:
+        if isinstance(item, llm_tool_call_type):
+            calls.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        call_id = str(item.get("id") or item.get("tool_call_id") or "")
+        name = str(item.get("name") or item.get("tool_name") or "")
+        arguments = item.get("arguments")
+        if not isinstance(arguments, dict):
+            arguments = {}
+        if call_id and name:
+            calls.append(llm_tool_call_type(id=call_id, name=name, arguments=arguments))
+    return calls
+
+
+def _read_json(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            rows.append(data)
+    return rows
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""

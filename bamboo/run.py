@@ -10,11 +10,17 @@ import anyio
 import typer
 from rich.console import Console
 
-from bamboo.adapters.cli.main import _start_interactive_session, _start_session
+from bamboo.adapters.cli.main import (
+    _start_interactive_session,
+    _start_resumed_interactive_session,
+    _start_resumed_session,
+    _start_session,
+)
 from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
+from bamboo.memory.session_store import build_replay_summary, find_session_record
 from bamboo.userspace.userspace import ensure_userspace, get_configs_dir
 
 setup_logging()
@@ -28,6 +34,8 @@ PERMISSION_OPTION = typer.Option(None, "--permission", help="Permission mode: de
 NO_STREAM_OPTION = typer.Option(False, "--no-stream", help="Disable streaming")
 YES_ALL_OPTION = typer.Option(False, "--yes", "-y", help="Auto-confirm all permission prompts")
 DEBUG_EVENTS_OPTION = typer.Option(False, "--debug-events", help="Print raw EventBus events for this session")
+RESUME_OPTION = typer.Option(None, "--resume", help="Resume a persisted session id")
+RECORD_DIR_OPTION = typer.Option(None, "--record-dir", help="Explicit persisted session record directory")
 SESSION_MODE_OPTION = typer.Option(
     SessionMode.auto,
     "--session-mode",
@@ -66,6 +74,8 @@ def init() -> None:
 def run(
     task: str = typer.Argument("", help="Task description to execute"),
     debug_events: bool = DEBUG_EVENTS_OPTION,
+    resume: str | None = RESUME_OPTION,
+    record_dir: Path | None = RECORD_DIR_OPTION,
 ) -> None:
     """运行一个命令行任务。"""
     # CLI 命令只负责组装参数；任务生命周期由 TaskRuntime 负责。
@@ -81,9 +91,12 @@ def run(
     run_params.debug_events = debug_events
     run_params.session_mode = SessionMode.chat
     run_params.task_id = str(uuid.uuid4())
-    run_params.session_id = str(uuid.uuid4())
+    run_params.session_id = resume or str(uuid.uuid4())
 
-    created_task = anyio.run(_start_session, run_params)
+    if resume:
+        created_task = anyio.run(_start_resumed_session, run_params, record_dir=str(record_dir) if record_dir else None)
+    else:
+        created_task = anyio.run(_start_session, run_params)
     console.print(
         f"[green]task completed[/green] task_id={created_task.task_id} session_id={created_task.session_id}"
     )
@@ -100,6 +113,8 @@ def main(
     yes_all: bool = YES_ALL_OPTION,
     debug_events: bool = DEBUG_EVENTS_OPTION,
     session_mode: SessionMode = SESSION_MODE_OPTION,
+    resume: str | None = RESUME_OPTION,
+    record_dir: Path | None = RECORD_DIR_OPTION,
 ) -> None:
     """启动 Bamboo 会话；无 --msg 时进入交互式命令行对话。"""
     run_params = RunParams()
@@ -114,13 +129,63 @@ def main(
     run_params.debug_events = debug_events
     run_params.session_mode = session_mode
     run_params.task_id = str(uuid.uuid4())
-    run_params.session_id = str(uuid.uuid4())
+    run_params.session_id = resume or str(uuid.uuid4())
 
     if run_params.message:
-        anyio.run(_start_session, run_params)
+        if resume:
+            anyio.run(_start_resumed_session, run_params, record_dir=str(record_dir) if record_dir else None)
+        else:
+            anyio.run(_start_session, run_params)
+        return
+
+    if resume:
+        anyio.run(_start_resumed_interactive_session, run_params, record_dir=str(record_dir) if record_dir else None)
         return
 
     anyio.run(_start_interactive_session, run_params)
+
+
+@app.command()
+def replay(
+    session_id: str = typer.Argument(..., help="Persisted session id to replay"),
+    mode: SessionMode = SESSION_MODE_OPTION,
+    project: Path | None = PROJECT_OPTION,
+    record_dir: Path | None = RECORD_DIR_OPTION,
+    json_output: bool = typer.Option(False, "--json", help="Print raw replay summary JSON"),
+) -> None:
+    """离线回放一个已持久化 session 的执行摘要，不调用模型或工具。"""
+    resolved = find_session_record(
+        session_id,
+        mode=mode.value if isinstance(mode, SessionMode) else str(mode),
+        project_path=project if mode == SessionMode.project else None,
+        record_dir=record_dir,
+    )
+    if resolved is None:
+        raise typer.BadParameter(f"Session not found: {session_id}")
+    summary = build_replay_summary(resolved)
+    if json_output:
+        import json
+
+        console.print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+    session = summary["session"]
+    console.print(f"[bold]session[/bold] {session.get('session_id', session_id)}")
+    console.print(f"[dim]record_dir[/dim] {summary['record_dir']}")
+    console.print(
+        "[dim]counts[/dim] "
+        f"messages={summary['message_count']} events={summary['event_count']} "
+        f"tasks={summary['task_count']} turns={summary['turn_count']} "
+        f"llm={summary['llm_request_count']}/{summary['llm_response_count']} "
+        f"tools={summary['tool_call_count']}/{summary['tool_result_count']}"
+    )
+    for turn in summary["turns"]:
+        console.print(f"\n[cyan]turn[/cyan] {turn.get('task_id', '')} [{turn.get('status', '')}]")
+        if turn.get("user_message"):
+            console.print(f"[bold]user[/bold] {turn['user_message']}")
+        if turn.get("assistant_answer"):
+            console.print(f"[bold]assistant[/bold] {turn['assistant_answer']}")
+        if turn.get("error"):
+            console.print(f"[red]error[/red] {turn['error']}")
 
 
 @app.command()
