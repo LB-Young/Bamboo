@@ -7,11 +7,12 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import os
 import platform
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from bamboo.helpers.constant import SessionMode
 
@@ -33,6 +34,35 @@ PROJECT_MARKERS = (
     "Cargo.toml",
 )
 PROJECT_INSTRUCTION_FILES = ("BAMBOO.md", "AGENTS.md", "CLAUDE.md")
+
+
+@dataclass(frozen=True, slots=True)
+class PromptSection:
+    """A debuggable section of a rendered prompt."""
+
+    name: str
+    content: str
+    source: str
+    priority: int = 100
+    cacheable: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def content_hash(self) -> str:
+        """Return a stable hash of this section's content."""
+        return hash_prompt_text(self.content)
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Return section metadata without full prompt content."""
+        return {
+            "name": self.name,
+            "source": self.source,
+            "priority": self.priority,
+            "cacheable": self.cacheable,
+            "content_hash": self.content_hash,
+            "content_chars": len(self.content),
+            "metadata": dict(self.metadata),
+        }
 
 
 def resolve_prompt_mode(session_mode: SessionMode | str, project_root: Path) -> PromptMode:
@@ -65,6 +95,35 @@ def build_system_prompt(
     )
 
 
+def build_system_prompt_sections(
+    *,
+    session_mode: SessionMode | str,
+    project_root: Path,
+    memory_dir: Path,
+    model: str = "",
+    provider: str = "",
+) -> list[PromptSection]:
+    """便捷函数：创建默认构建器并返回 prompt section 列表。"""
+    prompt_mode = resolve_prompt_mode(session_mode, project_root)
+    return SystemPromptBuilder(prompt_mode=prompt_mode).build_sections(
+        project_root=project_root,
+        memory_dir=memory_dir,
+        model=model,
+        provider=provider,
+    )
+
+
+def render_prompt_sections(sections: list[PromptSection]) -> str:
+    """按 priority/name/source 稳定渲染 prompt section。"""
+    ordered = sorted(sections, key=lambda section: (section.priority, section.name, section.source))
+    return "\n\n".join(section.content.strip() for section in ordered if section.content.strip())
+
+
+def hash_prompt_text(content: str) -> str:
+    """返回 prompt 文本的稳定 SHA-256 hash。"""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class SystemPromptBuilder:
     """按固定顺序组装 Bamboo system prompt。"""
@@ -73,49 +132,98 @@ class SystemPromptBuilder:
 
     def build(self, *, project_root: Path, memory_dir: Path, model: str = "", provider: str = "") -> str:
         """组装完整 system prompt 文本。"""
-        sections = [
-            *_read_prompt_sections(self.prompt_mode),
-            _build_environment_section(
-                prompt_mode=self.prompt_mode,
+        return render_prompt_sections(
+            self.build_sections(
                 project_root=project_root,
                 memory_dir=memory_dir,
                 model=model,
                 provider=provider,
+            )
+        )
+
+    def build_sections(
+        self,
+        *,
+        project_root: Path,
+        memory_dir: Path,
+        model: str = "",
+        provider: str = "",
+    ) -> list[PromptSection]:
+        """组装完整 system prompt section 列表。"""
+        sections = [
+            *_read_prompt_sections(self.prompt_mode),
+            PromptSection(
+                name="runtime-environment",
+                source="runtime",
+                priority=900,
+                cacheable=False,
+                content=_build_environment_section(
+                    prompt_mode=self.prompt_mode,
+                    project_root=project_root,
+                    memory_dir=memory_dir,
+                    model=model,
+                    provider=provider,
+                ),
+                metadata={"prompt_mode": self.prompt_mode},
             ),
         ]
         if self.prompt_mode == "project":
-            project_instructions = _read_project_instructions(project_root)
-            if project_instructions:
-                sections.append(project_instructions)
-        return "\n\n".join(section.strip() for section in sections if section.strip())
+            sections.extend(_read_project_instruction_sections(project_root))
+        return sections
 
 
-def _read_prompt_sections(prompt_mode: PromptMode) -> list[str]:
+def _read_prompt_sections(prompt_mode: PromptMode) -> list[PromptSection]:
     """按模式读取多个 markdown prompt 片段。"""
-    sections = []
-    for section_dir_name in PROMPT_SECTION_DIRS[prompt_mode]:
+    sections: list[PromptSection] = []
+    for dir_index, section_dir_name in enumerate(PROMPT_SECTION_DIRS[prompt_mode]):
         section_dir = _resolve_prompt_section_dir(section_dir_name)
-        for section_path in sorted(section_dir.glob("*.md")):
+        if not section_dir.is_dir():
+            continue
+        base_priority = 100 + (dir_index * 100)
+        for file_index, section_path in enumerate(sorted(section_dir.glob("*.md"))):
             content = section_path.read_text(encoding="utf-8").strip()
             if content:
-                sections.append(content)
+                sections.append(
+                    PromptSection(
+                        name=section_path.stem,
+                        source=str(section_path),
+                        priority=base_priority + file_index,
+                        cacheable=True,
+                        content=content,
+                        metadata={"prompt_mode": prompt_mode, "section_dir": section_dir_name},
+                    )
+                )
     return sections
 
 
-def read_provider_prompt_sections(prompt_profile: str) -> list[str]:
-    """按模型 prompt_profile 读取 provider 专用 prompt 片段。"""
+def read_provider_prompt_section_objects(prompt_profile: str) -> list[PromptSection]:
+    """按模型 prompt_profile 读取 provider 专用 prompt section 对象。"""
     normalized_profile = prompt_profile.strip().lower()
     if not normalized_profile:
         return []
     section_dir = _resolve_prompt_section_dir(f"provider/{normalized_profile}")
     if not section_dir.is_dir():
         return []
-    sections: list[str] = []
-    for section_path in sorted(section_dir.glob("*.md")):
+    sections: list[PromptSection] = []
+    for file_index, section_path in enumerate(sorted(section_dir.glob("*.md"))):
         content = section_path.read_text(encoding="utf-8").strip()
         if content:
-            sections.append(content)
+            sections.append(
+                PromptSection(
+                    name=f"provider-{normalized_profile}-{section_path.stem}",
+                    source=str(section_path),
+                    priority=500 + file_index,
+                    cacheable=True,
+                    content=content,
+                    metadata={"prompt_profile": normalized_profile},
+                )
+            )
     return sections
+
+
+def read_provider_prompt_sections(prompt_profile: str) -> list[str]:
+    """按模型 prompt_profile 读取 provider 专用 prompt 片段。"""
+    return [section.content for section in read_provider_prompt_section_objects(prompt_profile)]
 
 
 def _resolve_prompt_section_dir(section_dir_name: str) -> Path:
@@ -161,15 +269,26 @@ def _build_environment_section(
     return "\n".join(lines)
 
 
-def _read_project_instructions(project_root: Path) -> str:
+def _read_project_instruction_sections(project_root: Path) -> list[PromptSection]:
     """读取项目根目录下约定的 Agent 指令文件。"""
-    instruction_sections = []
+    instruction_sections: list[str] = []
+    sources: list[str] = []
     for file_name in PROJECT_INSTRUCTION_FILES:
         instruction_path = project_root / file_name
         if instruction_path.is_file():
             content = instruction_path.read_text(encoding="utf-8").strip()
             if content:
                 instruction_sections.append(f"## {file_name}\n\n{content}")
+                sources.append(str(instruction_path))
     if not instruction_sections:
-        return ""
-    return "# Project Instructions\n\n" + "\n\n".join(instruction_sections)
+        return []
+    return [
+        PromptSection(
+            name="project-instructions",
+            source=", ".join(sources),
+            priority=1000,
+            cacheable=False,
+            content="# Project Instructions\n\n" + "\n\n".join(instruction_sections),
+            metadata={"files": sources},
+        )
+    ]

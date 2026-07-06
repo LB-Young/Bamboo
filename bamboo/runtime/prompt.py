@@ -12,7 +12,7 @@ from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
 from bamboo.llms.config import ModelCapabilities, ModelConfig
 from bamboo.memory.manager import MemoryManager
-from bamboo.prompts import read_provider_prompt_sections
+from bamboo.prompts import PromptSection, read_provider_prompt_section_objects, render_prompt_sections
 from bamboo.skills import SkillRegistry
 from bamboo.tools import ToolRegistry, get_tool_registry
 
@@ -28,6 +28,7 @@ class AgentPrompt:
     tools: list[dict]
     memory_context: str = ""
     provider_context: str = ""
+    prompt_sections: list[PromptSection] = field(default_factory=list)
     model_capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     error_history: list[str] = field(default_factory=list)
 
@@ -36,6 +37,8 @@ class AgentPrompt:
         sections = [
             "# System Prompt",
             self.system_prompt,
+            "# Prompt Sections",
+            self._render_section_metadata(),
             "# Messages",
             "\n".join(f"[{message.role}] {message.content}" for message in self.messages) or "(none)",
             "# Available Tools",
@@ -53,6 +56,13 @@ class AgentPrompt:
 
     def to_llm_request(self) -> LLMRequest:
         """把 Agent prompt 转换为与 Provider 无关的模型请求。"""
+        if self.prompt_sections:
+            system_prompt = render_prompt_sections(self.prompt_sections)
+            return LLMRequest(
+                system_prompt=system_prompt,
+                messages=list(self.messages),
+                tools=list(self.tools),
+            )
         system_sections = [self.system_prompt]
         if self.memory_context:
             system_sections.extend(["# Global Memory", self.memory_context])
@@ -69,6 +79,22 @@ class AgentPrompt:
             messages=list(self.messages),
             tools=list(self.tools),
         )
+
+    def _render_section_metadata(self) -> str:
+        """Render prompt section metadata for debug output."""
+        if not self.prompt_sections:
+            return "(none)"
+        rows = []
+        for section in sorted(self.prompt_sections, key=lambda item: (item.priority, item.name, item.source)):
+            metadata = section.to_metadata()
+            rows.append(
+                (
+                    f"- {metadata['priority']} `{metadata['name']}` "
+                    f"source=`{metadata['source']}` cacheable={metadata['cacheable']} "
+                    f"hash={metadata['content_hash'][:12]} chars={metadata['content_chars']}"
+                )
+            )
+        return "\n".join(rows)
 
 
 class AgentPromptBuilder:
@@ -105,16 +131,29 @@ class AgentPromptBuilder:
             for message in session.active_messages()
         ]
         tools = self._get_tool_schemas()
+        tool_catalog = self._build_tool_catalog()
+        skill_catalog = self._build_skill_catalog()
+        memory_context = self._build_memory_context(session)
+        provider_context = self._build_provider_context()
+        error_history = error_history or []
         return AgentPrompt(
             system_prompt=session.context.system_prompt,
             messages=messages,
-            tool_catalog=self._build_tool_catalog(),
-            skill_catalog=self._build_skill_catalog(),
-            memory_context=self._build_memory_context(session),
-            provider_context=self._build_provider_context(),
+            tool_catalog=tool_catalog,
+            skill_catalog=skill_catalog,
+            memory_context=memory_context,
+            provider_context=provider_context,
+            prompt_sections=self._build_prompt_sections(
+                session=session,
+                tool_catalog=tool_catalog,
+                skill_catalog=skill_catalog,
+                memory_context=memory_context,
+                provider_context=provider_context,
+                error_history=error_history,
+            ),
             model_capabilities=self._model_capabilities(),
             tools=tools,
-            error_history=error_history or [],
+            error_history=error_history,
         )
 
     def _build_tool_catalog(self) -> str:
@@ -148,11 +187,83 @@ class AgentPromptBuilder:
         """Render provider-specific prompt sections for the active model."""
         if self.model_config is None:
             return ""
-        sections = read_provider_prompt_sections(self.model_config.prompt_profile)
+        sections = [section.content for section in read_provider_prompt_section_objects(self.model_config.prompt_profile)]
         capability_section = self._build_capabilities_section(self.model_config)
         if capability_section:
             sections.append(capability_section)
         return "\n\n".join(section for section in sections if section)
+
+    def _build_prompt_sections(
+        self,
+        *,
+        session: Session,
+        tool_catalog: str,
+        skill_catalog: str,
+        memory_context: str,
+        provider_context: str,
+        error_history: list[str],
+    ) -> list[PromptSection]:
+        """Build runtime prompt sections with debuggable metadata."""
+        sections = [
+            PromptSection(
+                name="system-prompt",
+                source="session.context.system_prompt",
+                priority=100,
+                cacheable=True,
+                content=session.context.system_prompt,
+            )
+        ]
+        if memory_context:
+            sections.append(
+                PromptSection(
+                    name="global-memory",
+                    source="memory-manager",
+                    priority=300,
+                    cacheable=False,
+                    content=f"# Global Memory\n\n{memory_context}",
+                )
+            )
+        if provider_context:
+            sections.append(
+                PromptSection(
+                    name="provider-prompt",
+                    source=f"provider:{self.model_config.prompt_profile if self.model_config else ''}",
+                    priority=400,
+                    cacheable=True,
+                    content=f"# Provider Prompt\n\n{provider_context}",
+                )
+            )
+        if tool_catalog:
+            sections.append(
+                PromptSection(
+                    name="available-tools",
+                    source="tool-registry",
+                    priority=500,
+                    cacheable=False,
+                    content=f"# Available Tools\n\n{tool_catalog}",
+                )
+            )
+        if skill_catalog:
+            sections.append(
+                PromptSection(
+                    name="available-skills",
+                    source="skill-registry",
+                    priority=600,
+                    cacheable=False,
+                    content=f"# Available Skills\n\n{skill_catalog}",
+                )
+            )
+        if error_history:
+            sections.append(
+                PromptSection(
+                    name="recoverable-errors",
+                    source="agent-runtime",
+                    priority=900,
+                    cacheable=False,
+                    content="# Recoverable Errors\n\n" + "\n".join(error_history),
+                )
+            )
+        return sections
 
     def _model_capabilities(self) -> ModelCapabilities:
         """Return active model capabilities, preserving legacy defaults when unset."""

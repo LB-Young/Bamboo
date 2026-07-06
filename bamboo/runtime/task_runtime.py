@@ -33,6 +33,7 @@ from bamboo.helpers.requests_params import RunParams
 
 # LLMFactory 在 TaskRuntime 初始化时加载模型配置，并为本次执行提供模型路由。
 from bamboo.llms import LLMFactory
+from bamboo.prompts import hash_prompt_text
 
 # AgentRuntime 执行 Agent 的 OTA 循环，AgentRuntimeError 表示 Agent 层运行失败。
 from bamboo.runtime.agent_runtime import AgentRuntime, AgentRuntimeError
@@ -106,7 +107,9 @@ class TaskRuntime:
     def create_task(self, run_params: RunParams) -> Task:
         """根据入口参数创建一个全新的 Task 和 Session。"""
         # TaskFactory 负责把标准化输入转换为 Task，并创建本次会话的初始 Session。
-        return self.task_factory.create(run_params)
+        task = self.task_factory.create(run_params)
+        self._annotate_prompt_metadata(task)
+        return task
 
     def create_followup_task(self, previous_task: Task, message: str) -> Task:
         """基于已有 Session 创建下一轮用户输入对应的新 Task。"""
@@ -123,7 +126,7 @@ class TaskRuntime:
         previous_task.session.current_task_id = task_id
         previous_task.session.add_message("user", message)
         # 返回一个新的 Task 对象，避免在 CLI 层手动重置旧 Task 的运行状态字段。
-        return Task(
+        task = Task(
             platform=previous_task.platform,
             session_id=previous_task.session_id,
             task_id=task_id,
@@ -133,11 +136,14 @@ class TaskRuntime:
             run_params=run_params,
             memory_dir=previous_task.memory_dir,
         )
+        self._annotate_prompt_metadata(task)
+        return task
 
     async def run_existing_task(self, task: Task) -> Task:
         """运行已经创建好的 Task，供交互式会话复用同一个 Session。"""
         # state 保存本次 TaskRuntime 执行期间的尝试次数和可恢复错误。
         state = TaskRunState()
+        self._annotate_prompt_metadata(task)
         task.session.current_task_id = task.task_id
         trace_recorder = self._create_trace_recorder(task)
         if trace_recorder is not None:
@@ -215,6 +221,11 @@ class TaskRuntime:
         if task.session.memory_store is None:
             return
         task.session.memory_store.append_turn(task)
+
+    def _annotate_prompt_metadata(self, task: Task) -> None:
+        """Record stable prompt metadata on the task snapshot."""
+        task.metadata["system_prompt_hash"] = hash_prompt_text(task.session.context.system_prompt)
+        task.metadata["system_prompt_chars"] = str(len(task.session.context.system_prompt))
 
     async def _cleanup_runtime_context(self, task: Task) -> None:
         """Release resources owned by the runtime context builder."""

@@ -5,9 +5,19 @@ from pathlib import Path
 import pytest
 
 from bamboo.factory.session import SessionFactory
+from bamboo.runtime.task_runtime import TaskRuntime
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.requests_params import RunParams
-from bamboo.prompts import build_system_prompt, resolve_prompt_mode
+from bamboo.llms import LLMFactory
+from bamboo.prompts import (
+    SystemPromptBuilder,
+    build_system_prompt,
+    build_system_prompt_sections,
+    hash_prompt_text,
+    render_prompt_sections,
+    resolve_prompt_mode,
+)
+from bamboo.runtime.prompt import AgentPromptBuilder
 from bamboo.userspace.userspace import ensure_userspace
 
 
@@ -53,6 +63,37 @@ def test_build_project_prompt_includes_project_instructions(tmp_path: Path) -> N
     assert "# Runtime Environment" in prompt
     assert "deepseek-chat" in prompt
     assert "项目内回答必须先读代码。" in prompt
+
+
+def test_system_prompt_sections_expose_order_source_and_hash(tmp_path: Path) -> None:
+    """验证 system prompt 可以先构建为可调试 section 对象。"""
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir()
+    (tmp_path / "AGENTS.md").write_text("项目规则。", encoding="utf-8")
+
+    sections = build_system_prompt_sections(
+        session_mode=SessionMode.project,
+        project_root=tmp_path,
+        memory_dir=memory_dir,
+        model="deepseek-chat",
+        provider="deepseek",
+    )
+    rendered = render_prompt_sections(sections)
+
+    assert rendered == build_system_prompt(
+        session_mode=SessionMode.project,
+        project_root=tmp_path,
+        memory_dir=memory_dir,
+        model="deepseek-chat",
+        provider="deepseek",
+    )
+    assert [section.priority for section in sections] == sorted(section.priority for section in sections)
+    assert any(section.name == "runtime-environment" and section.source == "runtime" for section in sections)
+    project_section = next(section for section in sections if section.name == "project-instructions")
+    assert str(tmp_path / "AGENTS.md") in project_section.source
+    assert project_section.cacheable is False
+    assert len(project_section.content_hash) == 64
+    assert project_section.content_hash == hash_prompt_text(project_section.content)
 
 
 def test_build_chat_prompt_excludes_project_instructions(tmp_path: Path) -> None:
@@ -108,6 +149,15 @@ def test_build_prompt_prefers_userspace_prompt_sections(tmp_path: Path) -> None:
     assert "可靠、清晰、直接的 AI 助手" not in prompt
 
 
+def test_system_prompt_builder_skips_missing_section_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """验证缺失 section 目录不会阻断 prompt 构建。"""
+    monkeypatch.setattr("bamboo.prompts.system_prompt.PROMPT_SECTION_DIRS", {"chat": ("missing",), "project": ("missing",)})
+
+    prompt = SystemPromptBuilder(prompt_mode="chat").build(project_root=tmp_path, memory_dir=tmp_path / "memory")
+
+    assert "# Runtime Environment" in prompt
+
+
 def test_session_factory_sets_prompt_mode_metadata(tmp_path: Path) -> None:
     """验证 SessionFactory 会把完整 system prompt 和模式元数据写入 Context。"""
     run_params = RunParams(
@@ -122,3 +172,39 @@ def test_session_factory_sets_prompt_mode_metadata(tmp_path: Path) -> None:
     assert session.context.metadata["prompt_mode"] == "project"
     assert "面向软件工程项目的自主 Agent" in session.context.system_prompt
     assert session.messages[0].content == "hello"
+
+
+def test_agent_prompt_render_includes_section_metadata(tmp_path: Path) -> None:
+    """验证 AgentPrompt debug 渲染包含 section 元数据。"""
+    run_params = RunParams(message="hello", project=str(tmp_path), session_mode=SessionMode.chat)
+    session = SessionFactory().create(memory_dir_path=tmp_path / "memory", run_params=run_params)
+
+    prompt = AgentPromptBuilder().build(session)
+    rendered = prompt.render()
+
+    assert "# Prompt Sections" in rendered
+    assert "`system-prompt`" in rendered
+    assert "source=`session.context.system_prompt`" in rendered
+
+
+def test_task_runtime_records_system_prompt_hash(tmp_path: Path) -> None:
+    """验证 TaskRuntime 创建任务后会写入 system prompt hash。"""
+    runtime = TaskRuntime(llm_factory=LLMFactory.from_mapping(_model_document()))
+    task = runtime.create_task(RunParams(message="hello", project=str(tmp_path), session_mode=SessionMode.chat))
+
+    assert task.metadata["system_prompt_hash"] == hash_prompt_text(task.session.context.system_prompt)
+    assert task.metadata["system_prompt_chars"] == str(len(task.session.context.system_prompt))
+
+
+def _model_document() -> dict:
+    return {
+        "default_model": "test-model",
+        "models": {
+            "test-model": {
+                "provider": "deepseek",
+                "model": "provider-model-id",
+                "api_key": "test-api-key",
+                "base_url": "https://llm.test/v1",
+            }
+        },
+    }

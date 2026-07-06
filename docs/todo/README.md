@@ -5,7 +5,7 @@
 ## 已完成并移除的条目
 
 - RuntimeContextBuilder：已由 `bamboo/runtime/runtime_context.py` 实现。
-- Prompt Section Pipeline：已由 `bamboo/prompts/system_prompt.py` 和 `bamboo/runtime/prompt.py` 实现基础分段。
+- Prompt Section Pipeline：已由 `PromptSection` 对象模型、`SystemPromptBuilder.build_sections()`、runtime prompt section metadata 和 prompt hash 实现。
 - Permission Policy：已由 `bamboo/security/permission_policy.py`、resolver、audit 和 AgentRuntime 接入实现。
 - Skills Hub / Guard：已由 `bamboo/skills/hub.py`、`guard.py`、CLI 和 lock/audit 实现。
 - Subagent Runtime：已由 `bamboo/runtime/subagent_runtime.py`、`bamboo/tools/buildin/subagent_run.py` 和内置 subagent 配置实现。
@@ -22,7 +22,7 @@
 
 ## 排期原则
 
-- 优先补齐用户高频能力：PromptSection、记忆更新、本地模型发现、cron 主会话投递。
+- 优先补齐用户高频能力：记忆更新、本地模型发现、cron 主会话投递。
 - 最后做高级扩展：评估工具、辅助模型细分、subagent worktree、plugin installer。
 - `P2-05 Session Resume And Replay` 的需求 md 已不存在，代码中已有 `--resume` / `replay` 相关实现入口；后续 replay 能力统一并入 `P2-10 Evaluation And Replay Tools` 扩展，不再单独排期。
 
@@ -30,23 +30,21 @@
 
 | 建议顺序 | 需求 | 功能说明 | 重要程度 | 优先级 | 依赖/备注 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `P2-04-prompt-section-object-model.md` | 把 prompt 从字符串拼接升级为显式 `PromptSection` 对象，记录 section 来源、优先级、hash 和 debug 元数据。 | 高 | P1 | 有助于调试 provider prompt、memory、skills 注入；不阻塞安全闭环。 |
-| 2 | `P2-06-memory-update-and-backfill-tools.md` | 新增 memory read/search/update/backfill 工具，让用户能通过对话修正知识，并把 source log 中的高价值信息回填到 knowledge md。 | 高 | P1 | 建议在 PromptSection 之后做，方便验证 memory 更新后 prompt 注入是否生效。 |
-| 3 | `P2-11-local-model-discovery.md` | 增加 Ollama `/api/tags`、vLLM `/v1/models` 发现能力，输出或可选写入 `models.yaml` 配置片段。 | 高 | P1 | 用户可见收益大，且与主运行时耦合低，适合独立交付。 |
-| 4 | `P2-08-cron-main-session-delivery.md` | 让 cron job 支持 `isolated` 和真实 `main` 投递，把定时任务结果追加到指定活跃会话并推送 Web/CLI。 | 中高 | P1 | 依赖 trace/schema 和 session 查找能力；否则 UI 侧难以稳定消费。 |
-| 5 | `P2-10-evaluation-and-replay-tools.md` | 建立 eval/replay 工具链，用 session trace 或 fixture 复现失败、比较模型/prompt/tool 行为变化并输出报告。 | 中高 | P2 | 建议在 trace schema 固化后做；可复用已有 `replay` 初版。 |
-| 6 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
-| 7 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
-| 8 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
+| 1 | `P2-06-memory-update-and-backfill-tools.md` | 新增 memory read/search/update/backfill 工具，让用户能通过对话修正知识，并把 source log 中的高价值信息回填到 knowledge md。 | 高 | P1 | 依赖已完成的 PromptSection，方便验证 memory 更新后 prompt 注入是否生效。 |
+| 2 | `P2-11-local-model-discovery.md` | 增加 Ollama `/api/tags`、vLLM `/v1/models` 发现能力，输出或可选写入 `models.yaml` 配置片段。 | 高 | P1 | 用户可见收益大，且与主运行时耦合低，适合独立交付。 |
+| 3 | `P2-08-cron-main-session-delivery.md` | 让 cron job 支持 `isolated` 和真实 `main` 投递，把定时任务结果追加到指定活跃会话并推送 Web/CLI。 | 中高 | P1 | 依赖 trace/schema 和 session 查找能力；否则 UI 侧难以稳定消费。 |
+| 4 | `P2-10-evaluation-and-replay-tools.md` | 建立 eval/replay 工具链，用 session trace 或 fixture 复现失败、比较模型/prompt/tool 行为变化并输出报告。 | 中高 | P2 | 建议在 trace schema 固化后做；可复用已有 `replay` 初版。 |
+| 5 | `P2-07-auxiliary-model-router-expansion.md` | 把 auxiliary router 从 compaction 扩展到 memory、skills_hub、web_extract、vision 等角色，并支持各自 fallback。 | 中 | P2 | 当前 compaction 已够用；等 memory/skills 等真实调用点更多后再扩展更稳。 |
+| 6 | `P2-16-subagent-worktree-isolation.md` | 给可写 subagent 增加 worktree/tempdir 隔离，子 Agent 完成后返回 diff/summary，避免污染主工作区。 | 中 | P2 | 对多 Agent 并行写代码很重要，但实现复杂，建议排在安全基础之后。 |
+| 7 | `P2-17-plugin-manifest-installer.md` | 定义 Bamboo plugin manifest 和安装/卸载链路，组合发布 skills、commands、workflows、MCP 配置片段。 | 中低 | P3 | 属于分发和生态能力，等核心运行时与安全模型稳定后再做。 |
 
 ## 建议阶段
 
 ### P1：核心用户能力
 
-1. `P2-04-prompt-section-object-model.md`
-2. `P2-06-memory-update-and-backfill-tools.md`
-3. `P2-11-local-model-discovery.md`
-4. `P2-08-cron-main-session-delivery.md`
+1. `P2-06-memory-update-and-backfill-tools.md`
+2. `P2-11-local-model-discovery.md`
+3. `P2-08-cron-main-session-delivery.md`
 
 ### P2：质量工程和高级运行时
 

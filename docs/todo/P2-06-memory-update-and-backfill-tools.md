@@ -2,11 +2,11 @@
 
 ## 排期信息
 
-- 建议顺序：2
+- 建议顺序：1
 - 建议阶段：P1 - 核心用户能力
 - 重要程度：高
 - 优先级：P1
-- 依赖关系：建议在 `P2-04 Prompt Section Object Model` 之后实施，便于验证 memory 更新后 prompt 注入是否生效。
+- 依赖关系：依赖已完成的 PromptSection 对象模型，便于验证 memory 更新后 prompt 注入是否生效。
 
 ## 功能定位
 
