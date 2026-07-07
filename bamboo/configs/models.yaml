@@ -40,6 +40,22 @@ models:
       vision: false
       max_parallel_tools: 1
 
+  mimo-default:
+    provider: mimo
+    model: mimo-vl-7b-sft
+    prompt_profile: mimo
+    api_key: ""
+    base_url: https://api.xiaomimimo.com/v1
+    timeout: 60
+    temperature: 0.2
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: true
+      max_parallel_tools: 1
+
   gpt-default:
     provider: gpt
     model: gpt-4.1-mini

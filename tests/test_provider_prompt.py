@@ -73,6 +73,13 @@ def test_runtime_prompt_includes_active_provider_prompt(tmp_path: Path) -> None:
     assert prompt.tools
 
 
+def test_mimo_provider_prompt_is_available() -> None:
+    """验证 MiMo provider prompt 能按 prompt_profile 加载。"""
+    sections = read_provider_prompt_sections("mimo")
+
+    assert any("MiMo Provider Notes" in section for section in sections)
+
+
 def test_tool_calling_disabled_hides_structured_tools(tmp_path: Path) -> None:
     """验证不支持 tool calling 的模型走文本协议 fallback，不发送 tools schema。"""
     document = _model_document(provider="ollama", prompt_profile="ollama", tool_calling=False)

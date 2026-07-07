@@ -39,12 +39,7 @@ class OpenAICompatibleClient(LLMClient):
     async def complete(self, request: LLMRequest) -> LLMResponse:
         """发送 Chat Completions 请求并转换为统一响应。"""
         url = f"{self._base_url()}/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            **self.config.extra_headers,
-        }
-        if self.config.api_key:
-            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        headers = self._headers()
         payload = self._build_payload(request)
 
         try:
@@ -80,6 +75,20 @@ class OpenAICompatibleClient(LLMClient):
             raise LLMRequestError(f"No base_url configured for provider '{self.config.provider}'")
         return base_url.rstrip("/")
 
+    def _headers(self) -> dict[str, str]:
+        """Return HTTP headers for this OpenAI-compatible provider."""
+        headers = {
+            "Content-Type": "application/json",
+            **self.config.extra_headers,
+        }
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        return headers
+
+    def _max_tokens_field(self) -> str:
+        """Return the provider-specific output token field name."""
+        return "max_tokens"
+
     def _build_payload(self, request: LLMRequest) -> dict[str, Any]:
         """把统一请求转换为 OpenAI Chat Completions 请求体。"""
         messages: list[dict[str, Any]] = []
@@ -109,7 +118,7 @@ class OpenAICompatibleClient(LLMClient):
         payload: dict[str, Any] = {
             "model": self.config.model,
             "messages": messages,
-            "max_tokens": self.config.max_tokens,
+            self._max_tokens_field(): self.config.max_tokens,
             **self.config.extra_body,
         }
         if self.config.temperature is not None:

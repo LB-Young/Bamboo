@@ -27,7 +27,7 @@ from bamboo.llms import (
     ModelCatalog,
     ModelConfigError,
 )
-from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient, OllamaClient, VLLMClient
+from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient, MimoClient, OllamaClient, VLLMClient
 from bamboo.runtime.agent_runtime import AgentRuntime
 from bamboo.runtime.context_compactor import ContextBudgetPolicy
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
@@ -117,6 +117,36 @@ def test_local_openai_compatible_client_allows_empty_api_key() -> None:
         )
         assert response.content == "local answer"
         assert response.provider == "ollama"
+
+    anyio.run(run_test)
+
+
+def test_mimo_client_uses_documented_headers_and_token_field() -> None:
+    """验证 MiMo Provider 使用 api-key 鉴权和 max_completion_tokens 字段。"""
+    document = _model_document("mimo")
+    document["models"]["test-model"]["base_url"] = ""
+    config = ModelCatalog.from_mapping(document).models["test-model"].resolve_environment()
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            assert request.url == "https://api.xiaomimimo.com/v1/chat/completions"
+            assert request.headers["api-key"] == "test-api-key"
+            assert "authorization" not in request.headers
+            assert payload["max_completion_tokens"] == 128
+            assert "max_tokens" not in payload
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [{"message": {"content": "mimo answer"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = MimoClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+        assert response.content == "mimo answer"
+        assert response.provider == "mimo"
 
     anyio.run(run_test)
 
@@ -366,6 +396,7 @@ def test_factory_uses_a_distinct_client_for_each_provider() -> None:
         "gpt": GPTClient,
         "deepseek": DeepSeekClient,
         "minimax": MiniMaxClient,
+        "mimo": MimoClient,
         "claude": ClaudeClient,
         "ollama": OllamaClient,
         "vllm": VLLMClient,

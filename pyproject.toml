@@ -54,6 +54,7 @@ packages = [
 bamboo = [
     "configs/*.yaml",
     "prompts/*/*.md",
+    "prompts/provider/*/*.md",
     "adapters/web/static/*.html",
     "adapters/web/static/*.js",
     "adapters/web/static/*.css",
