@@ -29,6 +29,7 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "memory_search",
         "memory_update",
         "read",
+        "skill_installer",
         "skill_load",
         "subagent_run",
         "task_create",
@@ -37,13 +38,14 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "task_stop",
         "todo_write",
         "web_fetch",
+        "workflow_installer",
         "workflow_load",
         "workflow_run",
         "write",
     ]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
-    assert registry.summary()["by_source"] == {"buildin": 30}
-    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 15, "unknown": 1, "write": 11}
+    assert registry.summary()["by_source"] == {"buildin": 32}
+    assert registry.summary()["by_risk"] == {"execute": 2, "network": 1, "read": 15, "unknown": 1, "write": 13}
 
 
 def test_tool_registry_hides_disabled_tool() -> None:

@@ -40,6 +40,7 @@ packages = [
     "bamboo.llms",
     "bamboo.llms.providers",
     "bamboo.memory",
+    "bamboo.plugins",
     "bamboo.security",
     "bamboo.tools",
     "bamboo.tools.buildin",

@@ -17,6 +17,7 @@ from bamboo.memory.manager import MemoryManager
 
 dirs: list[str] = [
     "configs",                  # 配置目录
+    "configs/mcp.d",            # Plugin 安装的 MCP 配置片段
     "prompts",                  # 可编辑系统提示词模板
     "buildin_tools",            # 内建 Tool（安装时从包内复制）
     "tools",                    # 用户安装的 Tool / Agent 创建的 Skill
@@ -30,10 +31,13 @@ dirs: list[str] = [
     "storage/projects",         # 项目级存储
     "storage/dates",            # 日期级存储
     "storage/skills",           # Skill 状态、索引、校验和使用记录
+    "storage/plugins",          # Plugin lock 和审计记录
     "memory",                   # 全局记忆
     "tasks",                    # 任务队列
     "cron",                     # Cron job 配置和调度状态
     "logs",                     # 日志
+    "plugins",                  # Plugin 安装隔离区
+    "plugins/quarantine",       # Plugin quarantine
     "workspace",                # 默认工作区
     "workspace/tmp",            # 临时文件
 ]

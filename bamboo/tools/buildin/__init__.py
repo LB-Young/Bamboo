@@ -22,6 +22,7 @@ def create_builtin_tools() -> list[Tool]:
     from bamboo.tools.buildin.lsp import LSPTool
     from bamboo.tools.buildin.memory import MemoryBackfillTool, MemoryReadTool, MemorySearchTool, MemoryUpdateTool
     from bamboo.tools.buildin.memory_retrieve import MemoryRetrieveTool
+    from bamboo.tools.buildin.package_install import SkillInstallTool, WorkflowInstallTool
     from bamboo.tools.buildin.read import ReadTool
     from bamboo.tools.buildin.skill_load import SkillLoadTool
     from bamboo.tools.buildin.subagent_run import SubagentRunTool
@@ -51,6 +52,7 @@ def create_builtin_tools() -> list[Tool]:
         MemorySearchTool(),
         MemoryUpdateTool(),
         ReadTool(),
+        SkillInstallTool(),
         SkillLoadTool(),
         SubagentRunTool(),
         TaskCreateTool(),
@@ -59,6 +61,7 @@ def create_builtin_tools() -> list[Tool]:
         TaskStopTool(),
         TodoWriteTool(),
         WebFetchTool(),
+        WorkflowInstallTool(),
         WorkflowLoadTool(),
         WorkflowRunTool(),
         WriteTool(),

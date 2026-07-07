@@ -57,6 +57,8 @@ models_app = typer.Typer(help="Discover and manage Bamboo model registrations.",
 app.add_typer(models_app, name="models")
 eval_app = typer.Typer(help="Run Bamboo eval and replay cases.", no_args_is_help=True)
 app.add_typer(eval_app, name="eval")
+plugin_app = typer.Typer(help="Manage Bamboo plugin packages.", no_args_is_help=True)
+app.add_typer(plugin_app, name="plugin")
 
 
 @app.command()
@@ -497,6 +499,95 @@ def skill_enable(name: str = typer.Argument(..., help="Skill name")) -> None:
 
     state = SkillStore().enable(name)
     console.print(f"[green]skill enabled[/green] {name} status={state.status}")
+
+
+@plugin_app.command("validate")
+def plugin_validate(path: Path = typer.Argument(..., help="Local plugin directory")) -> None:
+    """校验并扫描本地 Plugin，但不安装。"""
+    from bamboo.plugins import PluginInstaller
+
+    result = PluginInstaller().validate(path)
+    _print_plugin_scan(result.scan_result)
+    if not result.scan_result.ok:
+        raise typer.Exit(1)
+
+
+@plugin_app.command("install")
+def plugin_install(
+    path: Path = typer.Argument(..., help="Local plugin directory"),
+    force: bool = typer.Option(False, "--force", help="Allow install despite dangerous scan findings"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing installed component targets"),
+) -> None:
+    """安装本地 Plugin 包，写入 lock 和 audit。"""
+    from bamboo.plugins import PluginInstaller
+
+    result = PluginInstaller().install(path, force=force, overwrite=overwrite)
+    _print_plugin_scan(result.scan_result)
+    if not result.installed:
+        console.print(f"[red]plugin install blocked[/red] {result.name}: {result.reason}")
+        raise typer.Exit(1)
+    files = len(result.lock_entry.files) if result.lock_entry is not None else 0
+    console.print(f"[green]plugin installed[/green] {result.name} files={files}")
+
+
+@plugin_app.command("list")
+def plugin_list() -> None:
+    """列出已安装 Plugin。"""
+    from bamboo.plugins import PluginInstaller
+
+    for entry in PluginInstaller().list():
+        console.print(f"{entry.name}\t{entry.version}\t{entry.scan_level}\tfiles={len(entry.files)}\t{entry.description}")
+
+
+@plugin_app.command("show")
+def plugin_show(name: str = typer.Argument(..., help="Plugin name")) -> None:
+    """显示已安装 Plugin 的 lock 摘要。"""
+    from bamboo.plugins import PluginInstaller
+
+    entry = PluginInstaller().show(name)
+    if entry is None:
+        raise typer.BadParameter(f"Plugin not installed: {name}")
+    console.print(f"[bold]{entry.name}[/bold] {entry.version}")
+    console.print(entry.description)
+    console.print(f"[dim]publisher[/dim] {entry.publisher}")
+    console.print(f"[dim]source[/dim] {entry.source}")
+    console.print(f"[dim]installed_at[/dim] {entry.installed_at}")
+    console.print(f"[dim]scan[/dim] {entry.scan_level}")
+    if entry.permissions:
+        console.print(f"[dim]permissions[/dim] {', '.join(entry.permissions)}")
+    for installed_file in entry.files:
+        console.print(f"{installed_file.component_type}\t{installed_file.target}")
+
+
+@plugin_app.command("remove")
+def plugin_remove(
+    name: str = typer.Argument(..., help="Plugin name"),
+    force: bool = typer.Option(False, "--force", help="Delete user-modified installed files too"),
+) -> None:
+    """卸载 Plugin，默认保留用户修改过的文件。"""
+    from bamboo.plugins import PluginInstaller
+
+    result = PluginInstaller().remove(name, force=force)
+    if result.kept_files:
+        console.print(f"[yellow]plugin partially removed[/yellow] {name}: {result.reason}")
+        for path in result.kept_files:
+            console.print(f"[yellow]kept modified[/yellow] {path}")
+        raise typer.Exit(1)
+    if not result.removed:
+        console.print(f"[red]plugin remove failed[/red] {name}: {result.reason}")
+        raise typer.Exit(1)
+    console.print(f"[green]plugin removed[/green] {name} deleted={len(result.deleted_files)}")
+
+
+def _print_plugin_scan(scan_result) -> None:
+    """Render plugin scan result for CLI."""
+    if not scan_result.findings:
+        console.print(f"Plugin scan {scan_result.level}: no findings")
+        return
+    console.print(f"Plugin scan {scan_result.level}: {len(scan_result.findings)} finding(s)")
+    for finding in scan_result.findings:
+        location = f"{finding.path}:{finding.line}" if finding.line else finding.path or "-"
+        console.print(f"- [{finding.severity}] {finding.category} {location}: {finding.message}")
 
 
 def debug_main(
