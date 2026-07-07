@@ -2,6 +2,7 @@ name: explorer
 description: Read-only codebase exploration agent that finds relevant files, symbols, and architecture notes.
 model: ""
 permission: read-only
+workspace_mode: read_only
 tools:
   read: true
   grep: true

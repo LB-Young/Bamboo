@@ -2,6 +2,7 @@ name: reviewer
 description: Read-only code review agent focused on correctness, regressions, and missing tests.
 model: ""
 permission: read-only
+workspace_mode: read_only
 tools:
   read: true
   grep: true

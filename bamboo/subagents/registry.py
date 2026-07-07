@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from bamboo.subagents.models import SubagentDefinition
+from bamboo.subagents.models import SubagentDefinition, WorkspaceMode
 from bamboo.userspace.userspace import get_userspace_dir
 
 
@@ -83,12 +83,17 @@ def load_subagent_definition(path: Path, *, source: str) -> SubagentDefinition:
     normalized_tools: dict[str, str | bool] = {}
     for tool_name, mode in tools.items():
         normalized_tools[str(tool_name)] = _normalize_tool_mode(mode)
+    workspace_mode = _normalize_workspace_mode(data.get("workspace_mode", "shared"), path)
+    warnings = _workspace_warnings(normalized_tools, workspace_mode)
     return SubagentDefinition(
         name=name,
         description=str(data.get("description", "")).strip(),
         model=str(data.get("model", "") or ""),
         tools=normalized_tools,
         permission=str(data.get("permission", "read-only") or "read-only"),
+        workspace_mode=workspace_mode,
+        keep_workspace_on_success=bool(data.get("keep_workspace_on_success", False)),
+        validation_warnings=tuple(warnings),
         source_path=str(path),
         source=source,
     )
@@ -105,3 +110,24 @@ def _normalize_tool_mode(value: Any) -> str | bool:
             return False
         return normalized
     return bool(value)
+
+
+def _normalize_workspace_mode(value: Any, path: Path) -> WorkspaceMode:
+    mode = str(value or "shared").strip().lower().replace("-", "_")
+    if mode not in {"shared", "read_only", "tempdir", "worktree"}:
+        raise ValueError(f"Subagent workspace_mode must be shared/read_only/tempdir/worktree: {path}")
+    return mode  # type: ignore[return-value]
+
+
+def _workspace_warnings(tools: dict[str, str | bool], workspace_mode: WorkspaceMode) -> list[str]:
+    write_like_tools = [
+        name
+        for name, mode in tools.items()
+        if mode is True and name in {"write", "edit", "bash", "browser", "web_fetch", "cron_add", "cron_tick"}
+    ]
+    if write_like_tools and workspace_mode in {"shared", "read_only"}:
+        return [
+            "subagent enables write/execute/network-like tools without tempdir/worktree isolation: "
+            + ", ".join(sorted(write_like_tools))
+        ]
+    return []

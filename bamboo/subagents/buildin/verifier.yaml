@@ -2,6 +2,7 @@ name: verifier
 description: Verification agent that can inspect code and run read-only or test commands through bash.
 model: ""
 permission: read-only
+workspace_mode: read_only
 tools:
   read: true
   grep: true

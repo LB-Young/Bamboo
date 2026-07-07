@@ -87,14 +87,49 @@ class SubagentRunTool(Tool):
             f'<task_result subagent="{result.subagent_name}" '
             f'task_id="{result.task_id}" session_id="{result.session_id}" status="{result.status}">\n'
             f"{result.output}\n"
+            f"{_workspace_result_block(result)}"
             "</task_result>"
         )
         return ToolResult(
             content=content,
+            success=result.status != "failed",
+            error=result.output if result.status == "failed" else "",
             metadata={
                 "subagent_name": result.subagent_name,
                 "task_id": result.task_id,
                 "session_id": result.session_id,
                 "status": result.status,
+                "workspace_mode": result.workspace_mode,
+                "workspace_path": result.workspace_path,
+                "changed_files": list(result.changed_files),
+                "diff_stat": result.diff_stat,
+                "diff_patch_path": result.diff_patch_path,
+                "merge_required": result.merge_required,
+                "workspace_retained": result.workspace_retained,
+                "workspace_note": result.workspace_note,
             },
         )
+
+
+def _workspace_result_block(result) -> str:
+    if not result.workspace_path and not result.changed_files:
+        return ""
+    lines = [
+        "\n<workspace>",
+        f"mode: {result.workspace_mode}",
+    ]
+    if result.workspace_path:
+        lines.append(f"path: {result.workspace_path}")
+    if result.workspace_note:
+        lines.append(f"note: {result.workspace_note}")
+    if result.changed_files:
+        lines.append("changed_files:")
+        lines.extend(f"- {item}" for item in result.changed_files)
+    if result.diff_stat:
+        lines.append(f"diff_stat: {result.diff_stat}")
+    if result.diff_patch_path:
+        lines.append(f"diff_patch_path: {result.diff_patch_path}")
+    lines.append(f"merge_required: {str(result.merge_required).lower()}")
+    lines.append(f"workspace_retained: {str(result.workspace_retained).lower()}")
+    lines.append("</workspace>\n")
+    return "\n".join(lines)

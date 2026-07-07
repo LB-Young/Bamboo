@@ -11,6 +11,7 @@ from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import SubagentFinishEvent, SubagentStartEvent
 from bamboo.helpers.requests_params import RunParams
 from bamboo.runtime.runtime_context import RuntimeContext, RuntimeContextBuilder
+from bamboo.runtime.subagent_workspace import SubagentWorkspaceManager
 from bamboo.subagents.models import SubagentDefinition, SubagentRunResult
 from bamboo.subagents.registry import SubagentRegistry
 from bamboo.tools.registry import ToolRegistry
@@ -29,12 +30,14 @@ class SubagentRuntime:
         parent_task: Task,
         registry: SubagentRegistry,
         session_factory: SessionFactory | None = None,
+        workspace_manager: SubagentWorkspaceManager | None = None,
         recovery_policy: "AgentRecoveryPolicy | None" = None,
     ) -> None:
         self.parent_context = parent_context
         self.parent_task = parent_task
         self.registry = registry
         self.session_factory = session_factory or SessionFactory()
+        self.workspace_manager = workspace_manager or SubagentWorkspaceManager()
         self.recovery_policy = recovery_policy or self._default_recovery_policy()
 
     async def run(
@@ -51,7 +54,18 @@ class SubagentRuntime:
             available = ", ".join(self.registry.available_names()) or "none"
             raise KeyError(f"Subagent not found: {subagent_type}. Available subagents: {available}")
 
-        child_task = self._create_child_task(definition, description=description, prompt=prompt, task_id=task_id)
+        workspace = self.workspace_manager.prepare(
+            definition=definition,
+            project_root=self.parent_task.session.context.project_root,
+            tool_registry=self.parent_context.tool_registry,
+        )
+        child_task = self._create_child_task(
+            definition,
+            description=description,
+            prompt=prompt,
+            task_id=task_id,
+            project_path=workspace.path,
+        )
         await self.parent_context.event_bus.emit(
             SubagentStartEvent(
                 session_id=self.parent_task.session_id,
@@ -84,7 +98,21 @@ class SubagentRuntime:
             runtime_context=child_builder.build(child_task),
             recovery_policy=self.recovery_policy,
         )
-        completed = await runtime.run(child_task)
+        completed = child_task
+        error = ""
+        try:
+            completed = await runtime.run(child_task)
+        except Exception as exc:
+            completed.status = "failed"
+            completed.error = str(exc)
+            error = str(exc)
+        diff = self.workspace_manager.collect_diff(workspace)
+        self.workspace_manager.finalize(
+            workspace,
+            diff,
+            success=completed.status == "completed" and not error,
+            keep_on_success=definition.keep_workspace_on_success,
+        )
         await self.parent_context.event_bus.emit(
             SubagentFinishEvent(
                 session_id=self.parent_task.session_id,
@@ -101,8 +129,16 @@ class SubagentRuntime:
             subagent_name=definition.name,
             task_id=completed.task_id,
             session_id=completed.session_id,
-            output=completed.output,
+            output=completed.output or error,
             status=completed.status,
+            workspace_mode=workspace.mode,
+            workspace_path=str(workspace.path) if workspace.isolated else "",
+            changed_files=diff.changed_files,
+            diff_stat=diff.diff_stat,
+            diff_patch_path=diff.diff_patch_path,
+            merge_required=diff.has_changes,
+            workspace_retained=workspace.retained,
+            workspace_note=workspace.note,
         )
 
     def _create_child_task(
@@ -112,6 +148,7 @@ class SubagentRuntime:
         description: str,
         prompt: str,
         task_id: str | None,
+        project_path,
     ) -> Task:
         child_task_id = task_id or str(uuid4())
         child_session_id = str(uuid4())
@@ -119,6 +156,7 @@ class SubagentRuntime:
         child_params = replace(
             self.parent_task.run_params,
             message=child_prompt,
+            project=str(project_path),
             task_id=child_task_id,
             session_id=child_session_id,
         )

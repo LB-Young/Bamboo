@@ -14,6 +14,7 @@ def test_load_subagent_definition_parses_tools(tmp_path: Path) -> None:
         "description: Explore code.\n"
         "model: test-model\n"
         "permission: read-only\n"
+        "workspace_mode: tempdir\n"
         "tools:\n"
         "  read: true\n"
         "  write: false\n"
@@ -25,7 +26,25 @@ def test_load_subagent_definition_parses_tools(tmp_path: Path) -> None:
 
     assert definition.name == "explorer"
     assert definition.model == "test-model"
+    assert definition.workspace_mode == "tempdir"
     assert definition.tools == {"read": True, "write": False, "bash": "read_only"}
+
+
+def test_load_subagent_definition_warns_when_writable_shared_workspace(tmp_path: Path) -> None:
+    path = tmp_path / "writer.yaml"
+    path.write_text(
+        "name: writer\n"
+        "description: Write code.\n"
+        "tools:\n"
+        "  write: true\n",
+        encoding="utf-8",
+    )
+
+    definition = load_subagent_definition(path, source="test")
+
+    assert definition.workspace_mode == "shared"
+    assert definition.validation_warnings
+    assert "without tempdir/worktree isolation" in definition.validation_warnings[0]
 
 
 def test_subagent_registry_project_overrides_builtin(tmp_path: Path) -> None:
