@@ -61,6 +61,8 @@ def test_build_project_prompt_includes_project_instructions(tmp_path: Path) -> N
     assert "# Language" in prompt
     assert "# Tool Results" in prompt
     assert "# Runtime Environment" in prompt
+    assert f"Project Root (authoritative project directory): `{tmp_path}`" in prompt
+    assert "Working Directory is only the Bamboo process directory" in prompt
     assert "deepseek-chat" in prompt
     assert "项目内回答必须先读代码。" in prompt
 

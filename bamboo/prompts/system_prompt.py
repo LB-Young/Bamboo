@@ -255,10 +255,12 @@ def _build_environment_section(
     lines = [
         "# Runtime Environment",
         f"- Prompt Mode: {prompt_mode}",
+        f"- Project Root (authoritative project directory): `{project_root}`",
+        "- In project mode, treat Project Root as the only project directory. Inspect and modify files under Project Root unless the user explicitly gives another path.",
+        "- Working Directory is only the Bamboo process directory. Do not use it to infer the current project.",
         f"- OS: {platform.system()} {platform.release()} ({platform.machine()})",
         f"- Shell: `{shell}`",
         f"- Working Directory: `{Path.cwd()}`",
-        f"- Project Root: `{project_root}`",
         f"- Memory Directory: `{memory_dir}`",
         f"- Today's Date: {today}",
     ]

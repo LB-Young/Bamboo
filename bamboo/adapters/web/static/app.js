@@ -296,6 +296,7 @@ function showPermissionRequest(event) {
   const refs = ensureToolRow(event);
   refs.row.classList.remove("done", "failed");
   refs.row.classList.add("awaiting-permission");
+  refs.row.open = true;
   refs.status.textContent = "待确认";
   refs.input.textContent = `${event.risk || "unknown"} · ${event.reason || "需要确认"}`;
   refs.row.querySelector(".permission-actions")?.remove();
@@ -339,6 +340,7 @@ async function submitPermission(event, decision, actions) {
     if (!res.ok) throw new Error("permission submit failed");
     const refs = ensureToolRow(event);
     refs.status.textContent = decision === "allow" ? "已允许" : "已拒绝";
+    refs.row.open = false;
   } catch (err) {
     console.error(err);
     actions.querySelectorAll("button").forEach((button) => {
@@ -352,6 +354,7 @@ function updatePermissionResult(event) {
   const refs = ensureToolRow(event);
   refs.row.querySelector(".permission-actions")?.remove();
   refs.row.classList.remove("awaiting-permission");
+  refs.row.open = false;
   if (event.approved) {
     refs.row.classList.add("running");
     refs.status.textContent = "已批准";
