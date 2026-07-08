@@ -40,6 +40,7 @@ from bamboo.helpers.requests_params import RunParams
 from bamboo.helpers.utils import BaseEvent
 from bamboo.runtime import TaskRuntime
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
+from bamboo.runtime.store import get_task_store
 from bamboo.security import WebPermissionResolver
 
 from bamboo.adapters.cli.commands import expand_command_message
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Bamboo Web")
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.state.permission_resolver = WebPermissionResolver()
+    app.state.running_tasks = {}
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
@@ -120,6 +122,17 @@ def create_app() -> FastAPI:
         accepted = await app.state.permission_resolver.submit(request_id, decision)
         return {"accepted": accepted, "request_id": request_id, "decision": decision}
 
+    @app.post("/api/tasks/{task_id}/stop")
+    async def stop_task(task_id: str) -> dict[str, Any]:
+        worker: asyncio.Task | None = app.state.running_tasks.get(task_id)
+        if worker is not None and not worker.done():
+            worker.cancel()
+            return {"accepted": True, "task_id": task_id, "status": "cancelling"}
+        snapshot = get_task_store().stop(task_id, "cancelled by user")
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"accepted": True, "task_id": task_id, "status": snapshot.status}
+
     @app.post("/api/chat/stream")
     async def chat_stream(payload: ChatRequest) -> StreamingResponse:
         message = payload.message.strip()
@@ -171,21 +184,26 @@ def create_app() -> FastAPI:
         async def run_task() -> None:
             try:
                 await runtime.run_existing_task(task)
+            except asyncio.CancelledError:
+                await queue.put(_SyntheticCancelled(task.session_id, task.task_id, "cancelled by user"))
             except Exception as exc:  # pragma: no cover - streamed to client
                 await queue.put(_SyntheticError(task.session_id, task.task_id, str(exc)))
             finally:
                 await queue.put(None)
+                app.state.running_tasks.pop(task.task_id, None)
 
         async def event_stream() -> AsyncIterator[bytes]:
             yield _jsonl(
                 {
                     "type": "session",
                     "session_id": task.session_id,
+                    "task_id": task.task_id,
                     "record_dir": str(task.session.memory_store.session_dir) if task.session.memory_store else "",
                     "mode": mode,
                 }
             )
             worker = asyncio.create_task(run_task())
+            app.state.running_tasks[task.task_id] = worker
             try:
                 while True:
                     event = await queue.get()
@@ -381,6 +399,8 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
         }
     if isinstance(event, _SyntheticError):
         return {"type": "error", "message": event.message}
+    if isinstance(event, _SyntheticCancelled):
+        return {"type": "cancelled", "message": event.message, "task_id": event.task_id}
     return {"type": "event", "event": event.to_dict()}
 
 
@@ -391,6 +411,12 @@ def _permission_event_id(event: PermissionRequestEvent | PermissionResultEvent) 
 class _SyntheticError(BaseEvent):
     def __init__(self, session_id: str, task_id: str, message: str) -> None:
         super().__init__(type="error", session_id=session_id, task_id=task_id)
+        self.message = message
+
+
+class _SyntheticCancelled(BaseEvent):
+    def __init__(self, session_id: str, task_id: str, message: str) -> None:
+        super().__init__(type="cancelled", session_id=session_id, task_id=task_id)
         self.message = message
 
 

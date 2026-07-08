@@ -7,6 +7,7 @@ TaskRuntime 是一次任务执行的总控：创建任务、保存状态、发�
 # 延迟解析类型注解，避免运行时立即解析 `TaskFactory | None` 等类型表达式。
 from __future__ import annotations
 
+import asyncio
 import inspect
 
 # Callable 用于描述可注入的 AgentRuntime 工厂函数类型。
@@ -157,40 +158,44 @@ class TaskRuntime:
 
     async def _run_existing_task_with_trace(self, task: Task, state: TaskRunState) -> Task:
         """运行任务主体；外层负责 trace recorder 生命周期。"""
-        # 任务创建后先落入 store，再发事件，保证外部订阅者看到的是已存在任务。
-        self.task_store.save_created(task)
-        self._append_task_trace(task, "created")
-        # 通知订阅者任务已经创建，例如 CLI 可以据此打印 task created。
-        await self._emit_task_created(task)
-        # 将任务从 created 推进到 running，并发布状态变化事件。
-        await self._transition_task(task, "created", "running")
-        # 当前框架把整个 Agent OTA 循环视为一个步骤，这里发布步骤开始事件。
-        await self._emit_step_started(task)
+        try:
+            # 任务创建后先落入 store，再发事件，保证外部订阅者看到的是已存在任务。
+            self.task_store.save_created(task)
+            self._append_task_trace(task, "created")
+            # 通知订阅者任务已经创建，例如 CLI 可以据此打印 task created。
+            await self._emit_task_created(task)
+            # 将任务从 created 推进到 running，并发布状态变化事件。
+            await self._transition_task(task, "created", "running")
+            # 当前框架把整个 Agent OTA 循环视为一个步骤，这里发布步骤开始事件。
+            await self._emit_step_started(task)
 
-        # 在恢复预算内重复尝试 Agent；每次失败后由 _recover_agent_failure 判断是否继续。
-        while state.agent_attempt < self.recovery_policy.max_agent_attempts:
-            # agent_attempt 记录当前是第几次 Agent 尝试，第一次进入循环后为 1。
-            state.agent_attempt += 1
-            try:
-                # 每次任务级重试都创建新的 AgentRuntime，避免复用已损坏的状态机。
-                agent = self._create_agent(task)
-                # 执行 Agent OTA 循环；成功后返回带有结果和状态更新的 task。
-                task = await agent.run(task)
-                # Agent 成功完成后，将任务状态标记为 completed。
-                await self._transition_task(task, "running", "completed")
-                self._append_turn_trace(task)
-                await self._run_knowledge_subagent_if_enabled(task)
-                # 发布步骤完成事件，summary 会被 CLI 或 UI 展示。
-                await self._emit_step_finished(task, "Bamboo task completed.")
-                # 任务成功结束，返回最终 Task 给调用方。
-                return task
-            except Exception as exc:
-                # exc 是本次 Agent 尝试抛出的异常，交给任务级恢复逻辑处理。
-                if not await self._recover_agent_failure(task, state, exc):
-                    # 如果恢复策略不允许继续，或重试次数已耗尽，则把任务标记为失败。
-                    await self._fail_task(task, exc)
-                    # 继续向上抛出异常，让外层入口知道本次运行失败。
-                    raise
+            # 在恢复预算内重复尝试 Agent；每次失败后由 _recover_agent_failure 判断是否继续。
+            while state.agent_attempt < self.recovery_policy.max_agent_attempts:
+                # agent_attempt 记录当前是第几次 Agent 尝试，第一次进入循环后为 1。
+                state.agent_attempt += 1
+                try:
+                    # 每次任务级重试都创建新的 AgentRuntime，避免复用已损坏的状态机。
+                    agent = self._create_agent(task)
+                    # 执行 Agent OTA 循环；成功后返回带有结果和状态更新的 task。
+                    task = await agent.run(task)
+                    # Agent 成功完成后，将任务状态标记为 completed。
+                    await self._transition_task(task, "running", "completed")
+                    self._append_turn_trace(task)
+                    await self._run_knowledge_subagent_if_enabled(task)
+                    # 发布步骤完成事件，summary 会被 CLI 或 UI 展示。
+                    await self._emit_step_finished(task, "Bamboo task completed.")
+                    # 任务成功结束，返回最终 Task 给调用方。
+                    return task
+                except Exception as exc:
+                    # exc 是本次 Agent 尝试抛出的异常，交给任务级恢复逻辑处理。
+                    if not await self._recover_agent_failure(task, state, exc):
+                        # 如果恢复策略不允许继续，或重试次数已耗尽，则把任务标记为失败。
+                        await self._fail_task(task, exc)
+                        # 继续向上抛出异常，让外层入口知道本次运行失败。
+                        raise
+        except asyncio.CancelledError:
+            await self._cancel_task(task, "cancelled by user")
+            raise
 
         # 理论上循环耗尽后会走到这里，构造统一的 AgentRuntimeError 表示重试预算耗尽。
         error = AgentRuntimeError("TaskRuntime exhausted agent attempts")
@@ -334,6 +339,16 @@ class TaskRuntime:
         self._append_turn_trace(task)
         # 发布步骤完成事件，但 summary 中明确说明任务失败。
         await self._emit_step_finished(task, f"Bamboo task failed: {task.error}")
+
+    async def _cancel_task(self, task: Task, reason: str) -> None:
+        """用户主动停止任务时，将任务标记为 cancelled。"""
+        task.error = reason
+        if task.status != "cancelled":
+            await self._transition_task(task, task.status, "cancelled")
+        self.task_store.stop(task.task_id, reason)
+        self._append_task_trace(task, "cancelled")
+        self._append_turn_trace(task)
+        await self._emit_step_finished(task, f"Bamboo task cancelled: {reason}")
 
     def _create_agent(self, task: Task) -> AgentRuntime:
         """使用任务配置和模型名为本次尝试初始化 AgentRuntime。"""

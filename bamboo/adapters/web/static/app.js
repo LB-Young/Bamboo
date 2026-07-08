@@ -4,6 +4,8 @@ const state = {
   sessions: [],
   currentSessionId: null,
   currentRecordDir: null,
+  currentTaskId: null,
+  stopRequested: false,
   streaming: false,
 };
 
@@ -25,6 +27,7 @@ const els = {
   messageInput: document.getElementById("messageInput"),
   composerHint: document.getElementById("composerHint"),
   sendButton: document.getElementById("sendButton"),
+  stopButton: document.getElementById("stopButton"),
 };
 
 let pendingAssistant = null;
@@ -49,6 +52,8 @@ function setStatus(status, detail = "") {
   els.statusPill.classList.toggle("busy", busy);
   els.statusPill.classList.toggle("idle", !busy);
   els.sendButton.disabled = busy;
+  els.stopButton.hidden = !busy;
+  els.stopButton.disabled = !busy || state.stopRequested || !state.currentTaskId;
 }
 
 async function loadSidebar() {
@@ -121,6 +126,8 @@ async function selectSession(session) {
 function newSession() {
   state.currentSessionId = null;
   state.currentRecordDir = null;
+  state.currentTaskId = null;
+  state.stopRequested = false;
   pendingAssistant = null;
   resetToolEvents();
   els.chatHistory.innerHTML = "";
@@ -153,6 +160,8 @@ function ensureAssistant() {
 
 async function sendMessage(text) {
   state.streaming = true;
+  state.stopRequested = false;
+  state.currentTaskId = null;
   setStatus("running", "Running");
   pendingAssistant = null;
   resetToolEvents();
@@ -193,6 +202,8 @@ async function sendMessage(text) {
     showSystem("请求失败，请检查服务端或模型配置。");
   } finally {
     state.streaming = false;
+    state.currentTaskId = null;
+    state.stopRequested = false;
     setStatus("idle");
   }
 }
@@ -200,8 +211,27 @@ async function sendMessage(text) {
 function handleEvent(event) {
   if (event.type === "session") {
     state.currentSessionId = event.session_id;
+    state.currentTaskId = event.task_id || state.currentTaskId;
     state.currentRecordDir = event.record_dir || state.currentRecordDir;
     els.chatMeta.textContent = `${state.mode === "project" ? "Project" : "Chat"} · ${event.session_id}`;
+    setStatus("running", state.stopRequested ? "Stopping" : "Running");
+    return;
+  }
+  if (event.type === "task") {
+    state.currentTaskId = event.task_id || state.currentTaskId;
+    setStatus("running", state.stopRequested ? "Stopping" : "Running");
+    return;
+  }
+  if (event.type === "task_status" && event.to === "cancelled") {
+    showSystem("已停止当前任务。");
+    state.stopRequested = true;
+    setStatus("running", "Stopping");
+    return;
+  }
+  if (event.type === "cancelled") {
+    showSystem(event.message || "已停止当前任务。");
+    state.stopRequested = true;
+    setStatus("running", "Stopping");
     return;
   }
   if (event.type === "delta") {
@@ -445,6 +475,7 @@ function bindEvents() {
     await loadSidebar();
   });
   els.newSession.addEventListener("click", newSession);
+  els.stopButton.addEventListener("click", stopCurrentTask);
   els.composer.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (state.streaming) return;
@@ -459,6 +490,21 @@ function bindEvents() {
       els.composer.requestSubmit();
     }
   });
+}
+
+async function stopCurrentTask() {
+  if (!state.currentTaskId || state.stopRequested) return;
+  state.stopRequested = true;
+  setStatus("running", "Stopping");
+  try {
+    const res = await fetch(`/api/tasks/${encodeURIComponent(state.currentTaskId)}/stop`, { method: "POST" });
+    if (!res.ok) throw new Error("stop failed");
+  } catch (err) {
+    console.error(err);
+    state.stopRequested = false;
+    setStatus("running", "Running");
+    showSystem("停止任务失败。");
+  }
 }
 
 async function switchMode(mode) {

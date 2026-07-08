@@ -141,7 +141,8 @@ textarea {
 
 .path-row button,
 #newSession,
-#sendButton {
+#sendButton,
+#stopButton {
   border: 0;
   border-radius: 8px;
   background: var(--accent);
@@ -154,6 +155,10 @@ textarea {
 #newSession:hover,
 #sendButton:hover {
   background: var(--accent-strong);
+}
+
+#stopButton {
+  background: var(--danger);
 }
 
 .session-tools {
@@ -498,12 +503,24 @@ textarea {
   gap: 12px;
 }
 
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 #sendButton {
   width: 84px;
   height: 38px;
 }
 
-#sendButton:disabled {
+#stopButton {
+  width: 84px;
+  height: 38px;
+}
+
+#sendButton:disabled,
+#stopButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
