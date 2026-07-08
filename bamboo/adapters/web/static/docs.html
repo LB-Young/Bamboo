@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bamboo 命令使用说明</title>
+    <link rel="stylesheet" href="/static/docs.css" />
+  </head>
+  <body>
+    <div class="page">
+      <aside class="toc">
+        <header class="brand">
+          <div class="mark">B</div>
+          <div>
+            <strong>Bamboo</strong>
+            <span>命令使用说明</span>
+          </div>
+        </header>
+        <nav aria-label="文档目录">
+          <div class="toc-group">Start</div>
+          <a href="#overview">功能概览</a>
+          <a href="#quickstart">快速开始</a>
+          <a href="#configuration">配置模型</a>
+          <div class="toc-group">Commands</div>
+          <a href="#main">main</a>
+          <a href="#run">run</a>
+          <a href="#web">web</a>
+          <a href="#docs">docs</a>
+          <a href="#replay">replay</a>
+          <a href="#models">models</a>
+          <a href="#skill">skill</a>
+          <a href="#cron">cron</a>
+          <a href="#plugin">plugin</a>
+          <a href="#eval">eval</a>
+          <a href="#version">version</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="hero">
+          <p class="eyebrow">Bamboo CLI Documentation</p>
+          <h1>Bamboo 命令使用说明</h1>
+          <p>
+            这份说明只覆盖使用者直接接触的 <code>bamboo</code> 命令、模型配置和常见启动方式。
+            不包含内部执行流程、Web API 或运行时实现细节。
+          </p>
+          <div class="meta-row" aria-label="文档摘要">
+            <span class="pill">Python 3.11+</span>
+            <span class="pill">CLI</span>
+            <span class="pill">Web</span>
+            <span class="pill">Model config</span>
+          </div>
+        </header>
+
+        <section id="overview">
+          <h2>功能概览</h2>
+          <div class="feature-list">
+            <article class="feature">
+              <h3>一次性任务</h3>
+              <p>用 <code>bamboo run</code> 或 <code>bamboo main --msg</code> 直接执行一条任务。</p>
+            </article>
+            <article class="feature">
+              <h3>交互式会话</h3>
+              <p>用 <code>bamboo main</code> 进入多轮命令行会话，支持普通 Chat 和 Project 上下文模式。</p>
+            </article>
+            <article class="feature">
+              <h3>Web 入口</h3>
+              <p>用 <code>bamboo web</code> 启动浏览器对话界面并自动打开页面，默认访问 <code>http://127.0.0.1:8899</code>；用 <code>bamboo docs</code> 启动并打开使用说明页。</p>
+            </article>
+            <article class="feature">
+              <h3>扩展和自动化</h3>
+              <p>通过 <code>skill</code>、<code>plugin</code>、<code>cron</code>、<code>eval</code> 等子命令管理能力扩展、定时任务和回放测试。</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="quickstart">
+          <h2>快速开始</h2>
+          <p class="lead">
+            默认配置使用 <code>deepseek-chat</code> 作为主模型。初始化后，只要在
+            <code>models.yaml</code> 里配置 DeepSeek API Key，或使用环境变量引用，就可以直接运行。
+          </p>
+          <pre><code>pip install -e .
+bamboo init
+
+# 编辑 ~/.bamboo/configs/models.yaml，把 deepseek-chat.api_key 改成你的 key，
+# 或写成 "${DEEPSEEK_API_KEY}" 后在 shell 里设置环境变量。
+export DEEPSEEK_API_KEY="your-deepseek-api-key"
+
+bamboo main --msg "帮我分析这个项目"</code></pre>
+          <p>
+            如果你要使用 GPT、Claude、MiniMax、Mimo、Ollama 或 vLLM，需要先在
+            <code>~/.bamboo/configs/models.yaml</code> 注册模型，再在
+            <code>~/.bamboo/configs/bamboo_main_agent.yaml</code> 中把 <code>model</code>
+            改为对应的模型注册名。
+          </p>
+        </section>
+
+        <section id="configuration">
+          <h2>配置模型</h2>
+          <p>
+            Bamboo 有两个关键配置文件。<code>models.yaml</code> 负责注册模型连接信息；
+            <code>bamboo_main_agent.yaml</code> 负责选择主 Agent 实际使用哪个模型注册名。
+          </p>
+
+          <h3>1. 配置 <code>models.yaml</code></h3>
+          <p>文件位置：</p>
+          <pre><code>~/.bamboo/configs/models.yaml</code></pre>
+          <p>默认 DeepSeek 示例：</p>
+          <pre><code>default_model: deepseek-chat
+
+models:
+  deepseek-chat:
+    provider: deepseek
+    model: deepseek-chat
+    prompt_profile: deepseek
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: https://api.deepseek.com/v1
+    timeout: 60
+    temperature: 0.2
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1</code></pre>
+
+          <table>
+            <thead>
+              <tr><th>字段</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>default_model</code></td><td>默认模型注册名，必须存在于 <code>models</code> 下。</td></tr>
+              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
+              <tr><td><code>model</code></td><td>供应商侧的真实模型 ID。</td></tr>
+              <tr><td><code>prompt_profile</code></td><td>提示词适配配置，通常和 provider 同名。</td></tr>
+              <tr><td><code>api_key</code></td><td>API Key。云模型通常必填；支持 <code>${ENV_NAME}</code> 环境变量引用。<code>ollama</code> 和 <code>vllm</code> 可以为空。</td></tr>
+              <tr><td><code>base_url</code></td><td>接口地址。云模型填官方或兼容接口地址，本地模型填本地服务地址。</td></tr>
+              <tr><td><code>timeout</code></td><td>请求超时时间，单位秒。</td></tr>
+              <tr><td><code>temperature</code></td><td>采样温度；不需要覆盖时可以保留默认值。</td></tr>
+              <tr><td><code>context_window</code></td><td>上下文窗口大小。</td></tr>
+              <tr><td><code>max_tokens</code></td><td>最大输出 token，必须小于 <code>context_window</code>。</td></tr>
+              <tr><td><code>capabilities</code></td><td>声明模型能力，例如工具调用、JSON Schema、视觉输入和并行工具数。</td></tr>
+            </tbody>
+          </table>
+
+          <h3>2. 配置主 Agent</h3>
+          <p>文件位置：</p>
+          <pre><code>~/.bamboo/configs/bamboo_main_agent.yaml</code></pre>
+          <p>默认配置：</p>
+          <pre><code>model: deepseek-chat
+fallback_model: ""
+compaction_model: ""
+compaction_fallback_model: ""
+
+auxiliary_models:
+  compaction:
+    model: ""
+    fallbacks: []
+  memory:
+    model: ""
+    fallbacks: []
+  knowledge_curator:
+    model: ""
+    fallbacks: []
+  skills_hub:
+    model: ""
+    fallbacks: []
+  web_extract:
+    model: ""
+    fallbacks: []
+  session_search:
+    model: ""
+    fallbacks: []
+  vision:
+    model: ""
+    fallbacks: []</code></pre>
+          <table>
+            <thead>
+              <tr><th>字段</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>model</code></td><td>主 Agent 使用的模型注册名，必须在 <code>models.yaml</code> 中存在。</td></tr>
+              <tr><td><code>fallback_model</code></td><td>主模型遇到 rate limit、server error、timeout 等可重试错误时的备用模型；留空表示不启用。</td></tr>
+              <tr><td><code>compaction_model</code></td><td>上下文压缩使用的模型；留空时复用 <code>model</code>。</td></tr>
+              <tr><td><code>compaction_fallback_model</code></td><td>上下文压缩的备用模型；留空表示不启用。</td></tr>
+              <tr><td><code>auxiliary_models</code></td><td>为 memory、skills_hub、vision 等辅助任务指定模型；未配置时默认复用主模型。</td></tr>
+            </tbody>
+          </table>
+
+          <h3>3. 切换到其他云模型</h3>
+          <p>例如使用 OpenAI 兼容的 GPT 配置：</p>
+          <pre><code># ~/.bamboo/configs/models.yaml
+default_model: gpt-default
+
+models:
+  gpt-default:
+    provider: gpt
+    model: gpt-4.1-mini
+    prompt_profile: gpt
+    api_key: "${OPENAI_API_KEY}"
+    base_url: https://api.openai.com/v1
+    timeout: 60
+    temperature: 0.2
+    context_window: 1047576
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: true
+      vision: false
+      max_parallel_tools: 1</code></pre>
+          <pre><code># ~/.bamboo/configs/bamboo_main_agent.yaml
+model: gpt-default</code></pre>
+
+          <h3>4. 使用本地模型</h3>
+          <p>Ollama 和 vLLM 可以通过发现命令生成模型注册片段：</p>
+          <pre><code>bamboo models discover ollama
+bamboo models discover ollama --write --set-default
+
+bamboo models discover vllm --base-url http://localhost:8000/v1
+bamboo models discover vllm --write --replace</code></pre>
+          <p class="note">
+            <code>--write</code> 只写入 <code>models.yaml</code>。如果要让主 Agent 使用发现到的模型，
+            还需要把 <code>bamboo_main_agent.yaml</code> 里的 <code>model</code> 改成对应注册名。
+          </p>
+        </section>
+
+        <section id="main">
+          <h2><code>bamboo main</code></h2>
+          <p>启动 Bamboo 主会话。无消息时进入交互式 CLI；传入 <code>--msg</code> 时执行单轮任务。</p>
+          <pre><code>bamboo main
+bamboo main --msg "帮我总结这个仓库"
+bamboo main --session-mode project --project /path/to/project
+bamboo main --resume SESSION_ID</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--msg</code>, <code>-m</code></td><td><code>null</code></td><td>初始消息；不传时进入交互式 CLI 会话。</td></tr>
+              <tr><td><code>--project</code>, <code>-p</code></td><td>当前目录</td><td>项目路径，Project 模式会使用它作为上下文根目录。</td></tr>
+              <tr><td><code>--model</code></td><td>主 Agent 配置</td><td>临时覆盖本轮使用的模型注册名。</td></tr>
+              <tr><td><code>--provider</code></td><td>模型配置</td><td>临时覆盖 provider，例如 <code>deepseek</code>、<code>gpt</code>、<code>claude</code>。</td></tr>
+              <tr><td><code>--permission</code></td><td><code>default</code></td><td>权限模式：<code>default</code>、<code>auto</code>、<code>bypass</code>、<code>yolo</code>。</td></tr>
+              <tr><td><code>--no-stream</code></td><td><code>false</code></td><td>禁用流式输出标记；具体支持取决于 provider。</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td><code>false</code></td><td>自动确认权限提示。</td></tr>
+              <tr><td><code>--debug-events</code></td><td><code>false</code></td><td>打印调试事件。</td></tr>
+              <tr><td><code>--session-mode</code></td><td><code>auto</code></td><td>会话模式：<code>auto</code>、<code>project</code>、<code>chat</code>。</td></tr>
+              <tr><td><code>--resume</code></td><td><code>null</code></td><td>恢复指定 session id。</td></tr>
+              <tr><td><code>--record-dir</code></td><td><code>null</code></td><td>显式指定持久化 session 目录。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="run">
+          <h2><code>bamboo run</code></h2>
+          <p>运行一个单次命令行任务，适合脚本或快速提问。</p>
+          <pre><code>bamboo run "检查测试失败原因"
+bamboo run "继续刚才的分析" --resume SESSION_ID</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>TASK</code></td><td><code>""</code></td><td>任务描述位置参数。</td></tr>
+              <tr><td><code>--debug-events</code></td><td><code>false</code></td><td>打印调试事件。</td></tr>
+              <tr><td><code>--resume</code></td><td><code>null</code></td><td>恢复指定 session id，并把 <code>TASK</code> 作为后续任务执行。</td></tr>
+              <tr><td><code>--record-dir</code></td><td><code>null</code></td><td>显式指定持久化 session 目录。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="web">
+          <h2><code>bamboo web</code></h2>
+          <p>启动 Bamboo Web 对话入口，并在系统浏览器中打开页面。命令会保持运行，按 <code>Ctrl+C</code> 停止服务。</p>
+          <pre><code>bamboo web
+bamboo web --host 0.0.0.0 --port 9000 --reload
+bamboo web --no-browser</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--host</code></td><td><code>127.0.0.1</code></td><td>Web 服务监听地址。</td></tr>
+              <tr><td><code>--port</code>, <code>-p</code></td><td><code>8899</code></td><td>Web 服务监听端口。</td></tr>
+              <tr><td><code>--reload</code></td><td><code>false</code></td><td>启用 Uvicorn 自动重载，主要用于开发。</td></tr>
+              <tr><td><code>--no-browser</code></td><td><code>false</code></td><td>只启动服务，不自动打开浏览器。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="docs">
+          <h2><code>bamboo docs</code></h2>
+          <p>启动 Bamboo Web 服务，并在系统浏览器中打开使用说明页。命令会保持运行，按 <code>Ctrl+C</code> 停止服务。</p>
+          <pre><code>bamboo docs
+bamboo docs --host 127.0.0.1 --port 8899
+bamboo docs --port 9000
+bamboo docs --no-server</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--host</code></td><td><code>127.0.0.1</code></td><td>Web 服务地址。</td></tr>
+              <tr><td><code>--port</code>, <code>-p</code></td><td><code>8899</code></td><td>Web 服务端口。</td></tr>
+              <tr><td><code>--no-server</code></td><td><code>false</code></td><td>只打开文档 URL，不启动 Web 服务。适合已有 <code>bamboo web</code> 正在运行的场景。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="replay">
+          <h2><code>bamboo replay</code></h2>
+          <p>离线查看已持久化 session 的执行摘要，不调用模型或工具。不传 <code>SESSION_ID</code> 时会列出最近会话。</p>
+          <pre><code>bamboo replay
+bamboo replay list
+bamboo replay latest
+bamboo replay -1
+bamboo replay -2
+bamboo replay SESSION_ID
+bamboo replay SESSION_ID --json
+bamboo replay SESSION_ID --session-mode project --project /path/to/project</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>SESSION_ID</code></td><td>可选</td><td>要查看的持久化 session id；也可以传 <code>latest</code>/<code>last</code> 查看最近会话，传 <code>-1</code>/<code>-2</code> 按列表序号选择最近第 1/2 条。</td></tr>
+              <tr><td><code>list</code></td><td>可选</td><td>列出全部可发现 session，并显示负数序号和 session 主题。</td></tr>
+              <tr><td><code>--session-mode</code></td><td><code>auto</code></td><td>查找 session 时使用的模式。</td></tr>
+              <tr><td><code>--project</code>, <code>-p</code></td><td><code>null</code></td><td>Project session 的项目路径。</td></tr>
+              <tr><td><code>--record-dir</code></td><td><code>null</code></td><td>显式指定记录目录。</td></tr>
+              <tr><td><code>--json</code></td><td><code>false</code></td><td>输出原始 replay summary JSON。</td></tr>
+              <tr><td><code>--limit</code></td><td><code>10</code></td><td>不传 <code>SESSION_ID</code> 时列出的最近会话数量。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="models">
+          <h2><code>bamboo models</code></h2>
+          <p>发现和写入本地 Ollama/vLLM 模型注册。</p>
+          <pre><code>bamboo models discover ollama
+bamboo models discover ollama --write --set-default
+bamboo models discover vllm --base-url http://localhost:8000/v1 --timeout 10</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>provider</code></td><td>必填</td><td>本地 provider：<code>ollama</code> 或 <code>vllm</code>。</td></tr>
+              <tr><td><code>--base-url</code></td><td>自动默认</td><td>覆盖本地服务 base URL。</td></tr>
+              <tr><td><code>--timeout</code></td><td><code>5.0</code></td><td>发现请求超时时间。</td></tr>
+              <tr><td><code>--write</code></td><td><code>false</code></td><td>把发现结果写入 <code>~/.bamboo/configs/models.yaml</code>。</td></tr>
+              <tr><td><code>--set-default</code></td><td><code>false</code></td><td>把第一个写入模型设置为 <code>default_model</code>。</td></tr>
+              <tr><td><code>--replace</code></td><td><code>false</code></td><td>替换同名模型注册。</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td><code>false</code></td><td>写入配置时跳过确认。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="skill">
+          <h2><code>bamboo skill</code></h2>
+          <table>
+            <thead>
+              <tr><th>命令</th><th>参数</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>bamboo skill create NAME</code></td><td><code>--description</code>/<code>-d</code>，<code>--overwrite</code></td><td>创建 Skill 源目录和状态文件。</td></tr>
+              <tr><td><code>bamboo skill list</code></td><td><code>--all</code></td><td>列出 Skills；<code>--all</code> 包含 inactive 项。</td></tr>
+              <tr><td><code>bamboo skill install IDENTIFIER</code></td><td><code>--trust</code>，<code>--force</code>，<code>--overwrite</code></td><td>安装外部 Skill；<code>--trust</code> 支持 <code>trusted</code>、<code>community</code>、<code>local</code>。</td></tr>
+              <tr><td><code>bamboo skill scan PATH</code></td><td>本地 Skill 目录</td><td>扫描目录但不安装。</td></tr>
+              <tr><td><code>bamboo skill show NAME</code></td><td>Skill 名称</td><td>显示 Skill 定义和状态摘要。</td></tr>
+              <tr><td><code>bamboo skill validate NAME</code></td><td>Skill 名称</td><td>重新校验 Skill。</td></tr>
+              <tr><td><code>bamboo skill enable NAME</code></td><td>Skill 名称</td><td>启用 Skill。</td></tr>
+              <tr><td><code>bamboo skill disable NAME</code></td><td>Skill 名称</td><td>禁用 Skill。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="cron">
+          <h2><code>bamboo cron</code></h2>
+          <table>
+            <thead>
+              <tr><th>命令</th><th>参数</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>bamboo cron start</code></td><td><code>--interval</code> 默认 <code>30.0</code></td><td>启动 heartbeat 调度器。</td></tr>
+              <tr><td><code>bamboo cron tick</code></td><td>无</td><td>执行一次调度检查并退出。</td></tr>
+              <tr><td><code>bamboo cron list</code></td><td>无</td><td>列出已注册任务。</td></tr>
+              <tr><td><code>bamboo cron add NAME</code></td><td><code>--schedule</code>/<code>-s</code>，<code>--prompt</code>/<code>-p</code>，<code>--project</code>，<code>--session</code>，<code>--delivery</code>，<code>--session-id</code>，<code>--record-dir</code>，<code>--replace</code></td><td>注册 Cron job。<code>--session</code> 和 <code>--delivery</code> 支持 <code>isolated</code>/<code>main</code>。</td></tr>
+              <tr><td><code>bamboo cron enable NAME</code></td><td>任务名</td><td>启用任务。</td></tr>
+              <tr><td><code>bamboo cron disable NAME</code></td><td>任务名</td><td>禁用任务。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="plugin">
+          <h2><code>bamboo plugin</code></h2>
+          <table>
+            <thead>
+              <tr><th>命令</th><th>参数</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>bamboo plugin validate PATH</code></td><td>本地插件目录</td><td>校验并扫描插件，但不安装。</td></tr>
+              <tr><td><code>bamboo plugin install PATH</code></td><td><code>--force</code>，<code>--overwrite</code></td><td>安装本地 Plugin。</td></tr>
+              <tr><td><code>bamboo plugin list</code></td><td>无</td><td>列出已安装插件。</td></tr>
+              <tr><td><code>bamboo plugin show NAME</code></td><td>插件名</td><td>显示已安装 Plugin 摘要。</td></tr>
+              <tr><td><code>bamboo plugin remove NAME</code></td><td><code>--force</code></td><td>卸载插件；默认保留用户修改过的已安装文件。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="eval">
+          <h2><code>bamboo eval</code></h2>
+          <table>
+            <thead>
+              <tr><th>命令</th><th>参数</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>bamboo eval run CASE_DIR</code></td><td><code>--json</code></td><td>运行包含 <code>input.yaml</code> 和 <code>expected.yaml</code> 的 eval case。</td></tr>
+              <tr><td><code>bamboo eval export SESSION_ID CASE_DIR</code></td><td><code>--session-mode</code>，<code>--project</code>，<code>--record-dir</code>，<code>--overwrite</code></td><td>把已有 session trace 导出为 replay eval fixture。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="version">
+          <h2>其他命令</h2>
+          <table>
+            <thead>
+              <tr><th>命令</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>bamboo init</code></td><td>初始化 Bamboo 用户目录和默认配置文件。</td></tr>
+              <tr><td><code>bamboo version</code></td><td>输出当前 Bamboo 版本。</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

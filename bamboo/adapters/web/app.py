@@ -64,7 +64,7 @@ class PermissionApprovalRequest(BaseModel):
 
 def create_app() -> FastAPI:
     setup_logging()
-    app = FastAPI(title="Bamboo Web")
+    app = FastAPI(title="Bamboo Web", docs_url="/openapi-docs")
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.state.permission_resolver = WebPermissionResolver()
     app.state.running_tasks = {}
@@ -72,6 +72,10 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
         return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    @app.get("/docs", response_class=HTMLResponse)
+    async def docs() -> str:
+        return (STATIC_DIR / "docs.html").read_text(encoding="utf-8")
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:

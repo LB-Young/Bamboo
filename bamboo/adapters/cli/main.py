@@ -350,7 +350,7 @@ def _render_cli_event(event: BaseEvent) -> None:
         return
 
     if isinstance(event, ToolResultEvent):
-        console.print(f"[dim]tool result[/dim] {event.tool_name}\n{event.output}")
+        console.print(f"[dim]tool result[/dim] {event.tool_name}--{str(event.output).strip()[:30]}" + "……")
         return
 
     if isinstance(event, ToolErrorEvent):

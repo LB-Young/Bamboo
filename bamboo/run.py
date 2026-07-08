@@ -4,11 +4,14 @@
 CLI adapter 和 TaskRuntime。真实执行逻辑不放在这里，避免入口层变重。
 """
 import uuid
+import threading
+import webbrowser
 from pathlib import Path
 
 import anyio
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from bamboo.adapters.cli.main import (
     _start_interactive_session,
@@ -20,7 +23,13 @@ from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
-from bamboo.memory.session_store import build_replay_summary, find_session_record
+from bamboo.memory.session_store import (
+    SessionRecord,
+    build_replay_summary,
+    find_latest_session_record,
+    find_session_record,
+    list_session_records,
+)
 from bamboo.userspace.userspace import ensure_userspace, get_configs_dir
 
 setup_logging()
@@ -151,21 +160,37 @@ def main(
     anyio.run(_start_interactive_session, run_params)
 
 
-@app.command()
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def replay(
-    session_id: str = typer.Argument(..., help="Persisted session id to replay"),
+    session_id: str | None = typer.Argument(None, help="Session id, latest/last, negative index, or list"),
     mode: SessionMode = SESSION_MODE_OPTION,
     project: Path | None = PROJECT_OPTION,
     record_dir: Path | None = RECORD_DIR_OPTION,
     json_output: bool = typer.Option(False, "--json", help="Print raw replay summary JSON"),
+    limit: int = typer.Option(10, "--limit", help="Number of recent sessions to list when SESSION_ID is omitted"),
 ) -> None:
-    """离线回放一个已持久化 session 的执行摘要，不调用模型或工具。"""
-    resolved = find_session_record(
-        session_id,
-        mode=mode.value if isinstance(mode, SessionMode) else str(mode),
-        project_path=project if mode == SessionMode.project else None,
-        record_dir=record_dir,
-    )
+    """离线回放一个已持久化 session；支持 list/latest/-1 等选择器。"""
+    mode_value = mode.value if isinstance(mode, SessionMode) else str(mode)
+    project_path = project if mode_value == SessionMode.project.value else None
+    if not session_id:
+        _print_recent_sessions(mode=mode_value, project_path=project_path, limit=limit)
+        return
+
+    if session_id == "list":
+        _print_recent_sessions(mode=mode_value, project_path=project_path, limit=1000)
+        return
+
+    selected = _select_session_record(session_id, mode=mode_value, project_path=project_path)
+    if selected is not None:
+        session_id = selected.session_id
+        resolved = selected.record_dir
+    else:
+        resolved = find_session_record(
+            session_id,
+            mode=mode_value,
+            project_path=project_path,
+            record_dir=record_dir,
+        )
     if resolved is None:
         raise typer.BadParameter(f"Session not found: {session_id}")
     summary = build_replay_summary(resolved)
@@ -192,6 +217,57 @@ def replay(
             console.print(f"[bold]assistant[/bold] {turn['assistant_answer']}")
         if turn.get("error"):
             console.print(f"[red]error[/red] {turn['error']}")
+
+
+def _select_session_record(selector: str, *, mode: str, project_path: Path | None) -> SessionRecord | None:
+    if selector in {"latest", "last"}:
+        latest = find_latest_session_record(mode=mode, project_path=project_path)
+        if latest is None:
+            raise typer.BadParameter("No persisted sessions found")
+        return latest
+    if not _is_negative_index(selector):
+        return None
+    index = abs(int(selector))
+    records = list_session_records(mode=mode, project_path=project_path, limit=index)
+    if len(records) < index:
+        raise typer.BadParameter(f"No session found for {selector}; run 'bamboo replay list' to see available sessions")
+    return records[index - 1]
+
+
+def _is_negative_index(value: str) -> bool:
+    return len(value) > 1 and value.startswith("-") and value[1:].isdigit()
+
+
+def _print_recent_sessions(*, mode: str, project_path: Path | None, limit: int) -> None:
+    records = list_session_records(
+        mode=mode,
+        project_path=project_path,
+        limit=limit,
+    )
+    if not records:
+        console.print("[yellow]No persisted sessions found.[/yellow]")
+        console.print("[dim]Run a task first, for example: bamboo main --msg \"hello\"[/dim]")
+        return
+    console.print("[bold]sessions[/bold]")
+    console.print("[dim]Use: bamboo replay SESSION_ID | bamboo replay -1 | bamboo replay latest[/dim]\n")
+    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
+    table.add_column("index", no_wrap=True)
+    table.add_column("session_id", no_wrap=True)
+    table.add_column("mode", no_wrap=True)
+    table.add_column("updated_at", no_wrap=True)
+    table.add_column("topic")
+    for index, record in enumerate(records, start=1):
+        label = record.label.replace("\n", " ").strip()
+        if len(label) > 70:
+            label = label[:67] + "..."
+        table.add_row(
+            f"-{index}",
+            record.session_id,
+            record.mode or "-",
+            record.updated_at or record.created_at,
+            label,
+        )
+    console.print(table)
 
 
 @eval_app.command("run")
@@ -249,12 +325,48 @@ def web(
     host: str = typer.Option("127.0.0.1", "--host", help="Web server host"),
     port: int = typer.Option(8899, "--port", "-p", help="Web server port"),
     reload: bool = typer.Option(False, "--reload", help="Enable uvicorn reload"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Do not open the Web UI in a browser"),
 ) -> None:
     """启动 Bamboo Web 对话入口。"""
     import uvicorn
 
-    console.print(f"[green]Bamboo Web[/green] http://{host}:{port}")
+    url = f"http://{host}:{port}"
+    console.print(f"[green]Bamboo Web[/green] {url}")
+    if not no_browser:
+        _open_url_later(url)
     uvicorn.run("bamboo.adapters.web.app:app", host=host, port=port, reload=reload)
+
+
+@app.command()
+def docs(
+    host: str = typer.Option("127.0.0.1", "--host", help="Web server host"),
+    port: int = typer.Option(8899, "--port", "-p", help="Web server port"),
+    no_server: bool = typer.Option(False, "--no-server", help="Only open the docs URL; do not start Web server"),
+) -> None:
+    """启动 Web 服务并在浏览器中打开 Bamboo 使用说明页。"""
+    url = f"http://{host}:{port}/docs"
+    if no_server:
+        console.print(f"[green]Bamboo docs[/green] {url}")
+        _open_url(url)
+        return
+    import uvicorn
+
+    console.print(f"[green]Bamboo docs[/green] {url}")
+    console.print("[dim]Starting Bamboo Web for docs. Press Ctrl+C to stop.[/dim]")
+    _open_url_later(url)
+    uvicorn.run("bamboo.adapters.web.app:app", host=host, port=port, reload=False)
+
+
+def _open_url_later(url: str, *, delay_seconds: float = 0.8) -> None:
+    timer = threading.Timer(delay_seconds, _open_url, args=(url,))
+    timer.daemon = True
+    timer.start()
+
+
+def _open_url(url: str) -> None:
+    opened = webbrowser.open(url)
+    if not opened:
+        console.print("[yellow]browser open request was not accepted; open the URL manually[/yellow]")
 
 
 @cron_app.command("start")

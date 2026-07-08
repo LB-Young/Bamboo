@@ -357,8 +357,8 @@ class SessionMemoryStore:
 
 
 def current_time_record_name() -> str:
-    """返回用于 chat 记录目录名的当前时间。"""
-    return datetime.now().strftime("%H-%M-%S-%f")
+    """返回用于完整会话记录目录名的当前本地日期时间。"""
+    return datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
 
 
 def list_session_records(

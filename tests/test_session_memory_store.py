@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import anyio
@@ -48,6 +49,7 @@ def test_chat_session_persists_full_messages_to_memory_dates(tmp_path: Path) -> 
     assert len(session_dirs) == 1
     session_dir = session_dirs[0]
     assert session_dir.name != "session-1"
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{6}", session_dir.name)
     assert (session_dir / "session.json").is_file()
     assert (session_dir / "system_prompt.md").is_file()
     messages = _read_jsonl(session_dir / "messages.jsonl")
@@ -77,6 +79,7 @@ def test_project_session_persists_to_memory_projects(tmp_path: Path) -> None:
     session_dirs = [path for path in memory_dir.iterdir() if path.is_dir()]
     assert len(session_dirs) == 1
     session_dir = session_dirs[0]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{6}", session_dir.name)
     session_data = json.loads((session_dir / "session.json").read_text(encoding="utf-8"))
     assert session_data["mode"] == "project"
     assert session_data["project_root"] == str(project_root)
