@@ -2,7 +2,73 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Bamboo: debug run.py main()",
+            "name": "Bamboo: CLI single turn",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/bamboo/test_scripts/debug_cli_single_turn.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": []
+        },
+        {
+            "name": "Bamboo: CLI interactive",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/bamboo/test_scripts/debug_cli_interactive.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": []
+        },
+        {
+            "name": "Bamboo: Web server UI",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/bamboo/test_scripts/debug_web_server.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": []
+        },
+        {
+            "name": "Bamboo: Web flow smoke",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/bamboo/test_scripts/debug_web_flow_smoke.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "BAMBOO_DEBUG_WEB_LIVE_STREAM": "0"
+            },
+            "args": []
+        },
+        {
+            "name": "Bamboo: Replay flow",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/bamboo/test_scripts/debug_replay_flow.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": []
+        },
+        {
+            "name": "Bamboo: CLI module run command",
             "type": "debugpy",
             "request": "launch",
             "module": "bamboo.run",

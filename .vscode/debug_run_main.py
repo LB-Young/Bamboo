@@ -13,10 +13,13 @@ def run_debug_main() -> None:
         project=Path.cwd(),
         model=None,
         provider=None,
-        permission=None,
+        permission="default",
         no_stream=False,
         yes_all=False,
+        debug_events=False,
         session_mode=SessionMode.chat,
+        resume=None,
+        record_dir=None,
     )
 
 
