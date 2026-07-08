@@ -3,695 +3,1102 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bamboo TaskRuntime 流程图与时序图</title>
+  <title>Bamboo 项目结构与执行流程</title>
   <style>
     :root {
-      --bg: #f7f8f5;
+      color-scheme: light;
+      --bg: #f6f7f9;
       --surface: #ffffff;
-      --text: #20231f;
-      --muted: #60685d;
-      --line: #d9ded2;
-      --accent: #2f6f4e;
-      --accent-soft: #e6f0e7;
-      --code: #f1f3ee;
+      --surface-soft: #f9fafb;
+      --text: #1f2933;
+      --muted: #667085;
+      --line: #d9dee7;
+      --line-soft: #edf0f4;
+      --accent: #157f73;
+      --accent-strong: #0f665d;
+      --accent-soft: #e7f4f1;
+      --code: #102a43;
+      --warning: #8a5a00;
+      --warning-bg: #fff6db;
     }
 
     * {
       box-sizing: border-box;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.65;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.64;
+      text-rendering: optimizeLegibility;
     }
 
-    header {
-      background: #173927;
-      color: #f8fbf5;
-      padding: 46px 24px 34px;
+    a {
+      color: var(--accent);
+      text-decoration: none;
     }
 
-    header .inner,
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 22px 18px;
+      border-right: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin: 0 6px 22px;
+    }
+
+    .mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: white;
+      font-weight: 800;
+    }
+
+    .brand strong,
+    .brand span {
+      display: block;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    nav {
+      display: grid;
+      gap: 2px;
+    }
+
+    .nav-group {
+      margin: 18px 8px 6px;
+      color: #8a95a5;
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    nav a {
+      padding: 7px 10px;
+      border-radius: 8px;
+      color: #344054;
+      font-size: 14px;
+    }
+
+    nav a:hover {
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      text-decoration: none;
+    }
+
     main {
-      width: min(1180px, calc(100% - 40px));
-      margin: 0 auto;
+      width: min(1220px, 100%);
+      padding: 46px 56px 80px;
+    }
+
+    .hero {
+      padding-bottom: 30px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     h1 {
       margin: 0 0 12px;
-      font-size: clamp(29px, 5vw, 46px);
+      font-size: 42px;
       line-height: 1.12;
       letter-spacing: 0;
     }
 
-    header p {
-      max-width: 820px;
+    .hero p {
+      max-width: 900px;
       margin: 0;
-      color: #dce9dd;
+      color: var(--muted);
       font-size: 17px;
     }
 
-    main {
-      padding: 28px 0 56px;
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .pill {
+      min-height: 28px;
+      padding: 3px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: #475467;
+      font-size: 13px;
     }
 
     section {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 24px;
-      margin: 18px 0;
+      margin: 0;
+      padding: 34px 0;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 24px;
     }
 
     h2 {
-      margin: 0 0 12px;
-      font-size: 22px;
-      line-height: 1.3;
+      margin: 0 0 16px;
+      font-size: 25px;
+      line-height: 1.25;
       letter-spacing: 0;
     }
 
+    h3 {
+      margin: 28px 0 10px;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
     p {
+      max-width: 930px;
       margin: 0 0 12px;
     }
 
-    ul {
-      margin: 8px 0 0 22px;
-      padding: 0;
+    ul,
+    ol {
+      margin-top: 0;
     }
 
-    li {
-      margin: 6px 0;
+    li + li {
+      margin-top: 4px;
     }
 
     code {
-      background: var(--code);
-      border: 1px solid #e3e6de;
-      border-radius: 4px;
-      padding: 1px 5px;
+      padding: 2px 5px;
+      border-radius: 5px;
+      background: #f1f4f8;
+      color: var(--code);
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      font-size: 0.92em;
+      font-size: 0.94em;
     }
 
-    .diagram {
-      margin-top: 16px;
-      overflow-x: auto;
-      border: 1px solid var(--line);
+    pre {
+      overflow: auto;
+      margin: 14px 0 20px;
+      padding: 16px 18px;
+      border: 1px solid #243b53;
       border-radius: 8px;
-      background: #fbfcf9;
-      padding: 18px;
+      background: #102133;
+      color: #f8fafc;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
     }
 
     table {
       width: 100%;
-      border-collapse: collapse;
-      margin-top: 14px;
-      font-size: 15px;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 12px 0 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface);
+      font-size: 14px;
     }
 
     th,
     td {
-      border: 1px solid var(--line);
-      padding: 10px 12px;
-      text-align: left;
       vertical-align: top;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: left;
     }
 
     th {
-      background: var(--accent-soft);
-      color: #173927;
-      font-weight: 650;
+      background: #f8fafc;
+      color: #344054;
+      font-weight: 720;
     }
 
-    .module-group {
-      margin-top: 22px;
+    tr:last-child td {
+      border-bottom: 0;
     }
 
-    .module-group h3 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      line-height: 1.35;
-      letter-spacing: 0;
+    td + td,
+    th + th {
+      border-left: 1px solid var(--line-soft);
+    }
+
+    .diagram {
+      margin: 16px 0 22px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 18px;
+    }
+
+    .diagram pre {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .note,
+    .warning {
+      padding: 13px 15px;
+      border-radius: 8px;
+      margin: 14px 0;
     }
 
     .note {
-      background: var(--accent-soft);
+      border: 1px solid #b8dfd8;
       border-left: 4px solid var(--accent);
-      border-radius: 6px;
-      padding: 12px 14px;
-      margin-top: 14px;
+      background: var(--accent-soft);
+      color: #23423e;
+    }
+
+    .warning {
+      border: 1px solid #f2d58a;
+      border-left: 4px solid var(--warning);
+      background: var(--warning-bg);
+      color: #4f3b08;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 14px 0;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 15px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+      font-size: 15px;
+    }
+
+    .card p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
     }
 
     .muted {
       color: var(--muted);
     }
+
+    @media (max-width: 960px) {
+      .layout {
+        display: block;
+      }
+
+      aside {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      main {
+        padding: 30px 20px 56px;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <div class="inner">
-      <h1>Bamboo TaskRuntime 流程图与时序图</h1>
-      <p>这份图示文档描述建议中的执行入口设计：Adapter 只负责接入，TaskFactory 只负责创建，TaskRuntime 负责任务生命周期，AgentRuntime 通过 OTA 循环执行 Agent，状态机负责管理循环状态和终态。</p>
-    </div>
-  </header>
+  <div class="layout">
+    <aside>
+      <header class="brand">
+        <div class="mark">B</div>
+        <div>
+          <strong>Bamboo</strong>
+          <span>项目结构与执行流程</span>
+        </div>
+      </header>
+      <nav aria-label="页面目录">
+        <div class="nav-group">Overview</div>
+        <a href="#overview">总体视图</a>
+        <a href="#source-map">代码组织索引</a>
+        <a href="#configuration">配置与用户目录</a>
+        <div class="nav-group">Execution</div>
+        <a href="#entry-flow">入口到 Runtime</a>
+        <a href="#task-flow">TaskRuntime 主流程</a>
+        <a href="#agent-flow">Agent OTA 循环</a>
+        <a href="#web-flow">Web 流式流程</a>
+        <a href="#replay-flow">Replay 与会话查询</a>
+        <a href="#cron-eval-flow">Cron 与 Eval</a>
+        <div class="nav-group">Subsystems</div>
+        <a href="#llm-flow">模型路由</a>
+        <a href="#tools-flow">工具与权限</a>
+        <a href="#memory-flow">Memory 与持久化</a>
+        <a href="#extensions-flow">Skills / Plugins / MCP</a>
+        <a href="#events-flow">事件与 Trace</a>
+        <a href="#tests-map">测试覆盖地图</a>
+      </nav>
+    </aside>
 
-  <main>
-    <section>
-      <h2>推荐分层</h2>
-      <p>核心原则是把“创建”和“运行”分开，把“状态源”和“事件广播”分开。这里的 OTA 指 <code>Observe</code>、<code>Think</code>、<code>Act</code>：每一轮先观察当前上下文，再由模型思考决策，最后执行动作并回到下一轮观察。</p>
-      <ul>
-        <li><code>CLI/Web Adapter</code>：解析外部请求，构造 <code>RunParams</code>，订阅事件并负责展示。</li>
-        <li><code>TaskRuntime</code>：任务执行总控，统一创建任务、启动 Agent、写进度、处理异常和收尾。</li>
-        <li><code>TaskFactory</code>：只创建 <code>Task</code>、<code>Session</code>、<code>Context</code> 等对象。</li>
-        <li><code>AgentRuntime</code>：执行 OTA loop，包括观察上下文、思考决策、行动、工具调用、上下文更新。</li>
-        <li><code>AgentStateMachine</code>：定义 OTA 循环状态和合法迁移，是状态变化的规则层。</li>
-        <li><code>EventBus</code>：只发布和分发事件，不保存状态，不决定状态迁移。</li>
-        <li><code>TaskStore/SessionStore</code>：持久化任务状态、步骤进度、消息和上下文摘要。</li>
-      </ul>
-    </section>
+    <main>
+      <header class="hero">
+        <p class="eyebrow">Architecture And Runtime Flow</p>
+        <h1>Bamboo 项目结构与执行流程</h1>
+        <p>
+          这份文档按当前代码状态整理 Bamboo 的完整组织方式和运行链路。它覆盖命令入口、Web 入口、
+          Runtime、Agent OTA 循环、模型路由、工具、权限、Memory、Skills、Plugins、MCP、Cron、Eval、
+          Replay、事件追踪和测试文件。目标是让阅读者从一个页面看清整个项目如何组织，以及一次请求如何流经系统。
+        </p>
+        <div class="meta-row">
+          <span class="pill">更新日期：2026-07-08</span>
+          <span class="pill">入口：CLI / Web / Cron / Eval</span>
+          <span class="pill">核心：TaskRuntime + AgentRuntime</span>
+          <span class="pill">文档路径：docs/runtime-flow.html</span>
+        </div>
+      </header>
 
-    <section>
-      <h2>整体执行流程图</h2>
-      <p>这张图展示一次请求从 CLI/Web 进入，到任务完成或失败的主流程。</p>
-      <div class="diagram">
-        <pre class="mermaid">
+      <section id="overview">
+        <h2>总体视图</h2>
+        <p>
+          Bamboo 的代码按“入口适配、任务创建、运行时执行、模型路由、工具生态、持久化、扩展机制、自动化与评估”分层。
+          入口只负责把用户请求转为 <code>RunParams</code> 并渲染事件；核心执行由 <code>TaskRuntime</code>
+          和 <code>AgentRuntime</code> 负责；能力扩展通过 ToolRegistry、SkillRegistry、PluginInstaller、MCPManager 和 WorkflowRegistry 接入。
+        </p>
+        <div class="cards">
+          <article class="card">
+            <h3>用户入口</h3>
+            <p><code>bamboo/run.py</code> 注册 CLI；<code>adapters/cli</code> 渲染终端；<code>adapters/web</code> 提供 Web UI、流式接口、权限审批和 docs 页面。</p>
+          </article>
+          <article class="card">
+            <h3>任务核心</h3>
+            <p><code>factory</code> 创建 Session/Context/Task；<code>runtime</code> 编排任务、Agent 循环、压缩、trace、subagent 和 task store。</p>
+          </article>
+          <article class="card">
+            <h3>能力系统</h3>
+            <p><code>llms</code> 管模型；<code>tools</code> 管内置和 MCP 工具；<code>skills/plugins/workflows/subagents</code> 管扩展能力。</p>
+          </article>
+        </div>
+
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart LR
+    User["用户 / 脚本 / Cron"] --> Run["bamboo/run.py"]
+    Run --> CLI["adapters/cli"]
+    Run --> Web["adapters/web"]
+    Run --> Cron["cron scheduler"]
+    Run --> Eval["eval runner"]
+
+    CLI --> Params["RunParams"]
+    Web --> Params
+    Cron --> Params
+    Eval --> Params
+
+    Params --> TaskRuntime["runtime/task_runtime.py"]
+    TaskRuntime --> Factory["factory/task_factory.py + session.py"]
+    Factory --> SessionStore["memory/session_store.py"]
+    TaskRuntime --> AgentRuntime["runtime/agent_runtime.py"]
+    AgentRuntime --> RuntimeContext["runtime/runtime_context.py"]
+    RuntimeContext --> LLMs["llms/router.py + providers/*"]
+    RuntimeContext --> Tools["tools/registry.py + tools/buildin/* + tools/mcp/*"]
+    RuntimeContext --> Security["security/*"]
+    RuntimeContext --> Memory["memory/*"]
+    RuntimeContext --> Skills["skills/*"]
+    RuntimeContext --> Subagents["subagents/*"]
+    RuntimeContext --> Workflows["workflows/*"]
+    AgentRuntime --> EventBus["factory/event_bus.py"]
+    EventBus --> CLI
+    EventBus --> Web
+    EventBus --> Trace["runtime/trace_recorder.py"]
+          </pre>
+        </div>
+      </section>
+
+      <section id="source-map">
+        <h2>代码组织索引</h2>
+        <p>下面按目录列出当前项目的主要代码内容。这个表不是逐行源码复制，而是把每个文件在系统中的职责放到全局结构里。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>目录 / 文件</th>
+              <th>核心内容</th>
+              <th>在流程中的位置</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>bamboo/run.py</code></td>
+              <td>Typer CLI 总入口。注册 <code>init</code>、<code>main</code>、<code>run</code>、<code>replay</code>、<code>web</code>、<code>docs</code>、<code>models</code>、<code>skill</code>、<code>cron</code>、<code>plugin</code>、<code>eval</code>。</td>
+              <td>用户命令进入系统的第一层。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/adapters/cli/*</code></td>
+              <td><code>main.py</code> 负责 CLI 会话、恢复会话、事件渲染；<code>commands.py</code> 展开内置斜杠命令；<code>models.py</code> 管本地模型发现和写入。</td>
+              <td>命令行适配层，把 RunParams 交给 TaskRuntime，把 EventBus 事件打印到终端。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/adapters/web/*</code></td>
+              <td><code>app.py</code> 是 FastAPI 应用；<code>session_utils.py</code> 读取历史会话；<code>static/</code> 包含 Web UI、样式、命令文档页。</td>
+              <td>Web 对话、Project 模式、权限审批、停止任务、历史会话和 <code>/docs</code> 页面。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/factory/*</code></td>
+              <td><code>context.py</code>、<code>message.py</code>、<code>session.py</code>、<code>task_factory.py</code>、<code>event_bus.py</code>。</td>
+              <td>创建会话、消息、上下文、任务对象；提供进程内事件总线。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/runtime/*</code></td>
+              <td><code>task_runtime.py</code>、<code>agent_runtime.py</code>、<code>runtime_context.py</code>、<code>state_machine.py</code>、<code>context_compactor.py</code>、<code>prompt.py</code>、<code>store.py</code>、<code>trace_recorder.py</code>、<code>subagent_runtime.py</code>、<code>subagent_workspace.py</code>、<code>tool_result_budget.py</code>。</td>
+              <td>核心执行层，负责任务生命周期、Agent OTA 循环、模型调用、工具执行、压缩、trace 和子代理。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/llms/*</code></td>
+              <td><code>config.py</code> 解析 <code>models.yaml</code>；<code>factory.py</code> 创建客户端；<code>router.py</code> 管 main/fallback/auxiliary route；<code>local_discovery.py</code> 发现 Ollama/vLLM；<code>providers/*</code> 接 DeepSeek、MiniMax、Mimo、GPT、Claude、Ollama、vLLM 和 OpenAI-compatible。</td>
+              <td>模型注册、模型路由、fallback、辅助模型、LLM 请求与响应归一化。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/tools/*</code></td>
+              <td><code>registry.py</code> 管工具注册；<code>buildin/</code> 包含 bash、read、write、edit、grep、glob、browser、web_fetch、lsp、todo、task、subagent_run、workflow、memory、memory_retrieve、skill_load、package_install、cron、file_filter；<code>mcp/</code> 管 MCP client/manager/tool/model。</td>
+              <td>Agent Act 阶段调用的工具生态。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/security/*</code></td>
+              <td>权限策略、权限解析、命令安全、sandbox、URL 安全、审计日志。</td>
+              <td>工具执行前后的风险判断、用户确认、审计记录和执行约束。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/memory/*</code></td>
+              <td>memory 路径、session 持久化、source log、知识文件管理、检索、scope、knowledge subagent。</td>
+              <td>会话记录、项目/聊天记忆、可检索知识、任务结束后的知识沉淀。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/prompts/*</code></td>
+              <td>系统提示词构建器和 chat/project/shared/provider prompt 片段。</td>
+              <td>AgentPromptBuilder 把 prompts、tools、skills、memory、messages 组合成 LLM 请求。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/configs/*.yaml</code></td>
+              <td>默认模型、主 agent、tools、skills、subagents、workflows、mcp、memory、cron 配置模板。</td>
+              <td><code>bamboo init</code> 写入用户空间；运行时通过配置装配能力。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/skills/*</code></td>
+              <td>skill 模型、frontmatter、store、validator、guard、creator、registry、hub、CLI；内置 skills 位于 <code>skills/buildin/*</code>。</td>
+              <td>把可复用能力说明注入 prompt，也支持安装、扫描、启用、禁用。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/plugins/*</code></td>
+              <td>plugin manifest、installer、registry、models。</td>
+              <td>把本地插件包安装到用户空间，并通过 lock/audit 记录组件文件。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/workflows/*</code></td>
+              <td>workflow 模型、registry、installer；内置 daily-review workflow 和脚本。</td>
+              <td>让 Agent 通过 workflow tool 运行可复用流程。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/subagents/*</code></td>
+              <td>subagent 模型、registry、内置 explorer/planner/reviewer/verifier/knowledge-curator。</td>
+              <td>主 Agent 可通过 subagent_run 工具派生子任务，支持工作区隔离。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/cron/*</code></td>
+              <td>cron job 模型、store、scheduler 和 heartbeat。</td>
+              <td>定时把 prompt 送入 TaskRuntime，可 isolated 或投递到 main session。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/eval/*</code></td>
+              <td>eval case、runner、report、replay fixture 导出。</td>
+              <td>用于回放已有 session 或 live 运行 case，验证输出、事件和错误约束。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/commands/*</code></td>
+              <td>命令模型、registry、内置 slash command：commit、changelog、learn、rmslop。</td>
+              <td>CLI/Web 输入以 <code>/</code> 开头时先展开为 prompt。</td>
+            </tr>
+            <tr>
+              <td><code>bamboo/userspace/userspace.py</code></td>
+              <td>创建 <code>~/.bamboo</code> 用户目录、配置、cron、skills、plugins、memory 模板。</td>
+              <td><code>bamboo init</code> 的核心实现。</td>
+            </tr>
+            <tr>
+              <td><code>docs/*</code> 和 <code>tests/*</code></td>
+              <td>架构文档、事件 schema、eval 文档、设计图；测试覆盖 CLI、Web、Runtime、LLM、Tools、Memory、Security、Cron、Eval、Plugins、Skills、MCP。</td>
+              <td>项目说明、回归测试和实现契约。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="configuration">
+        <h2>配置与用户目录</h2>
+        <p><code>bamboo init</code> 从 <code>bamboo/configs</code>、prompt、内置 skill、workflow、subagent 等模板初始化用户空间。运行时优先读取用户空间配置。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>路径</th>
+              <th>内容</th>
+              <th>相关代码</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>~/.bamboo/configs/models.yaml</code></td>
+              <td>模型注册、provider、model id、api_key、base_url、capabilities、default_model。</td>
+              <td><code>llms/config.py</code>、<code>llms/factory.py</code>、<code>llms/router.py</code></td>
+            </tr>
+            <tr>
+              <td><code>~/.bamboo/configs/bamboo_main_agent.yaml</code></td>
+              <td>主模型、fallback、compaction 模型、辅助角色模型。</td>
+              <td><code>runtime/runtime_context.py</code>、<code>llms/router.py</code></td>
+            </tr>
+            <tr>
+              <td><code>~/.bamboo/memory/dates/YYYY-MM-DD/YYYY-MM-DD-HH-MM-SS-ffffff</code></td>
+              <td>chat 模式 session 记录。最后一层目录名现在带年月日，便于直接看出时间。</td>
+              <td><code>memory/get_memory_path.py</code>、<code>memory/session_store.py</code></td>
+            </tr>
+            <tr>
+              <td><code>~/.bamboo/memory/projects/&lt;project-name&gt;/YYYY-MM-DD-HH-MM-SS-ffffff</code></td>
+              <td>project 模式 session 记录。目录里有 <code>session.json</code>、<code>messages.jsonl</code>、<code>events.jsonl</code>、<code>tasks.jsonl</code>、<code>turns.jsonl</code>。</td>
+              <td><code>factory/session.py</code>、<code>memory/session_store.py</code></td>
+            </tr>
+            <tr>
+              <td><code>~/.bamboo/cron</code>、<code>~/.bamboo/skills</code>、<code>~/.bamboo/plugins</code></td>
+              <td>定时任务、外部 skill、plugin 安装结果、lock/audit。</td>
+              <td><code>cron/store.py</code>、<code>skills/store.py</code>、<code>plugins/installer.py</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="entry-flow">
+        <h2>入口到 Runtime</h2>
+        <p>所有外部入口最终都把请求转换成 <code>RunParams</code> 或等价结构，再交给 <code>TaskRuntime</code>。</p>
+        <div class="diagram">
+          <pre class="mermaid">
 flowchart TD
-    User["用户输入任务"] --> Adapter["CLI/Web Adapter"]
-    Adapter --> Subscribe["订阅 EventBus 事件流"]
-    Subscribe --> Params
-    Params --> Runtime["TaskRuntime.run(run_params)"]
+    CLI["bamboo main/run"] --> CLIAdapter["adapters/cli/main.py"]
+    Web["bamboo web/docs + Web UI"] --> WebAdapter["adapters/web/app.py"]
+    Cron["bamboo cron start/tick"] --> Scheduler["cron/scheduler.py"]
+    Eval["bamboo eval run/export"] --> EvalRunner["eval/runner.py"]
 
-    Runtime --> CreateTask["TaskFactory.create(run_params)"]
-    CreateTask --> Session["创建 Session"]
-    CreateTask --> Context["创建 Context"]
-    CreateTask --> Task["组装 Task"]
+    CLIAdapter --> CommandExpand["commands/registry.py + expand_command_message"]
+    WebAdapter --> CommandExpand
+    CommandExpand --> Params["RunParams"]
 
-    Task --> SaveCreated["TaskRuntime -> TaskStore.save_created"]
-    SaveCreated --> EmitTask["EventBus.emit(TaskCreateEvent)"]
-    EmitTask --> Subscribers["CLI/Web/Log/Audit 订阅者"]
+    Scheduler --> CronParams["RunParams from CronJob"]
+    EvalRunner --> EvalParams["RunParams for live eval"]
 
-    EmitTask --> InitAgent["初始化 AgentRuntime"]
-    InitAgent --> StateCreated["StateMachine: created"]
-    StateCreated --> Observe["transition: observing"]
-    Observe --> BuildObservation["Observe: 收集上下文/消息/工具结果"]
-    BuildObservation --> Think["transition: thinking"]
-    Think --> DecisionSource["Think: LLM 调用或 Mock 决策"]
-    DecisionSource --> TextEvents["emit Text/Reasoning Events"]
-    TextEvents --> Decision{"决策结果?"}
+    Params --> Runtime["TaskRuntime"]
+    CronParams --> Runtime
+    EvalParams --> Runtime
 
-    Decision -- 执行工具 --> ActingTool["transition: acting"]
-    ActingTool --> ToolCalling["transition: tool_calling"]
-    ToolCalling --> ToolCall["Act: 执行 Tool"]
-    ToolCall --> ToolEvents["emit ToolCall/ToolResult/ToolError"]
-    ToolEvents --> Observe
-
-    Decision -- 直接输出/内部动作 --> ActingOutput["transition: acting"]
-    ActingOutput --> UpdateSession["Act: 更新消息/输出缓冲"]
-    UpdateSession --> NeedCompact{"需要压缩上下文?"}
-
-    NeedCompact -- 是 --> Compacting["transition: compacting"]
-    Compacting --> SaveSummary["保存上下文摘要"]
-    SaveSummary --> Observe
-
-    NeedCompact -- 否 --> Done{"任务完成?"}
-    Done -- 否 --> Observe
-    Done -- 是 --> Completed["transition: completed"]
-
-    Completed --> AgentReturn["AgentRuntime 返回 Task"]
-    AgentReturn --> SaveResult["TaskRuntime 保存最终结果"]
-    SaveResult --> EmitFinish["emit StepFinish/TaskStatusChange"]
-    EmitFinish --> ReturnTask["返回 Task"]
-
-    Runtime -. exception path .-> OnError{"执行异常?"}
-    OnError -- 是 --> Failed["transition: failed"]
-    Failed --> SaveError["TaskStore.save_error"]
-    SaveError --> EmitError["emit ToolError/TaskStatusChange/Audit"]
-        </pre>
-      </div>
-      <div class="note">
-        图里的 <code>OnError</code> 表示 TaskRuntime 的异常兜底逻辑，不是独立于主流程并行执行。当前 <code>Think</code> 会调用真实 LLM；模型返回 Tool Call 时进入工具分支，否则把文本作为最终结论。
-      </div>
-    </section>
-
-    <section>
-      <h2>流程图模块详解</h2>
-      <p>下面按流程图中的节点逐一说明每个模块的职责。当前已接入真实模型调用、工具循环、上下文压缩和基础异常恢复，持久化仍需继续完善。</p>
-
-      <div class="module-group">
-        <h3>入口与参数层</h3>
+    Runtime --> Task["Task"]
+    Runtime --> Events["EventBus events"]
+    Events --> CLIOut["CLI render"]
+    Events --> WebStream["Web JSONL stream"]
+    Events --> Trace["TraceRecorder -> session_store"]
+          </pre>
+        </div>
         <table>
           <thead>
             <tr>
-              <th>流程图节点</th>
-              <th>作用</th>
-              <th>需要实现的逻辑</th>
-              <th>输入/输出</th>
+              <th>命令 / 入口</th>
+              <th>当前行为</th>
+              <th>关键文件</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><code>用户输入任务</code></td>
-              <td>代表用户从 CLI、Web、API 或定时任务提交的原始请求。</td>
-              <td>不建议在这里做业务处理，只保留原始输入、来源、项目路径、会话模式、权限模式等信息。</td>
-              <td>输入：自然语言任务、命令参数。输出：交给 Adapter 的原始请求。</td>
+              <td><code>bamboo main</code></td>
+              <td>无 <code>--msg</code> 时进入交互 CLI；有 <code>--msg</code> 时执行单轮；支持 <code>--resume</code>。</td>
+              <td><code>run.py</code>、<code>adapters/cli/main.py</code></td>
             </tr>
             <tr>
-              <td><code>CLI/Web Adapter</code></td>
-              <td>接入层，屏蔽不同入口之间的差异。</td>
-              <td>解析命令行参数或 HTTP 请求；先订阅 <code>EventBus</code>；生成 <code>RunParams</code>；启动 <code>TaskRuntime</code>；把事件渲染到终端、WebSocket 或日志；不要直接执行 Agent 主逻辑。</td>
-              <td>输入：用户请求。输出：<code>RunParams</code> 和最终展示结果。</td>
+              <td><code>bamboo run</code></td>
+              <td>运行一次性 chat 任务；完成后打印 task_id 和 session_id。</td>
+              <td><code>run.py</code>、<code>adapters/cli/main.py</code></td>
             </tr>
             <tr>
-              <td><code>构造 RunParams</code></td>
-              <td>把外部请求转换成框架内部统一参数。</td>
-              <td>生成 <code>task_id</code>、<code>session_id</code>；规范化 <code>platform</code>、<code>message</code>、<code>project</code>、<code>model</code>、<code>provider</code>、<code>permission</code>、<code>session_mode</code>；做必要的默认值填充和参数校验。</td>
-              <td>输入：Adapter 解析结果。输出：稳定的 <code>RunParams</code> 对象。</td>
+              <td><code>bamboo web</code></td>
+              <td>启动 FastAPI 服务并默认打开浏览器；<code>--no-browser</code> 只启动服务。</td>
+              <td><code>run.py</code>、<code>adapters/web/app.py</code></td>
+            </tr>
+            <tr>
+              <td><code>bamboo docs</code></td>
+              <td>启动同一个 Web 应用并打开 <code>/docs</code>；<code>--no-server</code> 只打开已有服务 URL。</td>
+              <td><code>run.py</code>、<code>adapters/web/static/docs.html</code></td>
+            </tr>
+            <tr>
+              <td><code>bamboo replay</code></td>
+              <td>不传参数列最近会话；<code>list</code> 列全部；<code>latest/last/-1/-2</code> 快速选择；也可传 session id。</td>
+              <td><code>run.py</code>、<code>memory/session_store.py</code></td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </section>
 
-      <div class="module-group">
-        <h3>任务生命周期层</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>流程图节点</th>
-              <th>作用</th>
-              <th>需要实现的逻辑</th>
-              <th>输入/输出</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>TaskRuntime.run(run_params)</code></td>
-              <td>一次任务执行的总入口和总控器。</td>
-              <td>调用 <code>TaskFactory</code> 创建任务；先写入任务创建记录，再发出任务创建事件；初始化 <code>AgentRuntime</code>；等待 Agent 返回；捕获执行异常；将完成、失败、取消等终态写入 Store 并发事件。</td>
-              <td>输入：<code>RunParams</code>。输出：执行后的 <code>Task</code> 或任务结果。</td>
-            </tr>
-            <tr>
-              <td><code>TaskFactory.create(run_params)</code></td>
-              <td>对象创建器，负责把运行参数装配成任务对象。</td>
-              <td>选择 memory 路径；创建 <code>Session</code>、<code>Context</code>、<code>Task</code>；加载配置；绑定任务 ID 和会话 ID；不要执行 Agent，不要订阅事件。</td>
-              <td>输入：<code>RunParams</code>。输出：<code>Task</code>。</td>
-            </tr>
-            <tr>
-              <td><code>创建 Session</code></td>
-              <td>建立会话边界，承载一次对话或项目任务的上下文。</td>
-              <td>保存 <code>session_id</code>、模型、供应商、会话模式、当前消息列表、token 统计、上下文摘要引用；支持从已有会话恢复。</td>
-              <td>输入：<code>RunParams</code>、配置。输出：<code>Session</code>。</td>
-            </tr>
-            <tr>
-              <td><code>创建 Context</code></td>
-              <td>为 Agent 准备可读上下文。</td>
-              <td>聚合系统提示词、项目元信息、历史消息、记忆、技能/工具说明、权限策略；提供 <code>build_context()</code> 或类似接口给 LLM 调用层使用。</td>
-              <td>输入：Session、配置、memory。输出：可传给 Agent/LLM 的上下文对象。</td>
-            </tr>
-            <tr>
-              <td><code>组装 Task</code></td>
-              <td>把一次用户请求封装成可运行实体。</td>
-              <td>保存任务标题、用户输入、session 引用、context 引用、配置引用、初始状态、输出缓冲、错误字段和创建时间。</td>
-              <td>输入：Session、Context、RunParams。输出：<code>Task</code>。</td>
-            </tr>
-            <tr>
-              <td><code>返回 Task</code></td>
-              <td>把最终任务对象返回给 Adapter 或调用方。</td>
-              <td>确保任务包含最终状态、输出、错误信息、变更摘要和必要的统计信息；不要把内部临时对象暴露给外部入口。</td>
-              <td>输入：执行完成后的 Task。输出：Adapter 可展示的结果。</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="module-group">
-        <h3>事件与观察层</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>流程图节点</th>
-              <th>作用</th>
-              <th>需要实现的逻辑</th>
-              <th>输入/输出</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>EventBus.emit(TaskCreateEvent)</code></td>
-              <td>通知外部系统任务已经创建。</td>
-              <td>构造标准事件，包含 <code>session_id</code>、<code>task_id</code>、标题、时间戳；调用 EventBus 广播；不要在 EventBus 里改变任务状态。</td>
-              <td>输入：Task。输出：任务创建事件。</td>
-            </tr>
-            <tr>
-              <td><code>CLI/Web/Log/Audit 订阅者</code></td>
-              <td>消费事件并做展示、日志、审计或监控。</td>
-              <td>按 <code>session_id</code> 过滤事件；CLI 渲染文本流；Web 通过 WebSocket/SSE 推送；Log 写结构化日志；Audit 保存关键操作和权限结果。</td>
-              <td>输入：EventBus 事件流。输出：用户界面、日志、审计记录。</td>
-            </tr>
-            <tr>
-              <td><code>emit Text/Reasoning Events</code></td>
-              <td>把模型输出和推理过程转成流式事件。</td>
-              <td>在 LLM 流式返回时发 <code>TextStartEvent</code>、<code>TextDeltaEvent</code>、<code>TextFinishEvent</code>；如需要展示推理流，再发 Reasoning 事件。</td>
-              <td>输入：LLM streaming delta。输出：文本/推理事件。</td>
-            </tr>
-            <tr>
-              <td><code>emit ToolCall/ToolResult/ToolError</code></td>
-              <td>把工具执行过程外显，便于 UI 展示和审计。</td>
-              <td>工具执行前发 <code>ToolCallEvent</code>；成功后发 <code>ToolResultEvent</code>；失败后发 <code>ToolErrorEvent</code>；事件里带 <code>tool_call_id</code> 方便关联。</td>
-              <td>输入：工具名、参数、结果或错误。输出：工具事件。</td>
-            </tr>
-            <tr>
-              <td><code>emit StepFinish/TaskStatusChange</code></td>
-              <td>通知步骤和任务状态变化。</td>
-              <td>任务完成或阶段结束时发步骤摘要、文件变更、token 用量、最终状态；让 UI 和日志不需要读取内部对象也能更新进度。</td>
-              <td>输入：Task/Step 结果。输出：步骤完成和状态变化事件。</td>
-            </tr>
-            <tr>
-              <td><code>emit ToolError/TaskStatusChange/Audit</code></td>
-              <td>异常路径的统一通知。</td>
-              <td>把错误转为结构化事件；记录错误类型、错误消息、可恢复性、是否需要用户处理；避免异常只停留在 traceback。</td>
-              <td>输入：异常对象、当前任务状态。输出：错误、状态、审计事件。</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="module-group">
-        <h3>Agent 执行层</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>流程图节点</th>
-              <th>作用</th>
-              <th>需要实现的逻辑</th>
-              <th>输入/输出</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>初始化 AgentRuntime</code></td>
-              <td>为具体 Agent 执行准备依赖。</td>
-              <td>注入 Task、EventBus、StateMachine、Store、LLM client、ToolRegistry、Memory manager、权限策略；初始化输出缓冲和循环控制参数。</td>
-              <td>输入：Task 和运行依赖。输出：可运行的 <code>AgentRuntime</code>。</td>
-            </tr>
-            <tr>
-              <td><code>StateMachine: created</code></td>
-              <td>任务刚创建后的初始状态。</td>
-              <td>只表示任务已被系统接收；通常由 TaskRuntime 创建，不应在这里做 LLM 调用或工具调用。</td>
-              <td>输入：新建 Task。输出：初始状态快照。</td>
-            </tr>
-            <tr>
-              <td><code>transition: observing</code></td>
-              <td>进入 OTA 循环的 Observe 阶段。</td>
-              <td>通过状态机校验 <code>created/tool_calling/acting/compacting/waiting -> observing</code> 是否合法；写 Store；发状态变化事件；准备读取当前世界状态。</td>
-              <td>输入：当前状态。输出：observing 状态。</td>
-            </tr>
-            <tr>
-              <td><code>Observe: 收集上下文/消息/工具结果</code></td>
-              <td>把 Agent 下一步决策所需的信息收集完整。</td>
-              <td>读取用户输入、历史消息、上轮工具结果、项目上下文、记忆、权限结果、取消信号；刷新 Context；判断是否需要等待用户或直接进入 thinking。</td>
-              <td>输入：Task、Session、Store、Memory。输出：本轮 observation。</td>
-            </tr>
-            <tr>
-              <td><code>transition: thinking</code></td>
-              <td>进入 OTA 循环的 Think 阶段。</td>
-              <td>校验 <code>observing -> thinking</code>；写入 thinking 状态；发状态事件；构造模型请求所需的 messages、tools 和上下文。</td>
-              <td>输入：observation。输出：thinking 状态和 LLM request。</td>
-            </tr>
-            <tr>
-              <td><code>Think: LLM 调用或 Mock 决策</code></td>
-              <td>让 Agent 基于 observation 做决策。</td>
-              <td>通过统一 Provider 接口调用真实模型，注入 messages、tools 和 model 参数；模型响应被归一化为最终文本或结构化 Tool Call。后续仍需完善 streaming、限流和精确 token 统计。</td>
-              <td>输入：observation 或标准 LLM request。输出：文本流、工具调用、最终回答或内部动作。</td>
-            </tr>
-            <tr>
-              <td><code>决策结果?</code></td>
-              <td>判断 Think 阶段的输出进入哪种 Act 分支。</td>
-              <td>解析模型响应；区分工具调用、直接输出、需要用户确认、上下文压缩、完成和失败；工具调用前校验工具存在性、参数合法性和权限。</td>
-              <td>输入：LLM 响应。输出：下一步 action 类型。</td>
-            </tr>
-            <tr>
-              <td><code>transition: acting</code></td>
-              <td>进入 OTA 循环的 Act 阶段。</td>
-              <td>校验 <code>thinking -> acting</code>；记录本轮 action；发状态事件；根据 action 类型进入工具执行、输出更新、等待用户或完成判断。</td>
-              <td>输入：action decision。输出：acting 状态。</td>
-            </tr>
-            <tr>
-              <td><code>transition: tool_calling</code></td>
-              <td>Act 阶段中的工具执行子状态。</td>
-              <td>校验 <code>acting -> tool_calling</code>；记录当前工具调用；发 <code>ToolCallEvent</code>；冻结当前 action 上下文，避免并发工具写入冲突。</td>
-              <td>输入：工具调用请求。输出：tool_calling 状态。</td>
-            </tr>
-            <tr>
-              <td><code>Act: 执行 Tool</code></td>
-              <td>调用具体工具实现，并把结果带回下一轮 Observe。</td>
-              <td>从 ToolRegistry 找工具；做参数校验；执行权限检查；运行工具；捕获 stdout/stderr/文件变更；把结果规范成 ToolResult；完成后回到 observing。</td>
-              <td>输入：tool name、tool input。输出：tool result 或 tool error。</td>
-            </tr>
-            <tr>
-              <td><code>Act: 更新消息/输出缓冲</code></td>
-              <td>处理不需要工具的 action。</td>
-              <td>把模型文本写入消息历史和输出缓冲；记录 reasoning/text 事件；更新 token 统计；根据输出判断是否需要 compact 或完成任务。</td>
-              <td>输入：模型文本或内部 action。输出：更新后的 Session/Task。</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="module-group">
-        <h3>上下文、完成与异常层</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>流程图节点</th>
-              <th>作用</th>
-              <th>需要实现的逻辑</th>
-              <th>输入/输出</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>需要压缩上下文?</code></td>
-              <td>判断是否需要 compact 消息历史或记忆。</td>
-              <td>根据 token 数、消息数量、模型上下文窗口、本轮 OTA action 判断；如果超过阈值，进入 compacting；否则继续判断任务完成。</td>
-              <td>输入：Session token 统计和消息历史。输出：是否压缩。</td>
-            </tr>
-            <tr>
-              <td><code>transition: compacting</code></td>
-              <td>进入上下文压缩状态。</td>
-              <td>校验 <code>acting -> compacting</code> 或 <code>observing -> compacting</code>；暂停 OTA loop；发状态事件；准备摘要输入，避免在压缩期间继续追加不一致的消息。</td>
-              <td>输入：acting/observing 状态和上下文。输出：compacting 状态。</td>
-            </tr>
-            <tr>
-              <td><code>保存上下文摘要</code></td>
-              <td>把长历史压缩成可恢复摘要。</td>
-              <td>调用 summarizer 或规则压缩；标记被压缩的消息；保存摘要到 SessionStore/Memory；更新 Context 引用；发 <code>SessionCompactEvent</code>。</td>
-              <td>输入：历史消息、任务上下文。输出：摘要、压缩后上下文。</td>
-            </tr>
-            <tr>
-              <td><code>任务完成?</code></td>
-              <td>判断 Agent loop 是否可以退出。</td>
-              <td>识别最终回答、没有待处理工具、没有等待用户输入、本轮 action 已稳定收敛；同时检查取消信号和失败状态。</td>
-              <td>输入：当前 Agent 状态和模型响应。输出：继续循环或进入完成。</td>
-            </tr>
-            <tr>
-              <td><code>transition: completed</code></td>
-              <td>进入成功终态。</td>
-              <td>校验 <code>acting -> completed</code>；冻结最终输出；写状态；发完成事件；终态后不允许再进入 OTA 循环。</td>
-              <td>输入：最终输出。输出：completed 状态。</td>
-            </tr>
-            <tr>
-              <td><code>TaskStore.save_result</code></td>
-              <td>持久化成功结果。</td>
-              <td>由 <code>TaskRuntime</code> 在 <code>AgentRuntime</code> 返回后调用；保存最终回答、步骤摘要、token 用量、工具调用记录、文件变更、完成时间；为后续查询、恢复和审计提供数据。</td>
-              <td>输入：Task 结果。输出：持久化记录。</td>
-            </tr>
-            <tr>
-              <td><code>执行异常?</code></td>
-              <td>TaskRuntime 的兜底异常判断。</td>
-              <td>捕获 AgentRuntime、LLM、工具、Store、EventBus handler 中未处理的异常；区分可恢复错误和不可恢复错误；避免任务卡在 observing/thinking/acting 中间态。</td>
-              <td>输入：异常。输出：失败处理流程。</td>
-            </tr>
-            <tr>
-              <td><code>transition: failed</code></td>
-              <td>进入失败终态。</td>
-              <td>校验状态迁移；记录失败原因、异常类型、堆栈摘要；根据错误类型决定是否允许重试。</td>
-              <td>输入：当前状态和异常。输出：failed 状态。</td>
-            </tr>
-            <tr>
-              <td><code>TaskStore.save_error</code></td>
-              <td>持久化失败信息。</td>
-              <td>保存错误消息、错误分类、发生阶段、当前 step、工具调用 ID、可恢复标记、时间戳；为排障和恢复执行做准备。</td>
-              <td>输入：异常和任务上下文。输出：错误记录。</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section>
-      <h2>核心时序图</h2>
-      <p>这张图展示主要对象之间的调用顺序。建议让 <code>TaskRuntime</code> 成为唯一对外运行入口，避免 Adapter 直接调 Agent 或 EventBus 驱动主流程。</p>
-      <div class="diagram">
-        <pre class="mermaid">
+      <section id="task-flow">
+        <h2>TaskRuntime 主流程</h2>
+        <p><code>TaskRuntime</code> 是任务生命周期总控。它不直接拼 prompt、不直接执行工具，而是创建 task、启动 AgentRuntime、处理 trace、失败恢复、知识沉淀和收尾状态。</p>
+        <div class="diagram">
+          <pre class="mermaid">
 sequenceDiagram
     autonumber
-    actor User as 用户
-    participant Adapter as CLI/Web Adapter
-    participant Runtime as TaskRuntime
-    participant Factory as TaskFactory
+    participant Entry as CLI/Web/Cron/Eval
+    participant TR as TaskRuntime
+    participant TF as TaskFactory
+    participant SF as SessionFactory
+    participant Store as TaskStore
+    participant Trace as TraceRecorder
     participant Agent as AgentRuntime
-    participant SM as AgentStateMachine
-    participant Store as TaskStore/SessionStore
+    participant Knowledge as KnowledgeSubagent
     participant Bus as EventBus
-    participant View as CLI/Web/Log 订阅者
-    participant LLM as LLM Provider
-    participant Tool as Tool Executor
 
-    User->>Adapter: 提交任务
-    Adapter->>Bus: subscribe(session events)
-    Bus-->>Adapter: unsubscribe callback
-    Adapter->>Runtime: run(run_params)
-    Runtime->>Factory: create(run_params)
-    Factory-->>Runtime: task(session, context, config)
-
-    Runtime->>Store: save_task_created(task)
-    Runtime->>Bus: emit(TaskCreateEvent)
-    Bus-->>View: 分发任务创建事件
-
-    Runtime->>Agent: run(task)
-    Agent->>Bus: emit(StepStartEvent)
-    Bus-->>View: 展示步骤开始
-
-    loop OTA 循环，直到 completed/failed/cancelled
-        Agent->>SM: transition(to observing)
-        SM-->>Agent: ok
-        Agent->>Store: save_state(observing)
-        Agent->>Bus: emit(SessionStatusChangeEvent)
-        Bus-->>View: 展示 Observe 状态
-        Agent->>Store: load_context/messages/tool_results
-        Store-->>Agent: observation
-
-        Agent->>SM: transition observing to thinking
-        SM-->>Agent: ok
-        Agent->>Store: save_state(thinking)
-        Agent->>Bus: emit(SessionStatusChangeEvent)
-        alt 当前 mock 阶段
-            Agent->>Agent: mock_think(observation)
-        else 真实 LLM 阶段
-            Agent->>LLM: think(observation, messages, tools)
-            LLM-->>Agent: stream deltas / decision
-        end
-        Agent->>Bus: emit(TextDeltaEvent / ReasoningDeltaEvent)
-        Bus-->>View: 渲染模型输出
-
-        Agent->>SM: transition thinking to acting
-        SM-->>Agent: ok
-        Agent->>Store: save_state(acting)
-
-        alt decision = tool_call
-            Agent->>SM: transition acting to tool_calling
-            SM-->>Agent: ok
-            Agent->>Bus: emit(ToolCallEvent)
-            Bus-->>View: 展示工具调用
-            Agent->>Tool: execute(tool_name, input)
-            Tool-->>Agent: result
-            Agent->>Store: save_tool_result(result)
-            Agent->>Bus: emit(ToolResultEvent)
-            Bus-->>View: 展示工具结果
-        else decision = final_answer
-            Agent->>Store: append_message(output)
-            Agent->>SM: transition acting to completed
-            SM-->>Agent: ok
-        else decision = continue
-            Agent->>Store: append_message(partial_output)
-        else decision = need_compact
-            Agent->>SM: transition acting to compacting
-            SM-->>Agent: ok
-            Agent->>Store: save_context_summary(summary)
-            Agent->>Bus: emit(SessionCompactEvent)
-        else decision = need_user_input
-            Agent->>SM: transition acting to waiting
-            SM-->>Agent: ok
-            Agent->>Bus: emit(SessionStatusChangeEvent)
-        end
+    Entry->>TR: run(run_params) or run_existing_task(task)
+    TR->>TF: create(run_params)
+    TF->>SF: create(memory_dir_path, run_params)
+    SF-->>TF: Session + Context + SessionMemoryStore
+    TF-->>TR: Task
+    TR->>Trace: start(session_id, task_id)
+    TR->>Store: save_created(task)
+    TR->>Bus: TaskCreateEvent
+    TR->>Bus: TaskStatusChangeEvent created -> running
+    TR->>Bus: StepStartEvent
+    loop agent attempts
+        TR->>Agent: run(task)
+        Agent-->>TR: completed task
     end
+    TR->>Bus: TaskStatusChangeEvent running -> completed
+    TR->>Trace: append_turn(task)
+    TR->>Knowledge: maybe_update(task) if enabled
+    TR->>Bus: StepFinishEvent
+    TR->>Trace: close()
+    TR-->>Entry: Task
+          </pre>
+        </div>
+        <div class="note">
+          失败路径：Agent 抛错后先按 <code>TaskRecoveryPolicy</code> 尝试任务级恢复；耗尽后标记 failed，写 task trace，并发 <code>StepFinishEvent</code> 和 <code>TaskStatusChangeEvent</code>。取消路径会进入 cancelled。
+        </div>
+      </section>
 
-    Agent-->>Runtime: task result
-    Runtime->>Store: save_result(output)
-    Runtime->>Bus: emit(StepFinishEvent)
-    Runtime->>Bus: emit(TaskStatusChangeEvent)
-    Bus-->>View: 展示完成状态
-
-    Runtime-->>Adapter: task
-    Adapter-->>User: 输出最终结果
-        </pre>
-      </div>
-    </section>
-
-    <section>
-      <h2>状态机流转图</h2>
-      <p>状态机不需要知道 EventBus 的订阅者是谁，只需要判断状态迁移是否合法。状态迁移完成后，由 Runtime 或 AgentRuntime 写 Store 并发事件。</p>
-      <div class="diagram">
-        <pre class="mermaid">
+      <section id="agent-flow">
+        <h2>Agent OTA 循环</h2>
+        <p><code>AgentRuntime</code> 执行 Observe -> Think -> Act 循环，直到 completed、failed 或 cancelled。每轮都会通过状态机发布状态事件。</p>
+        <div class="diagram">
+          <pre class="mermaid">
 stateDiagram-v2
     [*] --> created
-    created --> observing: task accepted
-
-    observing --> thinking: observation ready
-    observing --> compacting: context too large
-    observing --> waiting: need external input
-    observing --> failed: observe error
-    observing --> cancelled: cancel requested
-
-    thinking --> acting: decision ready
-    thinking --> failed: llm error not recoverable
-    thinking --> cancelled: cancel requested
-
-    acting --> tool_calling: tool requested
-    acting --> compacting: compact requested
-    acting --> waiting: permission/user input required
-    acting --> observing: continue next cycle
-    acting --> completed: final answer ready
-    acting --> failed: action error
-    acting --> cancelled: cancel requested
-
-    tool_calling --> observing: tool result received
-    tool_calling --> waiting: permission required
-    tool_calling --> failed: tool error not recoverable
-
+    created --> observing
+    observing --> compacting: context over budget
     compacting --> observing: summary saved
-    compacting --> failed: compact failed
-
-    waiting --> observing: user confirmed/input received
-    waiting --> failed: wait timeout/error
-    waiting --> cancelled: user cancelled
-
+    observing --> thinking: prompt ready
+    thinking --> acting: model response
+    thinking --> compacting: context length error
+    acting --> tool_calling: tool calls
+    tool_calling --> observing: tool result appended
+    tool_calling --> waiting: permission required
+    waiting --> tool_calling: approved
+    waiting --> observing: denied or resolved
+    acting --> completed: final answer
+    observing --> failed
+    thinking --> failed
+    acting --> failed
+    tool_calling --> failed
     completed --> [*]
     failed --> [*]
     cancelled --> [*]
-        </pre>
-      </div>
-    </section>
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>阶段</th>
+              <th>执行内容</th>
+              <th>核心代码</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Observe</td>
+              <td>通过 <code>AgentPromptBuilder</code> 收集 system prompt、历史消息、工具说明、skills、memory、错误恢复历史。</td>
+              <td><code>runtime/agent_runtime.py</code>、<code>runtime/prompt.py</code></td>
+            </tr>
+            <tr>
+              <td>Compact</td>
+              <td>根据 token budget 主动压缩；遇到 <code>LLMContextLengthError</code> 时 reactive compact 后重试。</td>
+              <td><code>runtime/context_compactor.py</code></td>
+            </tr>
+            <tr>
+              <td>Think</td>
+              <td>调用主模型；遇到可 fallback 错误时激活 fallback；发 <code>LLMRequestEvent</code>/<code>LLMResponseEvent</code>。</td>
+              <td><code>runtime/agent_runtime.py</code>、<code>llms/router.py</code></td>
+            </tr>
+            <tr>
+              <td>Act: final text</td>
+              <td>写 assistant message，发 text events，设置 task.output，并进入 completed。</td>
+              <td><code>runtime/agent_runtime.py</code>、<code>factory/session.py</code></td>
+            </tr>
+            <tr>
+              <td>Act: tool calls</td>
+              <td>校验工具、权限策略、执行工具、写 tool message、发 ToolCall/ToolResult/ToolError/ToolAudit。</td>
+              <td><code>runtime/agent_runtime.py</code>、<code>tools/*</code>、<code>security/*</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
 
-    <section>
-      <h2>事件与状态的写入位置</h2>
-      <p>建议用下面这个规则判断代码应该写在哪里：</p>
-      <ul>
-        <li>判断能不能从 A 状态进入 B 状态：写在 <code>AgentStateMachine</code>。</li>
-        <li>Agent 内部 OTA 状态切换：写在 <code>AgentRuntime.transition()</code>。</li>
-        <li>任务生命周期状态切换：写在 <code>TaskRuntime.transition()</code> 或等价的 runtime 私有方法。</li>
-        <li>保存任务进度、步骤结果、错误信息：写在 <code>TaskStore</code>。</li>
-        <li>保存消息、上下文、压缩摘要：写在 <code>SessionStore</code>。</li>
-        <li>把变化通知 CLI/Web/日志/审计：写成 <code>EventBus.emit(...)</code>。</li>
-      </ul>
-      <div class="note">
-        关键边界：EventBus 是通知通道，不是状态机，也不是进度数据库。这样后续调试、恢复任务、重放事件都会更简单。
-      </div>
-      <p class="muted">更新日期：2026-06-12。对应建议架构：TaskRuntime + TaskFactory + mock OTA AgentRuntime + AgentStateMachine + EventBus。</p>
-    </section>
-  </main>
+      <section id="web-flow">
+        <h2>Web 流式流程</h2>
+        <p>Web 入口是 FastAPI 应用，前端通过 JSONL stream 消费运行时事件，权限审批通过单独 endpoint 回传。</p>
+        <div class="diagram">
+          <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Browser as Browser UI
+    participant API as adapters/web/app.py
+    participant Resolver as WebPermissionResolver
+    participant Bus as EventBus
+    participant Runtime as TaskRuntime
+    participant Store as SessionMemoryStore
+
+    Browser->>API: POST /api/chat/stream
+    API->>API: normalize mode/project/session
+    API->>Bus: subscribe(session_id)
+    API->>Runtime: create or restore task
+    API-->>Browser: JSONL session event
+    Runtime->>Bus: runtime events
+    Bus-->>API: filtered events
+    API-->>Browser: JSONL event payloads
+    Browser->>API: POST /api/permissions/{request_id}
+    API->>Resolver: submit allow/deny
+    Runtime->>Store: messages/events/tasks/turns
+    API-->>Browser: JSONL complete event
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Web 路径</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>/</code></td><td>Web 对话 UI。</td></tr>
+            <tr><td><code>/docs</code></td><td>Bamboo 命令使用说明，<code>bamboo docs</code> 会打开它。</td></tr>
+            <tr><td><code>/openapi-docs</code></td><td>FastAPI OpenAPI UI，避免占用 <code>/docs</code>。</td></tr>
+            <tr><td><code>/api/chat/stream</code></td><td>流式执行一轮 chat/project task。</td></tr>
+            <tr><td><code>/api/sidebar</code>、<code>/api/sessions/{session_id}</code></td><td>列历史会话和读取消息。</td></tr>
+            <tr><td><code>/api/permissions/{request_id}</code></td><td>工具权限审批。</td></tr>
+            <tr><td><code>/api/tasks/{task_id}/stop</code></td><td>取消正在运行的任务。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="replay-flow">
+        <h2>Replay 与会话查询</h2>
+        <p><code>bamboo replay</code> 直接读取持久化 session，不调用模型或工具。它通过 session metadata 的 <code>updated_at</code> 排序，所以旧目录名和新目录名都能读。</p>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TD
+    Cmd["bamboo replay ARG"] --> Arg{"ARG?"}
+    Arg -- empty --> ListRecent["list recent sessions limit=10"]
+    Arg -- list --> ListAll["list sessions limit=1000"]
+    Arg -- latest/last --> Latest["find_latest_session_record"]
+    Arg -- -1/-2 --> ByIndex["list_session_records sorted by updated_at -> index"]
+    Arg -- session_id --> Find["find_session_record(session_id)"]
+    Latest --> Summary["build_replay_summary(record_dir)"]
+    ByIndex --> Summary
+    Find --> Summary
+    Summary --> Print["print counts + turns or JSON"]
+          </pre>
+        </div>
+        <pre><code>bamboo replay
+bamboo replay list
+bamboo replay latest
+bamboo replay -1
+bamboo replay -2
+bamboo replay SESSION_ID
+bamboo replay SESSION_ID --json</code></pre>
+      </section>
+
+      <section id="cron-eval-flow">
+        <h2>Cron 与 Eval</h2>
+        <p>Cron 和 Eval 都是普通任务入口之外的自动化入口。Cron 把计划任务转为 RunParams；Eval 可以 replay fixture，也可以 live 运行 TaskRuntime。</p>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart LR
+    CronYaml["~/.bamboo/cron/jobs.yaml"] --> CronStore["CronStore"]
+    CronStore --> Scheduler["CronScheduler.tick/run_forever"]
+    Scheduler --> Delivery{"delivery"}
+    Delivery -- isolated --> NewTask["new session task"]
+    Delivery -- main --> Existing["restore latest or target session"]
+    NewTask --> Runtime["TaskRuntime"]
+    Existing --> Runtime
+    Runtime --> CronRecord["CronRunRecord"]
+
+    EvalCase["eval case"] --> EvalRunner["EvalRunner"]
+    EvalRunner --> ReplayCase["mode=replay -> build_replay_summary"]
+    EvalRunner --> LiveCase["mode=live -> TaskRuntime"]
+          </pre>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>模块</th>
+              <th>说明</th>
+              <th>关键命令</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Cron</td>
+              <td><code>CronJob</code> 包含 schedule、prompt、project、session/delivery、target session、retry、metadata。scheduler 使用 croniter 判断 due run。</td>
+              <td><code>bamboo cron add/list/start/tick/enable/disable</code></td>
+            </tr>
+            <tr>
+              <td>Eval replay</td>
+              <td>读取 fixture 或 record_dir，生成 report，不调用模型。</td>
+              <td><code>bamboo eval run CASE_DIR</code></td>
+            </tr>
+            <tr>
+              <td>Eval export</td>
+              <td>把已有 session trace 导出成 eval fixture。</td>
+              <td><code>bamboo eval export SESSION_ID CASE_DIR</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="llm-flow">
+        <h2>模型路由</h2>
+        <p>模型能力由 <code>models.yaml</code> 注册，主 Agent 由 <code>bamboo_main_agent.yaml</code> 选择。RuntimeContextBuilder 创建 main、fallback、compaction 和 auxiliary routes。</p>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TD
+    ModelsYaml["models.yaml"] --> Catalog["ModelCatalog"]
+    AgentYaml["bamboo_main_agent.yaml"] --> Router["LLMRouter"]
+    Catalog --> Factory["LLMFactory"]
+    Factory --> Providers["providers/* clients"]
+    Router --> Main["main_route"]
+    Router --> Fallback["fallback_model"]
+    Router --> Compaction["compaction_route"]
+    Router --> Aux["auxiliary role routes"]
+    Providers --> Agent["AgentRuntime._think"]
+    Providers --> Compact["ContextCompactor"]
+          </pre>
+        </div>
+        <table>
+          <thead><tr><th>Provider</th><th>代码</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>DeepSeek</td><td><code>llms/providers/deepseek.py</code></td><td>DeepSeek API。</td></tr>
+            <tr><td>MiniMax</td><td><code>llms/providers/minimax.py</code></td><td>MiniMax API。</td></tr>
+            <tr><td>Mimo</td><td><code>llms/providers/mimo.py</code></td><td>Mimo API。</td></tr>
+            <tr><td>GPT</td><td><code>llms/providers/gpt.py</code></td><td>OpenAI GPT 配置。</td></tr>
+            <tr><td>Claude</td><td><code>llms/providers/claude.py</code>、<code>anthropic.py</code></td><td>Anthropic/Claude。</td></tr>
+            <tr><td>Ollama/vLLM</td><td><code>ollama.py</code>、<code>vllm.py</code>、<code>local_discovery.py</code></td><td>本地模型发现和 OpenAI-compatible 调用。</td></tr>
+            <tr><td>OpenAI-compatible</td><td><code>openai_compatible.py</code></td><td>通用兼容接口。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="tools-flow">
+        <h2>工具与权限</h2>
+        <p>工具注册在 ToolRegistry；内置工具直接注册，MCP 工具由 MCPManager 启动 server 后注册。工具执行前经过 PermissionPolicy 和 PermissionResolver。</p>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TD
+    Model["LLM tool_calls"] --> Agent["AgentRuntime._execute_tool_calls"]
+    Agent --> Registry["ToolRegistry"]
+    Registry --> Builtin["tools/buildin/*"]
+    Registry --> MCP["tools/mcp/*"]
+    Agent --> Policy["PermissionPolicy"]
+    Policy --> Decision{"allow / ask / deny"}
+    Decision -- allow --> Execute["Tool.execute"]
+    Decision -- ask --> Resolver["CLI/Web PermissionResolver"]
+    Resolver --> Execute
+    Decision -- deny --> ToolError["ToolErrorEvent"]
+    Execute --> Audit["ToolAuditLogger"]
+    Execute --> Result["ToolResultEvent + tool message"]
+          </pre>
+        </div>
+        <table>
+          <thead><tr><th>工具类别</th><th>文件</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>文件读写与搜索</td><td><code>read.py</code>、<code>write.py</code>、<code>edit.py</code>、<code>grep.py</code>、<code>glob.py</code>、<code>file_filter.py</code></td><td>读文件、写文件、编辑、查找和过滤。</td></tr>
+            <tr><td>执行与环境</td><td><code>bash.py</code>、<code>package_install.py</code>、<code>lsp.py</code>、<code>browser.py</code>、<code>web_fetch.py</code></td><td>命令、安全安装、语言服务、浏览器、网页抓取。</td></tr>
+            <tr><td>任务与协作</td><td><code>todo.py</code>、<code>task.py</code>、<code>subagent_run.py</code>、<code>workflow.py</code></td><td>Todo、任务快照、子代理、workflow。</td></tr>
+            <tr><td>记忆与扩展</td><td><code>memory.py</code>、<code>memory_retrieve.py</code>、<code>skill_load.py</code>、<code>cron.py</code></td><td>知识更新/检索、加载 skill、管理 cron。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="memory-flow">
+        <h2>Memory 与持久化</h2>
+        <p>Memory 分两类：完整 session trace 和可编辑知识文件。完整 trace 用于 replay/eval/debug；知识文件用于后续 prompt 注入和检索。</p>
+        <div class="diagram">
+          <pre class="mermaid">
+flowchart TD
+    SessionFactory["SessionFactory.create"] --> Store["SessionMemoryStore"]
+    Store --> SessionJson["session.json"]
+    Store --> SystemPrompt["system_prompt.md"]
+    Store --> Messages["messages.jsonl"]
+    TraceRecorder["TraceRecorder"] --> Events["events.jsonl"]
+    TaskRuntime --> Tasks["tasks.jsonl"]
+    TaskRuntime --> Turns["turns.jsonl"]
+    AgentRuntime --> Compactions["compactions.jsonl"]
+    Tools["memory tools"] --> Knowledge["memory/templates + knowledge files"]
+    KnowledgeSubagent["KnowledgeSubagent"] --> Knowledge
+    Replay["bamboo replay/eval"] --> Store
+          </pre>
+        </div>
+        <table>
+          <thead><tr><th>记录</th><th>写入者</th><th>读取者</th></tr></thead>
+          <tbody>
+            <tr><td><code>session.json</code></td><td>SessionMemoryStore.save_session</td><td>list_session_records、load_session_record、replay、Web sidebar。</td></tr>
+            <tr><td><code>messages.jsonl</code></td><td>Session.add_message -> memory_store.append_message</td><td>prompt restore、Web session view、replay/eval。</td></tr>
+            <tr><td><code>events.jsonl</code></td><td>TraceRecorder 订阅 EventBus</td><td>agent trace docs、eval expectations、debug。</td></tr>
+            <tr><td><code>tasks.jsonl</code>、<code>turns.jsonl</code></td><td>TaskRuntime</td><td>replay summary、cron delivery、eval export。</td></tr>
+            <tr><td><code>knowledge/*.md</code></td><td>Memory tools、KnowledgeSubagent</td><td>AgentPromptBuilder、memory retrieval。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="extensions-flow">
+        <h2>Skills / Plugins / MCP / Workflows / Subagents</h2>
+        <p>扩展系统分为 prompt 级能力、安装包级能力、外部工具协议、可运行流程和子代理。</p>
+        <table>
+          <thead><tr><th>系统</th><th>关键代码</th><th>执行关系</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Skills</td>
+              <td><code>skills/registry.py</code>、<code>store.py</code>、<code>validator.py</code>、<code>guard.py</code>、<code>hub.py</code>、<code>creator.py</code></td>
+              <td>SkillRegistry 发现启用的 skill；AgentPromptBuilder 可把相关 skill 内容加入 prompt；CLI 支持 create/list/install/scan/show/validate/enable/disable。</td>
+            </tr>
+            <tr>
+              <td>Plugins</td>
+              <td><code>plugins/manifest.py</code>、<code>installer.py</code>、<code>registry.py</code></td>
+              <td>PluginInstaller 校验、扫描、安装、移除本地 plugin，并记录 lock/audit；插件可携带 skills/tools/workflows 等组件。</td>
+            </tr>
+            <tr>
+              <td>MCP</td>
+              <td><code>tools/mcp/client.py</code>、<code>manager.py</code>、<code>tool.py</code></td>
+              <td>RuntimeContextBuilder 按配置启动 MCP servers，把 MCP tools 注册到 ToolRegistry；任务结束后释放 server。</td>
+            </tr>
+            <tr>
+              <td>Workflows</td>
+              <td><code>workflows/registry.py</code>、<code>installer.py</code>、<code>tools/buildin/workflow.py</code></td>
+              <td>workflow tool 读取已注册流程，执行 markdown 流程和脚本；内置 daily-review。</td>
+            </tr>
+            <tr>
+              <td>Subagents</td>
+              <td><code>subagents/registry.py</code>、<code>runtime/subagent_runtime.py</code>、<code>tools/buildin/subagent_run.py</code></td>
+              <td>主 Agent 通过 subagent_run 启动子任务；支持 explorer/planner/reviewer/verifier/knowledge-curator；可隔离工作区。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="events-flow">
+        <h2>事件与 Trace</h2>
+        <p>事件是 UI、日志、trace 和调试的公共接口。EventBus 不保存状态，只广播事件；状态保存在 TaskStore 和 SessionMemoryStore。</p>
+        <table>
+          <thead><tr><th>事件族</th><th>代表事件</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>Task</td><td><code>TaskCreateEvent</code>、<code>TaskStatusChangeEvent</code>、<code>TaskStopEvent</code></td><td>任务创建、运行、完成、失败、取消。</td></tr>
+            <tr><td>Session/Step</td><td><code>SessionStatusChangeEvent</code>、<code>SessionCompactEvent</code>、<code>StepStartEvent</code>、<code>StepFinishEvent</code></td><td>Agent 状态、压缩、步骤开始和结束。</td></tr>
+            <tr><td>LLM/Text</td><td><code>LLMRequestEvent</code>、<code>LLMResponseEvent</code>、<code>TextStartEvent</code>、<code>TextDeltaEvent</code>、<code>TextFinishEvent</code></td><td>模型请求、响应、文本流。</td></tr>
+            <tr><td>Tool/Permission</td><td><code>ToolCallEvent</code>、<code>ToolResultEvent</code>、<code>ToolErrorEvent</code>、<code>PermissionRequestEvent</code>、<code>PermissionResultEvent</code>、<code>ToolAuditEvent</code></td><td>工具调用、结果、错误、审批和审计。</td></tr>
+            <tr><td>Cron/Subagent/Workflow/Memory</td><td><code>CronJobStartEvent</code>、<code>SubagentStartEvent</code>、<code>WorkflowRunStartEvent</code>、<code>KnowledgeUpdateEvent</code></td><td>自动化、子任务、流程和知识更新。</td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          事件 schema 的字段说明在 <code>docs/agent-trace-events.md</code> 和 <code>docs/event-schema.md</code>。TraceRecorder 会按 session_id/task_id 过滤事件并写入 <code>events.jsonl</code>。
+        </div>
+      </section>
+
+      <section id="tests-map">
+        <h2>测试覆盖地图</h2>
+        <p>测试文件基本对应各模块边界，适合从这里反向理解代码契约。</p>
+        <table>
+          <thead><tr><th>测试文件</th><th>覆盖内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>test_web_cli.py</code>、<code>test_docs_cli.py</code>、<code>test_web_docs.py</code>、<code>test_web_permission_flow.py</code>、<code>test_web_session_utils.py</code></td><td>Web/docs 命令、Web 文档、权限审批、会话读取。</td></tr>
+            <tr><td><code>test_replay_cli.py</code>、<code>test_eval_runner.py</code>、<code>test_agent_trace_events.py</code>、<code>test_agent_trace_schema.py</code></td><td>replay selector、eval replay/live、事件 trace 和 schema。</td></tr>
+            <tr><td><code>test_session_memory_store.py</code>、<code>test_memory_tools.py</code>、<code>test_memory_retrieve_tool.py</code>、<code>test_memory_knowledge_layer.py</code>、<code>test_memory_source_log.py</code></td><td>session 持久化、带日期目录名、知识文件、检索和 source log。</td></tr>
+            <tr><td><code>test_llms.py</code>、<code>test_llm_router.py</code>、<code>test_local_model_discovery.py</code>、<code>test_provider_prompt.py</code>、<code>test_auxiliary_router.py</code></td><td>模型配置、provider、fallback、本地发现、prompt profile、辅助模型。</td></tr>
+            <tr><td><code>test_tool_registry.py</code>、<code>test_task_tools.py</code>、<code>test_todo_tool.py</code>、<code>test_edit_tool.py</code>、<code>test_browser_tool.py</code>、<code>test_web_fetch_tool.py</code>、<code>test_lsp_tool.py</code>、<code>test_package_install_tools.py</code></td><td>工具注册和内置工具行为。</td></tr>
+            <tr><td><code>test_security_phase3.py</code>、<code>test_sandbox_runner.py</code>、<code>test_url_safety.py</code></td><td>权限、安全执行、URL 安全。</td></tr>
+            <tr><td><code>test_mcp_tools.py</code>、<code>test_mcp_lifecycle.py</code></td><td>MCP 工具注册、生命周期和清理。</td></tr>
+            <tr><td><code>test_skills.py</code>、<code>test_skill_guard.py</code>、<code>test_skill_hub.py</code>、<code>test_plugin_installer.py</code>、<code>test_workflow_tools.py</code></td><td>Skills、Plugin 安装、Workflow 工具。</td></tr>
+            <tr><td><code>test_subagent_registry.py</code>、<code>test_subagent_runtime.py</code>、<code>test_subagent_worktree_isolation.py</code>、<code>test_knowledge_subagent.py</code></td><td>子代理注册、运行、工作区隔离、知识整理。</td></tr>
+            <tr><td><code>test_cron_scheduler.py</code>、<code>test_cron_tools.py</code>、<code>test_cron_main_session_delivery.py</code></td><td>Cron 调度、工具和投递到主会话。</td></tr>
+            <tr><td><code>test_system_prompt.py</code>、<code>test_command_registry.py</code>、<code>test_command_adapter.py</code>、<code>test_init_cli.py</code></td><td>系统提示词、slash commands、初始化用户空间。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>阅读顺序建议</h2>
+        <ol>
+          <li>先看 <code>bamboo/run.py</code>，理解所有用户命令入口。</li>
+          <li>再看 <code>factory/session.py</code> 和 <code>factory/task_factory.py</code>，理解 Task/Session/Context 如何创建。</li>
+          <li>接着看 <code>runtime/task_runtime.py</code> 和 <code>runtime/agent_runtime.py</code>，理解任务生命周期和 OTA 循环。</li>
+          <li>然后看 <code>runtime/runtime_context.py</code>，理解模型、工具、memory、skills、subagents、MCP 如何装配。</li>
+          <li>最后按需要进入 <code>llms</code>、<code>tools</code>、<code>memory</code>、<code>security</code>、<code>skills/plugins/workflows</code>。</li>
+        </ol>
+        <p class="muted">这份文档刻意覆盖全项目结构，不替代每个模块自己的单元测试和代码注释。若新增入口、配置、工具或持久化文件，应同步更新本页。</p>
+      </section>
+    </main>
+  </div>
 
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
@@ -700,13 +1107,13 @@ stateDiagram-v2
       startOnLoad: true,
       theme: "base",
       themeVariables: {
-        primaryColor: "#e6f0e7",
-        primaryTextColor: "#20231f",
-        primaryBorderColor: "#2f6f4e",
-        lineColor: "#67806d",
-        secondaryColor: "#f7f8f5",
+        primaryColor: "#e7f4f1",
+        primaryTextColor: "#1f2933",
+        primaryBorderColor: "#157f73",
+        lineColor: "#667085",
+        secondaryColor: "#f8fafc",
         tertiaryColor: "#ffffff",
-        fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        fontFamily: "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
       }
     });
   </script>
