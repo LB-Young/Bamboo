@@ -93,16 +93,6 @@ For the full model configuration and command reference, run:
 bamboo docs
 ```
 
-## Documentation
-
-- Command documentation: run `bamboo docs`
-- Runtime flow: [`docs/runtime-flow.html`](docs/runtime-flow.html)
-- Project execution flow: [`docs/project-execution-flow.html`](docs/project-execution-flow.html)
-- Collapsible call-logic mind map: [`docs/call-logic-mindmap.html`](docs/call-logic-mindmap.html)
-- Event schema: [`docs/event-schema.md`](docs/event-schema.md)
-- Agent trace events: [`docs/agent-trace-events.md`](docs/agent-trace-events.md)
-- Eval notes: [`docs/eval.md`](docs/eval.md)
-
 
 ## License
 
