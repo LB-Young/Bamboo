@@ -1,0 +1,456 @@
+# 会话完整记录：基于 KWeaver 本体论的业务知识网络与 Agent 设计
+
+## Turn 1
+
+### User
+你帮我设计一下整个知识网络。包括构建和使用
+
+### Gemini
+要设计并落地一个符合 KWeaver 理念的“业务知识网络”，我们需要打通从**底层数据库**到**上层智能体（Agent）**的闭环。
+
+以下为您设计一套完整的架构体系，涵盖**“如何构建（Build）”**与**“如何使用（Use）”**两大核心阶段。
+
+---
+
+## 阶段一：业务知识网络的构建（Build）
+
+构建的核心目标是**“解耦”**。我们不用把企业的生产数据重复拷贝一份，而是建立一套统一的“语义映射指南”。
+
+### 步骤 1：在配置库中定义“概念元模型”（配置层）
+在关系型数据库（如 PostgreSQL）或配置中心中，使用 JSON 定义好有哪些类以及它们绑定的属性、算子和 API。
+
+* **定义对象类（以订单类为例）：**
+    ```json
+    {
+      "class_name": "Order",
+      "properties": {
+        "orderId": "String",
+        "refundAmount": "Double"
+      },
+      "operators": ["Check_Empty_Package"], 
+      "actions": ["FreezeRefund", "PassRefund"]
+    }
+    ```
+* **定义行动类（API 路由绑定）：**
+    ```json
+    {
+      "action_name": "FreezeRefund",
+      "api_mapping": {
+        "url": "[https://api.internal.com/erp/refund/freeze](https://api.internal.com/erp/refund/freeze)",
+        "method": "POST",
+        "params": { "order_id": "{{Order.orderId}}" }
+      }
+    }
+    ```
+
+### 步骤 2：在图数据库中建立“拓扑骨架”（骨架层）
+在图数据库（如 Neo4j）中，只存储业务实体的 **ID** 和它们之间的 **拓扑拓扑关系**。不用存具体属性（如金额、重量等）。
+
+* **初始化拓扑节点与边（Cypher 语句示例）：**
+    ```cypher
+    // 创建类节点（定义地图）
+    CREATE (:SchemaNode {name: "User"}), (:SchemaNode {name: "Order"}), (:SchemaNode {name: "Logistics"})
+    
+    // 插入一个具体的业务实例骨架（仅存ID）
+    CREATE (u:UserInstance {id: "usr_beta_99"})
+    CREATE (o:OrderInstance {id: "oid_2026_x"})
+    CREATE (l:LogisticsInstance {id: "sf_12345678"})
+    
+    // 连线
+    CREATE (u)-[:SUBMITTED]->(o)
+    CREATE (o)-[:ASSOCIATED_WITH]->(l)
+    ```
+
+### 步骤 3：配置“动态数据联邦网关”（数据虚拟化）
+在 KWeaver 的中间件中，配置虚拟化连接器。告诉网关：当大模型向 `Order` 对象索要 `refundAmount` 时，系统应该去执行哪条 SQL：
+```sql
+-- 联邦查询网关内部的动态映射 SQL
+SELECT refund_fee FROM rds_order_db.t_refund_apply WHERE apply_id = :id;
+阶段二：业务知识网络的使用（Use）
+当网络构建完成后，智能体（Agent）在面对用户提问时，会经历一个“检索 -> 装载 -> 推理 -> 执行”的自动化链路。
+
+步骤 1：意图识别与图谱定位（Query & Routing）
+用户输入：“帮我看看单号 oid_2026_x 的退款申请有没有问题，有风险就拦截。”
+
+智能体提取出核心关键词：实体类型 = Order，实例ID = oid_2026_x。
+
+系统直接向 Neo4j 发起一阶/二阶邻居查询，把与该订单相连的整个业务关联簇（Graph Cluster）瞬间捞出：
+
+捞出结果：该订单关联了用户 usr_beta_99 和物流单 sf_12345678。
+
+步骤 2：上下文装载（Context Loader）
+这是 KWeaver 方案中最关键的步骤。Context Loader 引擎根据第一阶段定义的“三维映射配置表”，动态履行以下职责：
+
+静态属性加载：并发调用企业内部数据库/API，把订单金额（6999元）、用户退款率（85%）、物流重量（0.01kg）全部实时秒级反查出来。
+
+动态算子挂载：发现 Logistics 类上绑定了 Check_Empty_Package 算子，自动在后台运行该算子，拿到运行结果：“有空包风险”。
+
+行动工具打包：发现 Order 关联了 FreezeRefund 行动，自动将该接口的调用说明 and 参数结构准备好。
+
+步骤 3：大模型推理（LLM Reasoner）
+Context Loader 将拼装好的标准 JSON/Markdown 发送给大模型。此时大模型看到的上下文长这样：
+
+Markdown
+【业务沙盒上下文】
+- 目标订单：oid_2026_x（金额：6999.00）
+- 关联风险：用户历史退款率极高(85%)；空包校验算子返回异常(0.01kg)。
+- 决策建议：高度疑似欺诈风险。
+- 可用工具：你可以调用 [FreezeRefund] 拦截该笔订单。
+步骤 4：行动落地（Action Execution）
+大模型根据完备的上下文做出决策，输出标准的 Tool Call 指令：call_tool("FreezeRefund", {"order_id": "oid_2026_x"})。
+
+Agent 框架接收指令，顺着本体里配置的 API 路由，直接给 ERP 系统发送 POST 请求，完成对资金的冻结 and 拦截。
+
+💡 方案设计总结
+这套设计之所以被称为“智能体上下文工程的业务知识网络”，其精髓可以用八个字概括：“图看关系，动态查数”。
+
+图数据库（Neo4j） 只负责维护业务对象之间“谁和谁有关系”（高效率、低存储）。
+
+传统生产库 / API 负责维护“具体的数据是什么”（保证数据实时、无冗余）。
+
+元模型配置（PostgreSQL） 负责维护“大模型能看什么、能用什么工具”（保障安全边界）。
+
+这样的网络不仅构建轻量，而且给大模型提供的上下文极为精准，能完美避免大模型在复杂企业场景中“找不到工具”或“胡思乱想（幻觉）”的问题。
+
+Turn 2
+User
+一个action执行之后，订单相关的数据会发生改变，图谱里面对应的数据是不是也要改变
+
+Gemini
+这是一个非常经典且关键的工程问题！答案是：在 KWeaver 的架构设计下，“绝大部分情况下图谱不需要变”，只有极少数涉及“实体关系断裂或新生”的情况下才需要变。
+
+我们可以把改变分为两种情况来讨论：
+
+情况一：改变的只是“属性值”（图谱完全不需要变 ❌）
+比如：Action（拦截行动）执行之后，订单的状态从 “待审批” 变成了 “已拦截/已冻结”。
+
+为什么图谱不用变？ 因为在 KWeaver 的虚拟化设计中，图数据库（如 Neo4j）里面根本就没有存“订单状态 = 待审批”这行字！图数据库里只存了 (OrderInstance {id: "oid_2026_x"}) 这个孤零零的节点。
+
+那是怎么变过来的？
+订单的状态实际上存在你的业务生产库（如 MySQL）里。当 Action 执行成功，API 把 MySQL 里的 status 字段从 0 改成了 2。
+当智能体下一次再通过 Context Loader 来查询这个订单时，数据联邦网关会实时去 MySQL 里查，自然就捞到了最新的状态 “已拦截”。
+
+工程优势：图谱与业务库实现了解耦，数据永远是最新（强一致性）的，完全不存在“业务库变了，图数据库没同步”的同步延迟或分布式事务问题。
+
+情况二：改变的是“业务拓扑关系”（图谱需要动态更新 🔄）
+如果在 Action 执行之后，实体与实体之间的连线断了，或者产生了新的实体，这时候图谱（图数据库）就必须做出改变。
+
+我们举两个实际例子：
+
+换货场景（关系替换）：
+用户觉得收到的衣服小了，触发了 ExchangeGoods（换货Action）。执行之后，原来的订单 oid_2026_x 依然存在，但由于重新发货，原有的旧物流单 sf_旧 被作废，系统生成了新的物流单 sf_新。
+
+图谱的改变：需要断开 (Order) -[:ASSOCIATED_WITH]-> (sf_旧) 的边，重新建立 (Order) -[:ASSOCIATED_WITH]-> (sf_新) 的边。
+
+拆单发货场景（实体新生）：
+用户买了一件衣服和一双鞋，由于衣服缺货，触发了 SplitOrder（拆单Action）。
+
+图谱的改变：原本只有一个订单节点，Action 执行后，图谱里会新增两个子订单节点，并与原订单建立 -[:SUB_ORDER_OF]-> 的父子关系。
+
+🛠️ 在开发中，KWeaver 是怎么处理这种“图谱更新”的？
+当遇到“情况二”这种必须修改图谱的场景时，通常有两种工程做法：
+
+业务系统异步消息通知（推荐：事件驱动）：
+Action（系统API）执行成功后，业务系统（如ERP）向消息队列（Kafka/RabbitMQ）投递一个事件："ORDER_EXCHANGED_EVENT"。KWeaver 的图谱更新服务（BKN Engine）订阅这个消息，收到后自动在 Neo4j 里执行一句 Cypher 变更关系。
+
+Action 联动执行：
+在 KWeaver 平台配置 Action 的元数据时，可以为其挂载一个“后置图谱钩子（Post-Hook）”。即规定当 ExchangeGoods 这个接口返回 200 SUCCESS 时，自动触发一条预设的图谱修改指令。
+
+总结
+在 KWeaver 的本体论设计中，遵循“数据在库，关系在图”的原则。
+
+订单改个状态、改个金额、加个备注 -> 图谱岿然不动，靠网关实时反查。
+
+订单解绑了、拆分了、新生成了别的东西 -> 图谱异步更新关系。
+
+这样设计，让整个业务知识网络既具备了图的灵活推理能力，又保持了传统企业级架构的高性能和高可用。
+
+Turn 3
+User
+我现在在开发一个agent，并且想给他底层对接一个知识网络进来。但是我是个人开发者，没有什么复杂的业务系统，你建议我对什么场景建知识网络来开发项目
+
+Gemini
+作为个人开发者，在没有大型企业级 ERP、数据中台的情况下，想要跑通 KWeaver 这种“对象-关系-行动”三维映射的知识网络，最核心的选择标准是：这个场景必须有天然的网状关系，并且需要将“查数据（输入）”和“调API（输出）”紧密结合。
+
+如果只用来做普通的文档检索，传统的 RAG 就足够了，完全浪费了本体论和知识网络的优势。针对个人开发者，我非常建议你尝试以下三个“以个人为中心，天然具备网状结构，且容易获取 API 动作”的实战场景：
+
+推荐场景一：个人多平台自媒体与资产管理 Agent（最推荐，最容易做出差异化）
+如果你自己写技术博客、录视频，或者喜欢收藏各个平台的优质内容，这个场景非常容易跑通，且不需要复杂的本地系统。
+
+为什么适合知识网络：
+不同的内容（文章、视频、笔记）、标签、作者和平台之间有天然的拓扑关系。
+
+本体设计示例：
+
+对象类： Content (文章/视频)、Tag (技术标签)、Platform (掘金/B站/GitHub)、Author (原作者)。
+
+关系类： Content --[属于]--> Platform，Content --[打了]--> Tag，Content --[引用/扩展]--> Content（建立文章间的引用链）。
+
+三维映射（数据/逻辑/行动）：
+
+数据： 实时调用各平台的 API 查阅读量、点赞数、或者文章的 Markdown 原文。
+
+逻辑： 挂载一个算子：Calculate_ROI（通过点赞投币比、阅读涨粉比，计算哪类技术标签最近ROI最高）。
+
+行动： 绑定发布工具 API。例如，Agent 发现关于“AI Agent”标签的一篇旧文章最近在掘金很火，自动调用 GitHub API 提取最新代码，再调用微信公众号/知乎 API 一键同步更新。
+
+推荐场景二：个人多维消费与订阅理财 Agent
+虽然个人没有大型财务中台，但我们每个人都有复杂的日常开销、各种软件的按月订阅（SaaS 订阅）、以及资产账户（微信、支付宝、银行卡等）。
+
+为什么适合知识网络：
+记账软件通常只能存账单流水，而知识网络可以把“账单 - 订阅服务 - 资产账户 - 使用频次”串联起来。
+
+本体设计示例：
+
+对象类： Account (银行卡/微信)、SaaS_Service (OpenAI/Netflix/GitHub Copilot)、Bill (账单)、Category (消费分类)。
+
+关系类： Account --[支付]--> Bill，Bill --[属于]--> SaaS_Service。
+
+三维映射（数据/逻辑/行动）：
+
+数据： 通过账单 CSV 导入或本地轻量数据库读取账单金额、扣款周期。
+
+逻辑： 挂载逻辑算子 Analyze_Idle_Subscription（结合你的 GitHub 活动频率或网盘登录日志，判断某个按月扣费的服务最近是否在“吃灰”）。
+
+行动： 绑定通知或邮件接口。例如 Agent 发现你连续两个月没用过某个背单词 App，却依然在扣费，自动调用邮件 API 向商家发送退订申请邮件（或调用统一的 Webhook 弹窗提醒你一键取消订阅）。
+
+推荐场景三：本地多源代码库与技术栈依赖分析 Agent
+对于个人开发者来说，自己的电脑里躺着几十个不同的本地项目仓库。
+
+为什么适合知识网络：
+项目、技术栈（React, SpringBoot, LangChain）、第三方依赖库（npm 包/PyPI 包）之间是极其复杂的树状和网状结构。
+
+本体设计示例：
+
+对象类： Project (本地项目)、Dependency (第三方依赖包)、TechStack (核心技术栈)。
+
+关系类： Project --[基于]--> TechStack，Project --[引入]--> Dependency，Dependency --[存在漏洞]--> SecurityVulnerability。
+
+三维映射（数据/逻辑/行动）：
+
+数据： 本地扫描 package.json 或 requirements.txt 获取依赖版本。
+
+逻辑： 挂载一个算子，动态连接外部的安全漏洞库（如 OSV API），传入当前项目的依赖列表，判断是否有安全漏洞。
+
+行动： 绑定本地 Shell 脚本执行。Agent 发现你一年没动过的旧项目 Project_A 引入的某个包爆发了高危漏洞，自动调用行动工具，在本地执行 git checkout -b fix 并在终端跑 npm update <package-name>，自动提交一个修复分支。
+
+🛠️ 个人开发者的技术脚手架建议（教你如何极简落地）
+因为你没有复杂的企业架构，完全可以用最轻量、免费的开源组件把 KWeaver 的这套理念搭建起来：
+
+图谱骨架层（关系）： 用 Neo4j Desktop（个人版完全免费）或本地用 Docker 跑一个 Neo4j 容器。
+
+配置与数据虚拟化层（数据与逻辑）： 不需要大厂的联邦数据网关。直接用 FastAPI (Python)。
+
+在 FastAPI 里面写几个路由。比如 GET /api/logistics/{id}，这个接口里面直接用 requests 去查快递 API，或者直接读本地的一个 SQLite 数据库。
+
+这就是你的虚拟化层，把这些本地 API 的 URL 配置到你的本体定义里即可。
+
+行动层（工具）： 个人开发者最好的行动工具就是各种 Webhook、自动化流（如 Make.com / n8n 的免代码工作流），或者自己本地写好的 Python 脚本。
+
+Agent 编排层（大脑）： 使用 LangChain 或 LlamaIndex，结合图谱查询，把刚才在 FastAPI 里面拼装好的静态数据和算子运行结果，格式化为 Markdown 喂给大模型。
+
+总结建议：
+先从“场景一（个人知识与自媒体管理）”切入。因为获取社交平台的 API（或者写个简单的网页抓取算子）最容易，数据网状结构明显，而且大模型处理文字内容是天然的强项。这样你一个人就能在 1~2 周内迅速搭出一个具备 KWeaver 核心神韵的“高上下文可执行 Agent”。
+
+Turn 4
+User
+个人多平台自媒体与资产管理 Agent（最推荐，最容易做出差异化）
+
+我现在准备做这个场景，你帮我写一个完整的设计文档。
+
+Gemini
+这是一个非常棒的选择！“多平台自媒体内容与资产管理 Agent”不仅天然具备复杂的网状语义（内容、标签、平台、作者、渠道），而且能够完美将“数据读取（各平台API流量）”、“逻辑算子（ROI/爆款分析）”与“工具行动（一键分发/自动更新）”融合在一起。
+
+按照 KWeaver 本体论的核心思想，以下为您编写一份完整的项目技术设计文档。你可以直接根据这份文档开始写代码或配置你的系统。
+
+🚀 智能自媒体资产管理 Agent 设计文档 (基于 KWeaver 本体架构)
+1. 项目概述与核心目标
+本项目旨在打造一个“自媒体全网资产运营助手”。它不同于传统的静态看板或多平台同步软件，而是通过业务知识网络（BKN）作为底座，让 AI 智能体能够感知跨平台内容的表现，通过逻辑算子发现潜在的流量红利或更新需求，并能直接通过行动工具执行跨平台的内容联动修正与分发。
+
+2. 知识网络本体设计 (Ontology Design)
+在 KWeaver 的元模型指导下，我们将整个自媒体生态抽象为“对象、关系、行动”三个核心维度。
+
+2.1 对象类 (Object Classes)
+Content (内容实体)：代表一篇文章、一个视频或一篇笔记。
+
+Platform (渠道平台)：运营的自媒体渠道（如：GitHub, 掘金, 微信公众号, B站）。
+
+Tag (技术/内容标签)：内容的语义分类（如：AI Agent, Python, 架构设计）。
+
+AssetMetrics (资产数据度量)：内容在某平台产生的流量快照。
+
+2.2 关系类 (Relation Classes)
+Content --[PUBLISHED_ON]--> Platform：内容发布在哪些渠道上（1对多）。
+
+Content --[TAGGED_WITH]--> Tag：内容被打上了什么标签（多对多）。
+
+Content --[REFERENCES]--> Content：内容之间的引用或衍生关系（例如：视频内容引用的 GitHub 源码库）。
+
+Content --[HAS_METRICS]--> AssetMetrics：内容动态关联的流量指标。
+
+2.3 行动类 (Action Classes)
+SyncToPlatform (跨平台同步动作)：将指定内容同步或更新发布到目标平台。
+
+OptimizeKeywords (优化行动)：根据建议更新某一渠道内容的标题或关键字。
+
+3. 三维映射矩阵 (Three-Dimensional Mapping)
+这是将本体（抽象语义）连接到你本地 Python 代码、数据库和外部 API 的枢纽：
+
+本体节点 (Class)	维度 1：静态属性 -> 数据	维度 2：动态属性 -> 逻辑（算子）	维度 3：映射 -> 行动（API）
+Content	
+• contentId (内部ID)
+
+
+• title (标题)
+
+
+• bodyMarkdown (原文文本)
+
+—	—
+AssetMetrics	
+• viewCount (阅读数)
+
+
+• likeCount (点赞数)
+
+
+• commentCount (评论数)
+
+Calculate_Engagement_Rate
+
+
+（计算互动率 = 点赞/阅读）
+
+—
+Tag	• tagName (标签名)	
+Analyze_Tag_Trend
+
+
+（统计全网该标签近期的总互动涨幅）
+
+—
+SyncToPlatform	—	—	
+PlatformAPI.Publish
+
+
+（调用对应平台SDK发布内容）
+
+4. 存储架构设计 (Storage Architecture)
+作为个人开发者，建议采用轻量且易部署的混合存储：
+
+4.1 拓扑骨架层：Neo4j (图数据库)
+仅存储实体之间的节点 and 线，负责建立“关系网”。
+
+Node Labels: ContentInstance, PlatformInstance, TagInstance
+
+Edges: PUBLISHED_ON, TAGGED_WITH, REFERENCES
+
+4.2 配置与元数据层：SQLite / JSON (关系/结构化数据)
+用于存放 KWeaver 本体配置（有哪些类、API 映射路由等），以及离线的内容 MD 源码。
+
+5. 核心链路运行机制：以一个使用场景为例
+5.1 典型用户场景
+用户对 Agent 说：“帮我分析一下最近关于 ‘AI Agent’ 标签的内容表现，如果发现有爆款趋势，把我 GitHub 上的对应项目更新同步到掘金和公众号上。”
+
+5.2 核心执行链路（四步法）
+Step 1: 意图识别与拓扑定位 (图检索)
+Agent 接收输入，首先向图数据库发起查询：
+
+Cypher
+MATCH (t:TagInstance {name: "AI Agent"})<-[:TAGGED_WITH]-(c:ContentInstance)-[:PUBLISHED_ON]->(p:PlatformInstance)
+RETURN c.id, p.name
+返回骨架：定位到本地文章 content_001，且发现它引用了 GitHub 仓库 repo_agent_v1。
+
+Step 2: 上下文装载器运作 (Context Loader)
+Context Loader 触发数据虚拟化，并发实时捞取多方数据并运行逻辑算子：
+
+静态数据读取：调用 GitHub API 获取 repo_agent_v1 的 Star 数（新增100）；调用掘金 API 获取对应文章阅读量（新增5000）。
+
+动态算子运行：执行 Analyze_Tag_Trend 算子，传入采集到的数据，算子计算后得出结论：“该标签互动率环比暴涨 200%，属于高热度爆款趋势”。
+
+行动包组装：发现该 Content 具备 SyncToPlatform 能力，把对应的掘金 and 公众号发布工具的传参 Schema 打包。
+
+Step 3: 大模型推理与决策 (LLM Reasoner)
+Agent 接收到 Context Loader 组装好的完备上下文（如下）：
+
+Markdown
+### 智能体上下文沙盒
+- 标签焦点：AI Agent (全网热度算子结果：【暴涨，建议引流】)
+- 关联资产：本地内容 ID content_001，关联 GitHub 项目 Star 激增。
+- 当前状态：该项目的最新自述文档尚未同步到【掘金】和【微信公众号】渠道。
+- 允许行动：使用 [SyncToPlatform] 工具，可一键同步。
+大模型推理出结论：当前技术标签大火，应立即借势更新渠道，扩大个人品牌影响力。
+
+Step 4: 动作落地 (Action Execution)
+大模型输出 Tool Call 意图：SyncToPlatform(target=["Juejin", "WeChat"], content_id="content_001")。
+
+你的 FastAPI 后端拦截该请求，读取本地最新的 Markdown，转化为目标平台的 HTML/格式，调用掘金 and 微信公众号的 Open API（或自动化 Webhook），实现一键分发与引流。
+
+6. 开发推荐技术栈 (Personal Dev Stack)
+开发语言：Python 3.10+
+
+大模型编排：LangChain 或 LlamaIndex (利用其 Graph/Property Graph 模块)
+
+图数据库：Neo4j Desktop (本地 Docker 运行：docker run -d -p 7474:7474 -p 7687:7687 neo4j)
+
+数据联邦与接口层：FastAPI (用于写本地算子 and 承接大模型的 Action Tool 路由)
+
+三方集成工具：直接集成 PyGithub (GitHub SDK) 以及轻量的网络请求爬取各大平台数据。
+
+通过这一套设计，你的 Agent 拥有了一张清晰的“自媒体资产语义网”。它能清晰地知晓每个代码库、每篇文章发在哪里、流量如何，并能在全网热度变化时自动发起行动，这正是标准的 KWeaver 上下文工程的最佳个人实践！
+
+Turn 5
+User
+静态数据是保存在什么地方？
+
+Gemini
+在刚才为你设计的“个人自媒体与资产管理 Agent”场景中，静态数据（也就是对象的静态属性，比如文章的标题、长文本原文、渠道配置、API凭证等）主要保存在以下两个地方：
+
+1. 本地轻量关系型数据库（主要存储地：推荐 SQLite）
+对于个人开发者而言，最舒服、最轻量的方式是直接在本地用一个 SQLite 数据库（Python 自带，无需安装任何服务，直接生成一个 .db 文件）。
+
+在这个 SQLite 数据库里，你会建几张表来存这些静态数据：
+
+t_content (内容表)：
+
+content_id (主键: "content_001")
+
+title (标题: "KWeaver本体论设计解析")
+
+local_path (本地 Markdown 文件的绝对路径，或者直接用 TEXT 字段存长文本内容)
+
+created_at (创建时间)
+
+t_platform_config (平台渠道配置表)：
+
+platform_id ("juejin" / "wechat")
+
+platform_name ("掘金" / "微信公众号")
+
+api_token / cookie (用于调用发布 and 查询接口的身份凭证静态数据)
+
+2. 本地文件系统（存储长文本：Markdown / JSON 文件）
+如果你的博客文章非常长，里面还包含本地的图片、代码块，直接塞进数据库可能会觉得臃肿。你可以把它们直接作为 .md 文件 存在你电脑的某个特定文件夹里（例如：D:/my_blogs/）。
+
+在 SQLite 数据库里，你只需要存一个文件的路径（如 D:/my_blogs/agent_design.md）。
+
+当 Agent 需要读取文章原文（静态属性 bodyMarkdown）时，系统会根据数据库里的路径，直接用 Python 的 open().read() 去读取这个本地文件。
+
+💡 核心对齐：它在 KWeaver 架构里是怎么被调用的？
+请注意，这些数据虽然存在 SQLite 或本地文件中，但大模型 and Neo4j 图数据库平时是不直接看它们的。
+
+图数据库（Neo4j）里： 只存骨架连线。比如：(ContentInstance {id: "content_001"}) -[:PUBLISHED_ON]-> (PlatformInstance {id: "juejin"})。图里面完全没有长篇大论的文章内容 and Token 密钥。
+
+当用户问 Agent： “把 content_001 这篇文章同步一下。”
+
+系统的 Context Loader 登场：
+
+它先去 Neo4j 查到这个 ID。
+
+然后拿着 "content_001" 这个 ID，立刻去 SQLite 数据库里执行一句 SELECT * FROM t_content WHERE content_id = 'content_001'。
+
+顺便去本地读取对应的 .md 文件。
+
+最后把读出来的静态属性（标题、原文）动态组装进 Prompt（提示词上下文），喂给大模型。
+
+一句话总结： 作为个人项目，你的静态数据直接用 SQLite 数据库 + 本地 Markdown 文件夹 存储即可。这样做既轻量、安全（密钥都在本地），又非常方便用 Python 进行增删改查。
