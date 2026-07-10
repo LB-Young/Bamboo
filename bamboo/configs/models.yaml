@@ -24,12 +24,12 @@ models:
       vision: false
       max_parallel_tools: 1
 
-  minimax-text:
+  minimax-m3:
     provider: minimax
-    model: MiniMax-Text-01
+    model: MiniMax-M3
     prompt_profile: minimax
     api_key: ""
-    base_url: https://api.minimax.io/v1
+    base_url: https://api.minimaxi.com/v1
     timeout: 60
     temperature: 0.2
     context_window: 1000000
