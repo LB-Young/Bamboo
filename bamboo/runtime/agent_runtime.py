@@ -29,6 +29,7 @@ from bamboo.helpers.constant import (
     ToolResultEvent,
 )
 from bamboo.llms import LLMContextLengthError, LLMError, LLMRequest, LLMResponse, LLMToolCall
+from bamboo.prompts import render_prompt_sections
 from bamboo.runtime.prompt import AgentPrompt
 from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
@@ -52,6 +53,7 @@ class AgentRunState:
     iteration: int = 0
     compaction_count: int = 0
     recoverable_errors: list[str] = field(default_factory=list)
+    full_system_prompt_saved: bool = False
 
 
 @dataclass(slots=True)
@@ -143,10 +145,26 @@ class AgentRuntime:
 
     def _observe(self, task: Task) -> AgentPrompt:
         """收集本轮 Agent 需要观察的上下文。"""
-        return self.prompt_builder.build(
+        observation = self.prompt_builder.build(
             task.session,
             error_history=self.run_state.recoverable_errors,
         )
+        self._maybe_persist_full_system_prompt(task, observation)
+        return observation
+
+    def _maybe_persist_full_system_prompt(self, task: Task, observation: AgentPrompt) -> None:
+        """首次构建完整 prompt 时覆盖 system_prompt.md，之后不再改写。"""
+        if self.run_state.full_system_prompt_saved:
+            return
+        memory_store = getattr(task.session, "memory_store", None)
+        if memory_store is None:
+            return
+        if observation.prompt_sections:
+            full_prompt = render_prompt_sections(observation.prompt_sections)
+        else:
+            full_prompt = observation.system_prompt
+        memory_store.save_full_system_prompt(full_prompt)
+        self.run_state.full_system_prompt_saved = True
 
     async def _think(self, task: Task, observation: AgentPrompt) -> LLMResponse:
         """调用主模型分析当前观察结果，并返回可供 Act 执行的模型决策。"""

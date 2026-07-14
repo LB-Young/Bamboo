@@ -79,6 +79,16 @@ class SessionMemoryStore:
         self._write_json(session_json, payload)
         (self.session_dir / "system_prompt.md").write_text(system_prompt, encoding="utf-8")
 
+    def save_full_system_prompt(self, content: str) -> None:
+        """用完整组装后的 system prompt 覆盖 system_prompt.md。
+
+        Agent 第一轮构建出真正发给 LLM 的完整 prompt 后调用此方法，
+        后续轮次不再改写文件，避免 error_history 等运行时信息反复覆盖。
+        """
+        if not self.enabled:
+            return
+        (self.session_dir / "system_prompt.md").write_text(content, encoding="utf-8")
+
     def append_message(self, message: Any, *, task_id: str = "", extra: dict[str, Any] | None = None) -> None:
         """追加保存一条完整消息。"""
         if not self.enabled:

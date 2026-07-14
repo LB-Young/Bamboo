@@ -32,6 +32,113 @@ def isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("USERPROFILE", str(home_dir))
 
 
+def test_save_full_system_prompt_overwrites_base_content(tmp_path: Path) -> None:
+    """save_full_system_prompt 应该覆盖原有的 base system prompt。"""
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir()
+    store = SessionMemoryStore(memory_dir=memory_dir, session_id="session-full")
+
+    store.save_session(
+        mode="chat",
+        project_root=tmp_path,
+        model="m",
+        provider="p",
+        system_prompt="BASE PROMPT",
+    )
+    assert (store.session_dir / "system_prompt.md").read_text(encoding="utf-8") == "BASE PROMPT"
+
+    store.save_full_system_prompt("FULL PROMPT WITH TOOLS AND SKILLS")
+    assert (store.session_dir / "system_prompt.md").read_text(encoding="utf-8") == (
+        "FULL PROMPT WITH TOOLS AND SKILLS"
+    )
+
+
+def test_agent_runtime_persists_full_system_prompt_on_first_observe(tmp_path: Path) -> None:
+    """验证 AgentRuntime 第一轮 _observe 后，system_prompt.md 被覆盖为含工具目录的完整版本，后续 _observe 不再回写。"""
+    from bamboo.factory.task_factory import TaskFactory
+    from bamboo.llms import LLMClient, LLMResponse, LLMToolCall
+    from bamboo.runtime.agent_runtime import AgentRuntime
+    from bamboo.runtime.runtime_context import RuntimeContextBuilder
+    from bamboo.tools.buildin.base import Tool, ToolResult
+    from bamboo.tools.registry import ToolRegistry
+
+    class _StopTurnLLMClient(LLMClient):
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        async def complete(self, request):
+            self.call_count += 1
+            if self.call_count == 1:
+                return LLMResponse(
+                    content="",
+                    tool_calls=[LLMToolCall(id="call-1", name="annotated_echo", arguments={})],
+                    model="provider-model-id",
+                    provider="deepseek",
+                    finish_reason="tool_calls",
+                )
+            return LLMResponse(
+                content="done",
+                model="provider-model-id",
+                provider="deepseek",
+                finish_reason="stop",
+            )
+
+    class _AnnotatedEchoTool(Tool):
+        name = "annotated_echo"
+        description = "An annotated echo tool for prompt persistence test."
+
+        async def execute(self, **arguments) -> ToolResult:
+            return ToolResult(success=True, content="echo")
+
+    factory = LLMFactory.from_mapping(_model_document())
+    multi_turn_client = _StopTurnLLMClient()
+    factory.register_provider("deepseek", lambda config: multi_turn_client, replace=True)
+    tool_registry = ToolRegistry()
+    tool_registry.register(_AnnotatedEchoTool(), source="test")
+
+    run_params = RunParams(
+        message="run agent",
+        project=str(tmp_path),
+        session_mode=SessionMode.chat,
+        task_id="task-full-prompt",
+        session_id="session-full-prompt",
+    )
+    memory_dir = tmp_path / "home" / ".bamboo" / "memory" / "dates" / "today"
+    session = SessionFactory().create(memory_dir_path=memory_dir, run_params=run_params)
+    task = TaskFactory().create(run_params)
+    task.session = session
+    task.memory_dir = memory_dir
+
+    baseline_path = session.memory_store.session_dir / "system_prompt.md"
+    baseline_content = baseline_path.read_text(encoding="utf-8")
+    assert "annotated_echo" not in baseline_content
+
+    captured_writes: list[str] = []
+    original_save = session.memory_store.save_full_system_prompt
+
+    def _tracking_save(content: str) -> None:
+        captured_writes.append(content)
+        original_save(content)
+
+    session.memory_store.save_full_system_prompt = _tracking_save  # type: ignore[method-assign]
+
+    async def run_test() -> None:
+        runtime_context = RuntimeContextBuilder(
+            event_bus=EventBus(),
+            llm_factory=factory,
+            tool_registry=tool_registry,
+        ).build(task)
+        await AgentRuntime(runtime_context=runtime_context).run(task)
+
+    anyio.run(run_test)
+
+    saved_after = baseline_path.read_text(encoding="utf-8")
+    assert "annotated_echo" in saved_after
+    assert multi_turn_client.call_count >= 2
+    assert len(captured_writes) == 1
+    assert captured_writes[0] == saved_after
+
+
 def test_chat_session_persists_full_messages_to_memory_dates(tmp_path: Path) -> None:
     """验证 chat 模式保存到 ~/.bamboo/memory/dates。"""
     run_params = RunParams(
