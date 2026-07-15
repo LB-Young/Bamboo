@@ -32,6 +32,10 @@ dirs: list[str] = [
     "storage/dates",            # 日期级存储
     "storage/skills",           # Skill 状态、索引、校验和使用记录
     "storage/plugins",          # Plugin lock 和审计记录
+    "storage/bkn",              # BKN 索引、缓存、审计和状态
+    "storage/bkn/indexes",      # BKN 轻量索引
+    "storage/bkn/cache",        # BKN 可选数据源缓存
+    "bkn",                      # 用户维护的 BKN 包
     "memory",                   # 全局记忆
     "tasks",                    # 任务队列
     "cron",                     # Cron job 配置和调度状态
@@ -77,6 +81,16 @@ def get_builtin_skills_dir() -> Path:
 def get_skill_storage_dir() -> Path:
     """获取 Skill 运行状态存储目录。"""
     return get_userspace_dir() / "storage" / "skills"
+
+
+def get_user_bkn_dir() -> Path:
+    """获取用户维护的 BKN 包目录。"""
+    return get_userspace_dir() / "bkn"
+
+
+def get_bkn_storage_dir() -> Path:
+    """获取 BKN 运行时索引、缓存和审计存储目录。"""
+    return get_userspace_dir() / "storage" / "bkn"
 
 
 def ensure_userspace(*, overwrite: bool = False) -> UserspaceLayout:

@@ -29,16 +29,20 @@
 
 ## 排期原则
 
-- 当前没有剩余排期条目。
+- 当前剩余排期只保留 BKN 相关条目，详见 `docs/todo/bkn-milestones.md`。
 - `P2-05 Session Resume And Replay` 的需求 md 已不存在，代码中已有 `--resume` / `replay` 相关实现入口；replay fixture 能力已并入 Evaluation And Replay Tools，不再单独排期。
 
 ## 当前剩余条目
 
-暂无。
+- BKN（业务数据知识网络）：详见 `docs/todo/bkn-milestones.md`。
 
 ## 建议阶段
 
-暂无。
+- BKN Milestone 1：只读 BKN MVP。
+- BKN Milestone 2：平台级 BKN 图谱骨架。
+- BKN Milestone 3：BKN 构建与审批闭环。
+- BKN Milestone 4：数据源、算子和行动闭环。
+- BKN Milestone 5：管理和可视化。
 
 ## 实施原则
 

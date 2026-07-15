@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from bamboo.factory.session import SessionFactory
-from bamboo.runtime.task_runtime import TaskRuntime
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms import LLMFactory
@@ -18,7 +17,8 @@ from bamboo.prompts import (
     resolve_prompt_mode,
 )
 from bamboo.runtime.prompt import AgentPromptBuilder
-from bamboo.userspace.userspace import ensure_userspace
+from bamboo.runtime.task_runtime import TaskRuntime
+from bamboo.userspace.userspace import ensure_userspace, get_bkn_storage_dir, get_user_bkn_dir
 
 
 @pytest.fixture(autouse=True)
@@ -123,6 +123,12 @@ def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     assert (layout.root / "prompts" / "chat" / "00-identity.md").is_file()
     assert (layout.root / "prompts" / "shared" / "00-language.md").is_file()
     assert (layout.root / "storage" / "skills").is_dir()
+    assert (layout.root / "bkn").is_dir()
+    assert (layout.root / "storage" / "bkn").is_dir()
+    assert (layout.root / "storage" / "bkn" / "indexes").is_dir()
+    assert (layout.root / "storage" / "bkn" / "cache").is_dir()
+    assert get_user_bkn_dir() == layout.root / "bkn"
+    assert get_bkn_storage_dir() == layout.root / "storage" / "bkn"
     assert (layout.root / "buildin_skills" / "skill-creator" / "SKILL.md").is_file()
     assert (layout.root / "buildin_subagents" / "knowledge-curator.yaml").is_file()
     assert (layout.root / "memory" / "dates" / "chat" / "knowledge" / "profile.md").is_file()
