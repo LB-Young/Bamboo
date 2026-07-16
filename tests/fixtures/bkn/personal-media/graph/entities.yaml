@@ -1,0 +1,19 @@
+entities:
+  - id: content:agent-memory-design
+    class: Content
+    title: Agent Memory Design Notes
+    description: Notes about AI Agent memory architecture.
+    platform: github
+    tags:
+      - AI Agent
+      - Memory
+    source: github_stats
+
+  - id: platform:github
+    class: Platform
+    name: GitHub
+    type: code-hosting
+
+  - id: tag:ai-agent
+    class: Tag
+    name: AI Agent

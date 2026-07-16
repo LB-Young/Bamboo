@@ -1,0 +1,11 @@
+schema_version: 1
+name: personal-media
+description: Personal content assets across platforms.
+enabled: true
+entrypoints:
+  ontology: schema/ontology.yaml
+  entities: graph/entities.yaml
+  relations: graph/relations.yaml
+retrieval:
+  default_limit: 5
+  max_hops: 2

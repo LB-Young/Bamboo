@@ -1,0 +1,5 @@
+operators:
+  calculate_content_roi:
+    description: Calculate content ROI from views and engagement signals.
+    type: expression
+    expression: "(stars + forks) / max(views, 1)"

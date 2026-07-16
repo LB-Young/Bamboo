@@ -1,0 +1,5 @@
+actions:
+  republish_content:
+    description: Prepare republishing content to a target platform.
+    mode: tool
+    tool_name: workflow_run

@@ -6,6 +6,15 @@ from bamboo.tools.buildin.base import Tool, ToolResult
 def create_builtin_tools() -> list[Tool]:
     """创建 Bamboo 随包提供的全部内置工具实例。"""
     from bamboo.tools.buildin.bash import BashTool
+    from bamboo.tools.buildin.bkn_action_execute import BKNActionExecuteTool
+    from bamboo.tools.buildin.bkn_action_prepare import BKNActionPrepareTool
+    from bamboo.tools.buildin.bkn_export import BKNExportTool
+    from bamboo.tools.buildin.bkn_ingest import BKNIngestTool
+    from bamboo.tools.buildin.bkn_ingest_submit import BKNIngestSubmitTool
+    from bamboo.tools.buildin.bkn_list_actions import BKNListActionsTool
+    from bamboo.tools.buildin.bkn_retrieval import BKNRetrievalTool
+    from bamboo.tools.buildin.bkn_update_manifest import BKNUpdateManifestTool
+    from bamboo.tools.buildin.bkn_update_topology import BKNUpdateTopologyTool
     from bamboo.tools.buildin.browser import BrowserTool
     from bamboo.tools.buildin.cron import (
         CronAddTool,
@@ -34,6 +43,15 @@ def create_builtin_tools() -> list[Tool]:
 
     return [
         BashTool(),
+        BKNActionExecuteTool(),
+        BKNActionPrepareTool(),
+        BKNExportTool(),
+        BKNIngestSubmitTool(),
+        BKNIngestTool(),
+        BKNListActionsTool(),
+        BKNRetrievalTool(),
+        BKNUpdateManifestTool(),
+        BKNUpdateTopologyTool(),
         BrowserTool(),
         CronAddTool(),
         CronDisableTool(),

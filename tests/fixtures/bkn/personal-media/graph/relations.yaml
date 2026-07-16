@@ -1,0 +1,7 @@
+relations:
+  - from: content:agent-memory-design
+    type: PUBLISHED_ON
+    to: platform:github
+  - from: content:agent-memory-design
+    type: TAGGED_WITH
+    to: tag:ai-agent

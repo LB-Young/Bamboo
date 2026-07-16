@@ -19,6 +19,7 @@ from bamboo.adapters.cli.main import (
     _start_resumed_session,
     _start_session,
 )
+from bamboo.bkn.cli import app as bkn_app
 from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
@@ -68,6 +69,7 @@ eval_app = typer.Typer(help="Run Bamboo eval and replay cases.", no_args_is_help
 app.add_typer(eval_app, name="eval")
 plugin_app = typer.Typer(help="Manage Bamboo plugin packages.", no_args_is_help=True)
 app.add_typer(plugin_app, name="plugin")
+app.add_typer(bkn_app, name="bkn")
 
 
 @app.command()

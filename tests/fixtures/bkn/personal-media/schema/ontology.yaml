@@ -1,0 +1,20 @@
+classes:
+  Content:
+    description: Articles, videos, notes, and code examples.
+    operators:
+      - calculate_content_roi
+    actions:
+      - republish_content
+  Platform:
+    description: Publishing platform.
+  Tag:
+    description: Topic tag.
+relations:
+  PUBLISHED_ON:
+    from: Content
+    to: Platform
+    description: Content is published on a platform.
+  TAGGED_WITH:
+    from: Content
+    to: Tag
+    description: Content is tagged with a topic.

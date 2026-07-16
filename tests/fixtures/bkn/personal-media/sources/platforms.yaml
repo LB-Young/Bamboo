@@ -1,0 +1,4 @@
+sources:
+  github_stats:
+    type: json
+    path: data/github_stats.json

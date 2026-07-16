@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from bamboo.bkn import BKNRegistry, create_bkn_registry
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.session import Session
 from bamboo.factory.task_factory import Task
@@ -44,6 +45,7 @@ class RuntimeContext:
     tool_registry: ToolRegistry
     prompt_builder: AgentPromptBuilder
     context_compactor: ContextCompactor
+    bkn_registry: BKNRegistry | None = None
     memory_manager: object | None = None
     skill_registry: SkillRegistry | None = None
     subagent_registry: SubagentRegistry | None = None
@@ -106,6 +108,7 @@ class RuntimeContextBuilder:
         skill_registry: SkillRegistry | None = None,
         subagent_registry: SubagentRegistry | None = None,
         memory_manager: MemoryManager | None = None,
+        bkn_registry: BKNRegistry | None = None,
         compaction_policy: ContextBudgetPolicy | None = None,
         token_counter: TokenCounter | None = None,
         model_name: str | None = None,
@@ -122,6 +125,7 @@ class RuntimeContextBuilder:
         self.skill_registry = skill_registry or create_skill_registry()
         self.subagent_registry = subagent_registry
         self.memory_manager = memory_manager or MemoryManager()
+        self.bkn_registry = bkn_registry or create_bkn_registry()
         self.prompt_builder = prompt_builder or AgentPromptBuilder(
             tool_registry=self.tool_registry,
             skill_registry=self.skill_registry,
@@ -187,6 +191,7 @@ class RuntimeContextBuilder:
             tool_registry=self.tool_registry,
             prompt_builder=self.prompt_builder,
             context_compactor=context_compactor,
+            bkn_registry=self.bkn_registry,
             memory_manager=self.memory_manager,
             skill_registry=self.skill_registry,
             subagent_registry=self.subagent_registry or create_subagent_registry(task.run_params.project),

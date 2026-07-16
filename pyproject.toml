@@ -27,6 +27,8 @@ bamboo = "bamboo.run:app"
 [tool.setuptools]
 packages = [
     "bamboo",
+    "bamboo.bkn",
+    "bamboo.bkn.operators",
     "bamboo.core",
     "bamboo.cron",
     "bamboo.eval",

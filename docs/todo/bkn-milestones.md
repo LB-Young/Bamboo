@@ -36,7 +36,7 @@
 
 - [Feature 4.1：HTTP/API 数据源适配器](bkn/04-01-http-api-source-adapter.md)
 - [Feature 4.2：安全表达式算子](bkn/04-02-expression-operators.md)
-- [Feature 4.3：Action 元数据到 Tool/Workflow/MCP 的映射](bkn/04-03-action-mapping.md)
+- [Feature 4.3：BKN 私有 Action 脚本和工作流](bkn/04-03-action-mapping.md)
 
 ## Milestone 5：管理和可视化
 
