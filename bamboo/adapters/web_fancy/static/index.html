@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bamboo Fancy Web</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="app" class="landing panels-collapsed activity-collapsed">
+      <aside class="rail" aria-label="主导航">
+        <div class="brand-mark">B</div>
+        <button id="panelToggle" class="icon-button" type="button" title="会话面板" aria-label="会话面板">☰</button>
+        <button id="newSession" class="icon-button" type="button" title="新建会话" aria-label="新建会话">+</button>
+        <button id="activityToggle" class="icon-button" type="button" title="遥测面板" aria-label="遥测面板">◌</button>
+        <a class="icon-button" href="/docs" title="文档" aria-label="文档">?</a>
+      </aside>
+
+      <aside class="sessions-panel">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Bamboo</p>
+            <h1>Control Deck</h1>
+          </div>
+          <span id="statusPill" class="status idle">Idle</span>
+        </header>
+
+        <div class="mode-switch" role="tablist" aria-label="会话模式">
+          <button id="chatMode" class="active" type="button">Chat</button>
+          <button id="projectMode" type="button">Project</button>
+        </div>
+
+        <section id="projectPanel" class="project-panel" hidden>
+          <label for="projectPath">Project path</label>
+          <div class="path-row">
+            <input id="projectPath" type="text" placeholder="/Users/you/project" />
+            <button id="applyProject" type="button">Apply</button>
+          </div>
+        </section>
+
+        <section class="session-heading">
+          <div>
+            <strong id="sessionScope">Chat history</strong>
+            <span id="sessionCount">0 sessions</span>
+          </div>
+        </section>
+
+        <nav id="sessionList" class="session-list" aria-label="历史会话"></nav>
+      </aside>
+
+      <main class="workspace">
+        <div class="hud-grid" aria-hidden="true"></div>
+        <section class="orb-stage" aria-label="Bamboo neural core">
+          <canvas id="orbCanvas"></canvas>
+          <div class="orb-caption">
+            <p class="eyebrow">Neural Interface</p>
+            <h2>Bamboo Core</h2>
+            <span>Ask anything to initialize the session.</span>
+          </div>
+        </section>
+
+        <header class="topbar">
+          <div class="title-block">
+            <h2 id="chatTitle">New chat</h2>
+            <p id="chatMeta">Chat mode</p>
+          </div>
+          <div class="run-strip" aria-label="运行状态">
+            <span id="toolMetric">0 tools</span>
+            <span id="modeMetric">Chat</span>
+          </div>
+        </header>
+
+        <section id="chatHistory" class="chat-history" aria-live="polite"></section>
+
+        <form id="composer" class="composer">
+          <textarea id="messageInput" placeholder="Ask Bamboo..." rows="1"></textarea>
+          <footer class="composer-bar">
+            <span id="composerHint">当前为 Chat 模式</span>
+            <div class="composer-actions">
+              <button id="stopButton" class="danger-button" type="button" hidden>Stop</button>
+              <button id="sendButton" class="primary-button" type="submit">Send</button>
+            </div>
+          </footer>
+        </form>
+      </main>
+
+      <aside class="activity-panel">
+        <header>
+          <p class="eyebrow">Activity</p>
+          <h2>Telemetry</h2>
+        </header>
+        <div id="activityList" class="activity-list"></div>
+      </aside>
+    </div>
+    <script type="module" src="/static/app.js?v=20260717-orb"></script>
+  </body>
+</html>

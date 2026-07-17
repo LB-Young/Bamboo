@@ -3,8 +3,8 @@
 这个脚本负责注册 Typer 命令，并把用户输入转换为 RunParams 后交给
 CLI adapter 和 TaskRuntime。真实执行逻辑不放在这里，避免入口层变重。
 """
-import uuid
 import threading
+import uuid
 import webbrowser
 from pathlib import Path
 
@@ -337,6 +337,23 @@ def web(
     if not no_browser:
         _open_url_later(url)
     uvicorn.run("bamboo.adapters.web.app:app", host=host, port=port, reload=reload)
+
+
+@app.command("web-fancy")
+def web_fancy(
+    host: str = typer.Option("127.0.0.1", "--host", help="Web server host"),
+    port: int = typer.Option(8899, "--port", "-p", help="Web server port"),
+    reload: bool = typer.Option(False, "--reload", help="Enable uvicorn reload"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Do not open the Web UI in a browser"),
+) -> None:
+    """启动 Bamboo Fancy Web 对话入口。"""
+    import uvicorn
+
+    url = f"http://{host}:{port}"
+    console.print(f"[green]Bamboo Fancy Web[/green] {url}")
+    if not no_browser:
+        _open_url_later(url)
+    uvicorn.run("bamboo.adapters.web_fancy.app:app", host=host, port=port, reload=reload)
 
 
 @app.command()

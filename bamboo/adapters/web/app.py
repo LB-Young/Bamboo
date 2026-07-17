@@ -14,13 +14,14 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from bamboo.adapters.cli.commands import expand_command_message
 from bamboo.factory.event_bus import get_event_bus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
-    PermissionRequestEvent,
-    PermissionResultEvent,
     CronJobCompleteEvent,
     CronJobStartEvent,
+    PermissionRequestEvent,
+    PermissionResultEvent,
     SessionMode,
     SessionStatusChangeEvent,
     StepFinishEvent,
@@ -43,7 +44,6 @@ from bamboo.runtime.runtime_context import RuntimeContextBuilder
 from bamboo.runtime.store import get_task_store
 from bamboo.security import WebPermissionResolver
 
-from bamboo.adapters.cli.commands import expand_command_message
 from .session_utils import list_sessions, load_session, resolve_session_record, serialize_messages
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -62,20 +62,23 @@ class PermissionApprovalRequest(BaseModel):
     decision: str
 
 
-def create_app() -> FastAPI:
+def create_app(*, static_dir: Path = STATIC_DIR, title: str = "Bamboo Web") -> FastAPI:
     setup_logging()
-    app = FastAPI(title="Bamboo Web", docs_url="/openapi-docs")
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app = FastAPI(title=title, docs_url="/openapi-docs")
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     app.state.permission_resolver = WebPermissionResolver()
     app.state.running_tasks = {}
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
-        return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        return (static_dir / "index.html").read_text(encoding="utf-8")
 
     @app.get("/docs", response_class=HTMLResponse)
     async def docs() -> str:
-        return (STATIC_DIR / "docs.html").read_text(encoding="utf-8")
+        docs_path = static_dir / "docs.html"
+        if not docs_path.is_file():
+            docs_path = STATIC_DIR / "docs.html"
+        return docs_path.read_text(encoding="utf-8")
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:
