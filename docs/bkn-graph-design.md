@@ -124,7 +124,7 @@ flowchart TB
 ### 2.2 不动什么
 
 - ✅ 不改 `MemoryManager` 的 append / replace / remove_matching 行为
-- ✅ 不动 `system_prompt_build` 的 section 顺序，只加一个 section
+- ✅ 不动 `bamboo/prompts/system_prompt.py` 的 section 顺序，只加一个 section
 - ✅ 不动 `Context` 必填字段，只增加可选字段
 - ✅ 不内嵌向量数据库；初始版本用 SQLite + 文件 JSONL 即可
 
@@ -846,7 +846,7 @@ tools:
 
 ### 6.1 在 system prompt 注入 BKN 上下文（graph → loader 视角）
 
-在 `core/system_prompt_build._build_environment_section` 之后追加一个 section：
+在 `bamboo/prompts/system_prompt.py` 的 runtime environment section 之后追加一个 section：
 
 ```python
 def _build_bkn_section(bkn_dir: Path, snapshot: BknSnapshot) -> PromptSection:

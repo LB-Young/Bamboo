@@ -29,7 +29,6 @@ packages = [
     "bamboo",
     "bamboo.bkn",
     "bamboo.bkn.operators",
-    "bamboo.core",
     "bamboo.cron",
     "bamboo.eval",
     "bamboo.commands",
