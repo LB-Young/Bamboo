@@ -17,6 +17,30 @@ def test_expand_command_message_leaves_regular_message_unchanged(tmp_path: Path)
     assert result.message == "hello"
 
 
+def test_expand_command_message_leaves_absolute_path_message_unchanged(tmp_path: Path) -> None:
+    registry = CommandRegistry(command_dirs=[("test", tmp_path)])
+    message = "/Users/liubaoyang/Documents/project/script.py为这个脚本逐行添加注释，注释写在代码后面不要另起一行"
+
+    result = expand_command_message(message, registry=registry)
+
+    assert result.expanded is False
+    assert result.command_name == ""
+    assert result.error == ""
+    assert result.message == message
+
+
+def test_expand_command_message_leaves_plain_absolute_path_unchanged(tmp_path: Path) -> None:
+    registry = CommandRegistry(command_dirs=[("test", tmp_path)])
+    message = "/Users/liubaoyang/Documents/project/script.py"
+
+    result = expand_command_message(message, registry=registry)
+
+    assert result.expanded is False
+    assert result.command_name == ""
+    assert result.error == ""
+    assert result.message == message
+
+
 def test_expand_command_message_expands_slash_command(tmp_path: Path) -> None:
     commands_dir = tmp_path / "commands"
     commands_dir.mkdir()

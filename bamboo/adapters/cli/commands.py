@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from bamboo.commands import CommandRegistry, create_command_registry
+
+SLASH_COMMAND_PATTERN = re.compile(r"^/([A-Za-z0-9][A-Za-z0-9_-]*)(?:\s+(.*))?$", re.DOTALL)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,14 +30,12 @@ def expand_command_message(
 ) -> CommandExpansionResult:
     """Expand `/command args` into a regular user message."""
     stripped = message.strip()
-    if not stripped.startswith("/") or stripped in {"/", "//"}:
+    match = SLASH_COMMAND_PATTERN.match(stripped)
+    if match is None:
         return CommandExpansionResult(message=message)
 
-    command_text = stripped[1:]
-    name, _, arguments = command_text.partition(" ")
-    name = name.strip()
-    if not name:
-        return CommandExpansionResult(message=message)
+    name = match.group(1)
+    arguments = match.group(2) or ""
 
     command_registry = registry or create_command_registry(project)
     try:
