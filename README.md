@@ -96,4 +96,8 @@ bamboo docs
 
 ## License
 
-No license file is currently included in this repository.
+This project is available for personal learning, academic study, research, and
+other non-commercial educational purposes only. Commercial use requires prior
+written permission. For commercial licensing, contact `lby15356@gmail.com`.
+
+See [LICENSE](LICENSE) for the full terms.
