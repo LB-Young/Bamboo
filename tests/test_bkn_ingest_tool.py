@@ -35,6 +35,7 @@ def test_bkn_ingest_tool_creates_draft() -> None:
         )
         assert result.success
         assert result.metadata is not None
+        assert Path(result.metadata["bkn_doc_path"]).is_file()
         assert Path(result.metadata["preview_path"]).is_file()
 
     anyio.run(run_test)

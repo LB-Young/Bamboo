@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from bamboo.bkn import BKNRegistry
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
 from bamboo.llms.config import ModelCapabilities, ModelConfig
@@ -15,6 +16,8 @@ from bamboo.memory.manager import MemoryManager
 from bamboo.prompts import PromptSection, read_provider_prompt_section_objects, render_prompt_sections
 from bamboo.skills import SkillRegistry
 from bamboo.tools import ToolRegistry, get_tool_registry
+
+MAX_BKN_DOC_CHARS = 1600
 
 
 @dataclass(slots=True)
@@ -88,11 +91,9 @@ class AgentPrompt:
         for section in sorted(self.prompt_sections, key=lambda item: (item.priority, item.name, item.source)):
             metadata = section.to_metadata()
             rows.append(
-                (
-                    f"- {metadata['priority']} `{metadata['name']}` "
-                    f"source=`{metadata['source']}` cacheable={metadata['cacheable']} "
-                    f"hash={metadata['content_hash'][:12]} chars={metadata['content_chars']}"
-                )
+                f"- {metadata['priority']} `{metadata['name']}` "
+                f"source=`{metadata['source']}` cacheable={metadata['cacheable']} "
+                f"hash={metadata['content_hash'][:12]} chars={metadata['content_chars']}"
             )
         return "\n".join(rows)
 
@@ -106,12 +107,14 @@ class AgentPromptBuilder:
         tool_registry: ToolRegistry | None = None,
         skill_registry: SkillRegistry | None = None,
         memory_manager: MemoryManager | None = None,
+        bkn_registry: BKNRegistry | None = None,
         model_config: ModelConfig | None = None,
     ) -> None:
         """初始化 Prompt Builder，并固定当前 Agent 可见的工具注册表。"""
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry
         self.memory_manager = memory_manager
+        self.bkn_registry = bkn_registry
         self.model_config = model_config
 
     def set_model_config(self, model_config: ModelConfig) -> None:
@@ -133,6 +136,7 @@ class AgentPromptBuilder:
         tools = self._get_tool_schemas()
         tool_catalog = self._build_tool_catalog()
         skill_catalog = self._build_skill_catalog()
+        bkn_catalog = self._build_bkn_catalog()
         memory_context = self._build_memory_context(session)
         provider_context = self._build_provider_context()
         error_history = error_history or []
@@ -147,6 +151,7 @@ class AgentPromptBuilder:
                 session=session,
                 tool_catalog=tool_catalog,
                 skill_catalog=skill_catalog,
+                bkn_catalog=bkn_catalog,
                 memory_context=memory_context,
                 provider_context=provider_context,
                 error_history=error_history,
@@ -177,6 +182,41 @@ class AgentPromptBuilder:
             return ""
         return self.skill_registry.render_catalog()
 
+    def _build_bkn_catalog(self) -> str:
+        """Render committed BKN.md files as a compact BKN directory."""
+        if self.bkn_registry is None:
+            return ""
+        definitions = self.bkn_registry.list()
+        chunks = [
+            "# Available BKNs",
+            "",
+            "Bamboo Knowledge Networks provide business objects, relationships, data sources, operators, and action metadata.",
+            "Use the summaries below to decide whether a user request needs a BKN. When one is relevant, load that BKN's `preview.md` before detailed reasoning, then use BKN tools for concrete entities and relationships.",
+        ]
+        found = False
+        for definition in definitions:
+            bkn_doc_path = definition.root / "BKN.md"
+            if not bkn_doc_path.is_file():
+                continue
+            content = bkn_doc_path.read_text(encoding="utf-8").strip()
+            if not content:
+                continue
+            preview_path = definition.root / "preview.md"
+            if len(content) > MAX_BKN_DOC_CHARS:
+                content = content[: MAX_BKN_DOC_CHARS - 3].rstrip() + "..."
+            chunks.extend(
+                [
+                    "",
+                    f"## {definition.name}",
+                    "",
+                    content,
+                    "",
+                    f"- Full BKN context: `{preview_path}`",
+                ]
+            )
+            found = True
+        return "\n".join(chunks) if found else ""
+
     def _build_memory_context(self, session: Session) -> str:
         """Render editable memory knowledge for the active session."""
         if self.memory_manager is None:
@@ -199,6 +239,7 @@ class AgentPromptBuilder:
         session: Session,
         tool_catalog: str,
         skill_catalog: str,
+        bkn_catalog: str,
         memory_context: str,
         provider_context: str,
         error_history: list[str],
@@ -251,6 +292,16 @@ class AgentPromptBuilder:
                     priority=600,
                     cacheable=False,
                     content=f"# Available Skills\n\n{skill_catalog}",
+                )
+            )
+        if bkn_catalog:
+            sections.append(
+                PromptSection(
+                    name="available-bkns",
+                    source="bkn-registry",
+                    priority=650,
+                    cacheable=False,
+                    content=bkn_catalog,
                 )
             )
         if error_history:

@@ -25,6 +25,7 @@ def test_create_ingest_draft_writes_only_draft_files(tmp_path: Path) -> None:
     draft_root = Path(result["draft_root"])
     assert (draft_root / "manifest.draft.yaml").is_file()
     assert (draft_root / "schema.draft.json").is_file()
+    assert (draft_root / "BKN.md").is_file()
     assert (draft_root / "preview.md").is_file()
     assert not (tmp_path / "platforms" / "billing" / "manifest.yaml").exists()
 
@@ -54,9 +55,21 @@ def test_submit_ingest_draft_promotes_files_and_initializes_graph(tmp_path: Path
     assert result["submitted"] is True
     assert (platform_root / "manifest.yaml").is_file()
     assert (platform_root / "schema.json").is_file()
+    assert (platform_root / "BKN.md").is_file()
     assert not (platform_root / "draft").exists()
     assert (platform_root / "graph.sqlite").is_file()
     assert load_bkn_definition(platform_root).name == "billing"
+
+
+def test_create_ingest_draft_accepts_custom_bkn_doc(tmp_path: Path) -> None:
+    result = create_ingest_draft(
+        platform_id="billing",
+        bkn_doc="# BKN: billing\n\nUse for subscription billing questions.",
+        bkn_root=tmp_path,
+    )
+
+    content = (Path(result["draft_root"]) / "BKN.md").read_text(encoding="utf-8")
+    assert "Use for subscription billing questions." in content
 
 
 def test_submit_ingest_draft_approve_false_does_not_submit(tmp_path: Path) -> None:

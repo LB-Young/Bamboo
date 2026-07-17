@@ -24,6 +24,7 @@ def create_ingest_draft(
     nodes: list[dict[str, Any]] | None = None,
     edges: list[dict[str, Any]] | None = None,
     inputs: list[dict[str, Any]] | None = None,
+    bkn_doc: str = "",
     bkn_root: Path | None = None,
 ) -> dict[str, Any]:
     """Create a staged BKN draft without touching the active platform files."""
@@ -41,17 +42,20 @@ def create_ingest_draft(
     schema_path = draft_root / "schema.draft.json"
     nodes_path = draft_root / "nodes.draft.json"
     edges_path = draft_root / "edges.draft.json"
+    bkn_doc_path = draft_root / "BKN.md"
     preview_path = draft_root / "preview.md"
     manifest_path.write_text(yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False), encoding="utf-8")
     schema_path.write_text(json.dumps(schema_document, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     nodes_path.write_text(json.dumps(nodes or [], ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     edges_path.write_text(json.dumps(edges or [], ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    bkn_doc_path.write_text(_bkn_doc(platform_id, manifest, schema_document, bkn_doc), encoding="utf-8")
     preview_path.write_text(_preview(platform_id, manifest, schema_document, nodes or [], edges or [], inputs or []), encoding="utf-8")
     return {
         "platform_id": platform_id,
         "draft_root": str(draft_root),
         "manifest_path": str(manifest_path),
         "schema_path": str(schema_path),
+        "bkn_doc_path": str(bkn_doc_path),
         "preview_path": str(preview_path),
     }
 
@@ -84,12 +88,13 @@ def submit_ingest_draft(
     tmp_root.mkdir(parents=True)
     (tmp_root / "manifest.yaml").write_text(yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False), encoding="utf-8")
     (tmp_root / "schema.json").write_text(json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    if (draft_root / "preview.md").exists():
-        shutil.copy2(draft_root / "preview.md", tmp_root / "preview.md")
+    for name in ("BKN.md", "preview.md"):
+        if (draft_root / name).exists():
+            shutil.copy2(draft_root / name, tmp_root / name)
     read_manifest(tmp_root / "manifest.yaml")
     validate_manifest_schema_match(read_manifest(tmp_root / "manifest.yaml"), read_schema(tmp_root / "schema.json"), schema_path=tmp_root / "schema.json")
 
-    for name in ("manifest.yaml", "schema.json", "preview.md"):
+    for name in ("manifest.yaml", "schema.json", "BKN.md", "preview.md"):
         source = tmp_root / name
         if source.exists():
             source.replace(platform_root / name)
@@ -165,6 +170,40 @@ def _preview(
         for edge in edges:
             lines.append(f"  { _mermaid_id(edge.get('src') or edge.get('from')) } -->|{edge.get('relation', 'RELATED_TO')}| { _mermaid_id(edge.get('dst') or edge.get('to')) }")
         lines.append("```")
+    return "\n".join(lines) + "\n"
+
+
+def _bkn_doc(platform_id: str, manifest: dict[str, Any], schema: dict[str, Any], content: str) -> str:
+    if content.strip():
+        return content.strip() + "\n"
+    classes = schema.get("classes", {})
+    relations = schema.get("relations", {})
+    lines = [
+        f"# BKN: {platform_id}",
+        "",
+        manifest.get("description", "") or f"{manifest.get('name', platform_id)} knowledge network.",
+        "",
+        "## When To Use",
+        "",
+        f"Use this BKN when the user asks about `{manifest.get('name', platform_id)}` or `{manifest.get('domain', '')}` business objects, relationships, data sources, operators, or actions.",
+        "",
+        "When this BKN is relevant, load `preview.md` before answering detailed questions, then use BKN tools to retrieve concrete entities and relationships.",
+        "",
+        "## Classes",
+    ]
+    if isinstance(classes, dict) and classes:
+        for name, spec in sorted(classes.items()):
+            description = spec.get("description", "") if isinstance(spec, dict) else ""
+            lines.append(f"- `{name}`: {description}".rstrip())
+    else:
+        lines.append("- No classes declared.")
+    lines.extend(["", "## Relations"])
+    if isinstance(relations, dict) and relations:
+        for name, spec in sorted(relations.items()):
+            description = spec.get("description", "") if isinstance(spec, dict) else ""
+            lines.append(f"- `{name}`: {description}".rstrip())
+    else:
+        lines.append("- No relations declared.")
     return "\n".join(lines) + "\n"
 
 

@@ -27,6 +27,7 @@ class BKNIngestTool(Tool):
                 "nodes": {"type": "array"},
                 "edges": {"type": "array"},
                 "inputs": {"type": "array"},
+                "bkn_doc": {"type": "string", "description": "Optional BKN.md content for agent-facing usage guidance."},
             },
             "required": ["platform_id"],
         }
@@ -39,6 +40,7 @@ class BKNIngestTool(Tool):
         nodes: list[dict[str, Any]] | None = None,
         edges: list[dict[str, Any]] | None = None,
         inputs: list[dict[str, Any]] | None = None,
+        bkn_doc: str = "",
     ) -> ToolResult:
         try:
             result = create_ingest_draft(
@@ -48,6 +50,7 @@ class BKNIngestTool(Tool):
                 nodes=nodes,
                 edges=edges,
                 inputs=inputs,
+                bkn_doc=bkn_doc,
             )
         except BKNValidationError as exc:
             return ToolResult(content=str(exc), success=False, error=str(exc))

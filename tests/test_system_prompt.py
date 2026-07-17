@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from bamboo.bkn.ingest import create_ingest_draft, submit_ingest_draft
 from bamboo.factory.session import SessionFactory
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.requests_params import RunParams
@@ -113,6 +114,30 @@ def test_build_chat_prompt_excludes_project_instructions(tmp_path: Path) -> None
     assert "可靠、清晰、直接的 AI 助手" in prompt
     assert "面向软件工程项目的自主 Agent" not in prompt
     assert "项目专属规则" not in prompt
+
+
+def test_build_prompt_includes_committed_bkn_docs(tmp_path: Path) -> None:
+    """验证正式 BKN.md 会通过 runtime bkn_registry 进入 Agent prompt。"""
+    layout = ensure_userspace()
+    create_ingest_draft(
+        platform_id="billing",
+        manifest_draft={"name": "Billing", "domain": "billing", "owners": ["@tester"], "status": "active"},
+        schema={"classes": {"Customer": {"description": "Billing customer.", "actions": []}}},
+        bkn_doc="# BKN: billing\n\nUse for subscription billing, invoices, and payment account relationships.",
+        bkn_root=layout.root / "bkn",
+    )
+    submit_ingest_draft(platform_id="billing", approve=True, bkn_root=layout.root / "bkn")
+    platform_root = layout.root / "bkn" / "platforms" / "billing"
+    task_runtime = TaskRuntime(llm_factory=LLMFactory.from_mapping(_model_document()))
+    task = task_runtime.create_task(RunParams(message="hello", project=str(tmp_path), session_mode=SessionMode.chat))
+    runtime_context = task_runtime.runtime_context_builder.build(task)
+
+    prompt = runtime_context.prompt_builder.build(task.session).to_llm_request().system_prompt
+
+    assert "# Available BKNs" in prompt
+    assert "Use for subscription billing" in prompt
+    assert str(platform_root / "preview.md") in prompt
+    assert runtime_context.prompt_builder.bkn_registry is runtime_context.bkn_registry
 
 
 def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:

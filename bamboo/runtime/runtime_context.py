@@ -130,9 +130,12 @@ class RuntimeContextBuilder:
             tool_registry=self.tool_registry,
             skill_registry=self.skill_registry,
             memory_manager=self.memory_manager,
+            bkn_registry=self.bkn_registry,
         )
         if prompt_builder is not None and getattr(prompt_builder, "memory_manager", None) is None:
             prompt_builder.memory_manager = self.memory_manager
+        if prompt_builder is not None and getattr(prompt_builder, "bkn_registry", None) is None:
+            prompt_builder.bkn_registry = self.bkn_registry
         self.context_compactor = context_compactor
         self.compaction_policy = compaction_policy
         self.token_counter = token_counter
