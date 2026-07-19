@@ -77,19 +77,19 @@
         <section id="quickstart">
           <h2>快速开始</h2>
           <p class="lead">
-            默认配置使用 <code>deepseek-chat</code> 作为主模型。初始化后，只要在
-            <code>models.yaml</code> 里配置 DeepSeek API Key，或使用环境变量引用，就可以直接运行。
+            默认配置使用 <code>kimi-k3</code> 作为主模型。初始化后，只要在
+            <code>models.yaml</code> 里配置 Kimi API Key，或使用环境变量引用，就可以直接运行。
           </p>
           <pre><code>pip install -e .
 bamboo init
 
-# 编辑 ~/.bamboo/configs/models.yaml，把 deepseek-chat.api_key 改成你的 key，
-# 或写成 "${DEEPSEEK_API_KEY}" 后在 shell 里设置环境变量。
-export DEEPSEEK_API_KEY="your-deepseek-api-key"
+# 编辑 ~/.bamboo/configs/models.yaml，把 kimi-k3.api_key 改成你的 key，
+# 或写成 "${MOONSHOT_API_KEY}" 后在 shell 里设置环境变量。
+export MOONSHOT_API_KEY="your-kimi-api-key"
 
 bamboo main --msg "帮我分析这个项目"</code></pre>
           <p>
-            如果你要使用 GPT、Claude、MiniMax、Mimo、Ollama 或 vLLM，需要先在
+            如果你要使用 DeepSeek、GPT、Claude、MiniMax、Mimo、Ollama 或 vLLM，需要先在
             <code>~/.bamboo/configs/models.yaml</code> 注册模型，再在
             <code>~/.bamboo/configs/bamboo_main_agent.yaml</code> 中把 <code>model</code>
             改为对应的模型注册名。
@@ -106,24 +106,25 @@ bamboo main --msg "帮我分析这个项目"</code></pre>
           <h3>1. 配置 <code>models.yaml</code></h3>
           <p>文件位置：</p>
           <pre><code>~/.bamboo/configs/models.yaml</code></pre>
-          <p>默认 DeepSeek 示例：</p>
-          <pre><code>default_model: deepseek-chat
+          <p>默认 Kimi 示例：</p>
+          <pre><code>default_model: kimi-k3
 
 models:
-  deepseek-chat:
-    provider: deepseek
-    model: deepseek-chat
-    prompt_profile: deepseek
-    api_key: "${DEEPSEEK_API_KEY}"
-    base_url: https://api.deepseek.com/v1
+  kimi-k3:
+    provider: kimi
+    model: kimi-k3
+    prompt_profile: kimi
+    api_key: "${MOONSHOT_API_KEY}"
+    base_url: https://api.moonshot.cn/v1
     timeout: 60
-    temperature: 0.2
-    context_window: 128000
+    context_window: 1000000
     max_tokens: 4096
+    extra_body:
+      reasoning_effort: max
     capabilities:
       tool_calling: true
       json_schema: false
-      vision: false
+      vision: true
       max_parallel_tools: 1</code></pre>
 
           <table>
@@ -132,7 +133,7 @@ models:
             </thead>
             <tbody>
               <tr><td><code>default_model</code></td><td>默认模型注册名，必须存在于 <code>models</code> 下。</td></tr>
-              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
+              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
               <tr><td><code>model</code></td><td>供应商侧的真实模型 ID。</td></tr>
               <tr><td><code>prompt_profile</code></td><td>提示词适配配置，通常和 provider 同名。</td></tr>
               <tr><td><code>api_key</code></td><td>API Key。云模型通常必填；支持 <code>${ENV_NAME}</code> 环境变量引用。<code>ollama</code> 和 <code>vllm</code> 可以为空。</td></tr>
@@ -141,6 +142,7 @@ models:
               <tr><td><code>temperature</code></td><td>采样温度；不需要覆盖时可以保留默认值。</td></tr>
               <tr><td><code>context_window</code></td><td>上下文窗口大小。</td></tr>
               <tr><td><code>max_tokens</code></td><td>最大输出 token，必须小于 <code>context_window</code>。</td></tr>
+              <tr><td><code>extra_body</code></td><td>透传给模型 API 的额外顶层参数，例如 Kimi K3 的 <code>reasoning_effort</code>。</td></tr>
               <tr><td><code>capabilities</code></td><td>声明模型能力，例如工具调用、JSON Schema、视觉输入和并行工具数。</td></tr>
             </tbody>
           </table>
@@ -149,7 +151,7 @@ models:
           <p>文件位置：</p>
           <pre><code>~/.bamboo/configs/bamboo_main_agent.yaml</code></pre>
           <p>默认配置：</p>
-          <pre><code>model: deepseek-chat
+          <pre><code>model: kimi-k3
 fallback_model: ""
 compaction_model: ""
 compaction_fallback_model: ""
@@ -241,7 +243,7 @@ bamboo main --resume SESSION_ID</code></pre>
               <tr><td><code>--msg</code>, <code>-m</code></td><td><code>null</code></td><td>初始消息；不传时进入交互式 CLI 会话。</td></tr>
               <tr><td><code>--project</code>, <code>-p</code></td><td>当前目录</td><td>项目路径，Project 模式会使用它作为上下文根目录。</td></tr>
               <tr><td><code>--model</code></td><td>主 Agent 配置</td><td>临时覆盖本轮使用的模型注册名。</td></tr>
-              <tr><td><code>--provider</code></td><td>模型配置</td><td>临时覆盖 provider，例如 <code>deepseek</code>、<code>gpt</code>、<code>claude</code>。</td></tr>
+              <tr><td><code>--provider</code></td><td>模型配置</td><td>临时覆盖 provider，例如 <code>kimi</code>、<code>deepseek</code>、<code>gpt</code>、<code>claude</code>。</td></tr>
               <tr><td><code>--permission</code></td><td><code>default</code></td><td>权限模式：<code>default</code>、<code>auto</code>、<code>bypass</code>、<code>yolo</code>。</td></tr>
               <tr><td><code>--no-stream</code></td><td><code>false</code></td><td>禁用流式输出标记；具体支持取决于 provider。</td></tr>
               <tr><td><code>--yes</code>, <code>-y</code></td><td><code>false</code></td><td>自动确认权限提示。</td></tr>

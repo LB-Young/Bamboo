@@ -1,5 +1,5 @@
 # 默认模型必须引用下面 models 中的注册名。
-default_model: deepseek-chat
+default_model: kimi-k3
 
 # Agent 只使用模型注册名；Provider、实际模型 ID 和连接参数统一在这里维护。
 # 本地模型可用显式发现命令生成配置片段，不会在启动时自动探测：
@@ -8,6 +8,23 @@ default_model: deepseek-chat
 # 如需写入用户配置，先检查输出，再运行：
 #   bamboo models discover ollama --write
 models:
+  kimi-k3:
+    provider: kimi
+    model: kimi-k3
+    prompt_profile: kimi
+    api_key: "${MOONSHOT_API_KEY}"
+    base_url: https://api.moonshot.cn/v1
+    timeout: 60
+    context_window: 1000000
+    max_tokens: 4096
+    extra_body:
+      reasoning_effort: max
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: true
+      max_parallel_tools: 1
+
   deepseek-chat:
     provider: deepseek
     model: deepseek-chat

@@ -27,7 +27,16 @@ from bamboo.llms import (
     ModelCatalog,
     ModelConfigError,
 )
-from bamboo.llms.providers import ClaudeClient, DeepSeekClient, GPTClient, MiniMaxClient, MimoClient, OllamaClient, VLLMClient
+from bamboo.llms.providers import (
+    ClaudeClient,
+    DeepSeekClient,
+    GPTClient,
+    KimiClient,
+    MiniMaxClient,
+    MimoClient,
+    OllamaClient,
+    VLLMClient,
+)
 from bamboo.runtime.agent_runtime import AgentRuntime
 from bamboo.runtime.context_compactor import ContextBudgetPolicy
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
@@ -147,6 +156,64 @@ def test_mimo_client_uses_documented_headers_and_token_field() -> None:
         response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
         assert response.content == "mimo answer"
         assert response.provider == "mimo"
+
+    anyio.run(run_test)
+
+
+def test_kimi_client_uses_default_endpoint_and_k3_reasoning_effort() -> None:
+    """验证 Kimi Provider 默认 endpoint 和 K3 必需的 reasoning_effort。"""
+    document = _model_document("kimi")
+    document["models"]["test-model"]["base_url"] = ""
+    document["models"]["test-model"]["model"] = "kimi-k3"
+    document["models"]["test-model"].pop("temperature")
+    config = ModelCatalog.from_mapping(document).models["test-model"].resolve_environment()
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            assert request.url == "https://api.moonshot.cn/v1/chat/completions"
+            assert request.headers["authorization"] == "Bearer test-api-key"
+            assert payload["model"] == "kimi-k3"
+            assert payload["reasoning_effort"] == "max"
+            assert "temperature" not in payload
+            return httpx.Response(
+                200,
+                json={
+                    "model": "kimi-k3",
+                    "choices": [{"message": {"content": "kimi answer"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = KimiClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+        assert response.content == "kimi answer"
+        assert response.provider == "kimi"
+
+    anyio.run(run_test)
+
+
+def test_kimi_client_respects_configured_extra_body() -> None:
+    """验证 models.yaml 中的 extra_body 会作为顶层参数透传给 Kimi。"""
+    document = _model_document("kimi")
+    document["models"]["test-model"]["model"] = "kimi-k3"
+    document["models"]["test-model"]["extra_body"] = {"reasoning_effort": "max"}
+    config = ModelCatalog.from_mapping(document).models["test-model"].resolve_environment()
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            assert payload["reasoning_effort"] == "max"
+            return httpx.Response(
+                200,
+                json={
+                    "model": "kimi-k3",
+                    "choices": [{"message": {"content": "configured"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = KimiClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+        assert response.content == "configured"
 
     anyio.run(run_test)
 
@@ -395,6 +462,7 @@ def test_factory_uses_a_distinct_client_for_each_provider() -> None:
     expected_clients = {
         "gpt": GPTClient,
         "deepseek": DeepSeekClient,
+        "kimi": KimiClient,
         "minimax": MiniMaxClient,
         "mimo": MimoClient,
         "claude": ClaudeClient,

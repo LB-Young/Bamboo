@@ -35,39 +35,40 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
-Bamboo currently defaults to `deepseek-chat`. After `bamboo init`, configure the DeepSeek API key in `~/.bamboo/configs/models.yaml`:
+Bamboo currently defaults to `kimi-k3`. After `bamboo init`, configure the Kimi API key in `~/.bamboo/configs/models.yaml`:
 
 ```yaml
-default_model: deepseek-chat
+default_model: kimi-k3
 
 models:
-  deepseek-chat:
-    provider: deepseek
-    model: deepseek-chat
-    prompt_profile: deepseek
-    api_key: "${DEEPSEEK_API_KEY}"
-    base_url: https://api.deepseek.com/v1
+  kimi-k3:
+    provider: kimi
+    model: kimi-k3
+    prompt_profile: kimi
+    api_key: "${MOONSHOT_API_KEY}"
+    base_url: https://api.moonshot.cn/v1
     timeout: 60
-    temperature: 0.2
-    context_window: 128000
+    context_window: 1000000
     max_tokens: 4096
+    extra_body:
+      reasoning_effort: max
     capabilities:
       tool_calling: true
       json_schema: false
-      vision: false
+      vision: true
       max_parallel_tools: 1
 ```
 
 Confirm the main agent uses that model in `~/.bamboo/configs/bamboo_main_agent.yaml`:
 
 ```yaml
-model: deepseek-chat
+model: kimi-k3
 ```
 
 Run Bamboo:
 
 ```bash
-export DEEPSEEK_API_KEY="your-deepseek-api-key"
+export MOONSHOT_API_KEY="your-kimi-api-key"
 bamboo main
 ```
 
@@ -85,7 +86,7 @@ http://127.0.0.1:8899
 
 ## Other Models
 
-Bamboo also supports `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
+Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
 
 For the full model configuration and command reference, run:
 

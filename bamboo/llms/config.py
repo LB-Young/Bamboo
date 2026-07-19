@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-SUPPORTED_PROVIDERS = frozenset({"deepseek", "minimax", "gpt", "claude", "mimo", "ollama", "vllm"})
+SUPPORTED_PROVIDERS = frozenset({"deepseek", "kimi", "minimax", "gpt", "claude", "mimo", "ollama", "vllm"})
 API_KEY_OPTIONAL_PROVIDERS = frozenset({"ollama", "vllm"})
 _ENV_REFERENCE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 

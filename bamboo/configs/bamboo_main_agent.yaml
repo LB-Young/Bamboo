@@ -1,5 +1,5 @@
 # 主 Agent 只配置 models.yaml 中注册过的模型名。
-model: deepseek-chat
+model: kimi-k3
 
 # 可选。主模型遇到 rate_limit/server_error/timeout 等可重试错误时，只切换一次。
 fallback_model: ""
