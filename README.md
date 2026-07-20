@@ -95,6 +95,41 @@ http://127.0.0.1:8899
 
 Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set `model_type` to `text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
 
+Example vLLM OpenAI-compatible server for a vision model:
+
+```bash
+vllm serve google/gemma-3-27b-it \
+  --served-model-name gemma3-27b \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --api-key EMPTY \
+  --tensor-parallel-size 2 \
+  --max-model-len 16384 \
+  --gpu-memory-utilization 0.90 \
+  --limit-mm-per-prompt image=4
+```
+
+Then register it in `~/.bamboo/configs/models.yaml`:
+
+```yaml
+models:
+  gemma3-27b:
+    provider: vllm
+    model: gemma3-27b
+    model_type: vision
+    prompt_profile: vllm
+    api_key: "EMPTY"
+    base_url: http://localhost:8000/v1
+    timeout: 120
+    context_window: 16384
+    max_tokens: 4096
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: true
+      max_parallel_tools: 1
+```
+
 For the full model configuration and command reference, run:
 
 ```bash
