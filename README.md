@@ -95,28 +95,29 @@ http://127.0.0.1:8899
 
 Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set `model_type` to `text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
 
-Example vLLM OpenAI-compatible server for a vision model:
+Example vLLM OpenAI-compatible server with tool calling enabled:
 
 ```bash
-vllm serve google/gemma-3-27b-it \
-  --served-model-name gemma3-27b \
+vllm serve Qwen/Qwen2.5-32B-Instruct \
+  --served-model-name qwen2.5-32b \
   --host 0.0.0.0 \
   --port 8000 \
   --api-key EMPTY \
   --tensor-parallel-size 2 \
   --max-model-len 16384 \
   --gpu-memory-utilization 0.90 \
-  --limit-mm-per-prompt image=4
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes
 ```
 
 Then register it in `~/.bamboo/configs/models.yaml`:
 
 ```yaml
 models:
-  gemma3-27b:
+  qwen2.5-32b:
     provider: vllm
-    model: gemma3-27b
-    model_type: vision
+    model: qwen2.5-32b
+    model_type: text
     prompt_profile: vllm
     api_key: "EMPTY"
     base_url: http://localhost:8000/v1
@@ -124,11 +125,13 @@ models:
     context_window: 16384
     max_tokens: 4096
     capabilities:
-      tool_calling: false
+      tool_calling: true
       json_schema: false
-      vision: true
+      vision: false
       max_parallel_tools: 1
 ```
+
+For a multimodal vLLM model, add the model-specific vision options such as `--limit-mm-per-prompt image=4`, set `model_type: vision`, and set `capabilities.vision: true`. Tool calling still requires the parser/template supported by that specific model.
 
 For the full model configuration and command reference, run:
 

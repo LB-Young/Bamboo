@@ -229,22 +229,23 @@ bamboo models discover vllm --write --replace</code></pre>
             <code>--write</code> 只写入 <code>models.yaml</code>。如果要让主 Agent 使用发现到的模型，
             还需要把 <code>bamboo_main_agent.yaml</code> 里的 <code>model</code> 改成对应注册名。
           </p>
-          <p>如果要手动启动 vLLM OpenAI-compatible 服务，可以先用 <code>vllm serve</code>：</p>
-          <pre><code>vllm serve google/gemma-3-27b-it \
-  --served-model-name gemma3-27b \
+          <p>如果要手动启动支持工具调用的 vLLM OpenAI-compatible 服务，可以先用 <code>vllm serve</code>：</p>
+          <pre><code>vllm serve Qwen/Qwen2.5-32B-Instruct \
+  --served-model-name qwen2.5-32b \
   --host 0.0.0.0 \
   --port 8000 \
   --api-key EMPTY \
   --tensor-parallel-size 2 \
   --max-model-len 16384 \
   --gpu-memory-utilization 0.90 \
-  --limit-mm-per-prompt image=4</code></pre>
+  --enable-auto-tool-choice \
+  --tool-call-parser hermes</code></pre>
           <p>然后在 <code>models.yaml</code> 中注册同名模型：</p>
           <pre><code>models:
-  gemma3-27b:
+  qwen2.5-32b:
     provider: vllm
-    model: gemma3-27b
-    model_type: vision
+    model: qwen2.5-32b
+    model_type: text
     prompt_profile: vllm
     api_key: "EMPTY"
     base_url: http://localhost:8000/v1
@@ -252,14 +253,15 @@ bamboo models discover vllm --write --replace</code></pre>
     context_window: 16384
     max_tokens: 4096
     capabilities:
-      tool_calling: false
+      tool_calling: true
       json_schema: false
-      vision: true
+      vision: false
       max_parallel_tools: 1</code></pre>
           <p class="note">
             <code>--served-model-name</code> 要和 <code>models.yaml</code> 里的 <code>model</code> 一致。
-            文本模型把 <code>model_type</code> 改成 <code>text</code>，并把 <code>capabilities.vision</code> 设为 <code>false</code>。
-            如果模型支持工具调用，再把 <code>capabilities.tool_calling</code> 设为 <code>true</code>，并按该模型的 vLLM 文档添加对应 parser/chat template 参数。
+            vLLM 自动工具调用需要 <code>--enable-auto-tool-choice</code> 和模型匹配的 <code>--tool-call-parser</code>；
+            有些模型还要加对应 <code>--chat-template</code>。例如 Qwen2.5 通常使用 <code>hermes</code> parser。
+            多模态模型还需要按模型文档添加 <code>--limit-mm-per-prompt image=4</code> 等参数，并把 <code>model_type</code> 设为 <code>vision</code>、<code>capabilities.vision</code> 设为 <code>true</code>。
           </p>
         </section>
 
