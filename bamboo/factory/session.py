@@ -9,7 +9,7 @@ from typing import Any
 from bamboo.factory.context import Context
 from bamboo.factory.message import Message, MessageRole
 from bamboo.helpers.requests_params import RunParams
-from bamboo.llms.base import LLMToolCall
+from bamboo.llms.base import LLMImage, LLMToolCall
 from bamboo.memory.session_store import SessionMemoryStore, current_time_record_name
 from bamboo.prompts import build_system_prompt, resolve_prompt_mode
 
@@ -31,6 +31,7 @@ class Session:
         role: MessageRole,
         content: str,
         *,
+        images: list[LLMImage] | None = None,
         agent_name: str = "",
         tool_calls: list[LLMToolCall] | None = None,
         tool_call_id: str = "",
@@ -49,6 +50,7 @@ class Session:
         message = Message(
             role=role,
             content=content,
+            images=images or [],
             agent_name=agent_name,
             tool_calls=tool_calls or [],
             tool_call_id=tool_call_id,
@@ -141,6 +143,7 @@ class Session:
             "time": message.created_at,
             "role": message.role,
             "content": message.content,
+            "images": [self._image_snapshot(image) for image in message.images],
             "agent_name": message.agent_name,
             "message_type": message.message_type,
             "active_for_prompt": message.active_for_prompt,
@@ -206,8 +209,13 @@ class SessionFactory:
             current_task_id=run_params.task_id,
         )
         if run_params.message:
-            session.add_message("user", run_params.message)
+            session.add_message("user", run_params.message, images=run_params.images)
         return session
+
+    @staticmethod
+    def _image_snapshot(image: LLMImage) -> dict[str, str]:
+        """生成图片输入快照。"""
+        return {"source": image.source, "media_type": image.media_type, "detail": image.detail}
 
     def _resolve_record_dir(self, *, memory_dir_path: Path, prompt_mode: str) -> Path:
         """根据模式选择完整对话记录目录名。"""

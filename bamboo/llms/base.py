@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 LLMRole = Literal["user", "assistant", "system", "tool"]
+LLMModelType = Literal["text", "vision"]
 LLMErrorType = Literal[
     "rate_limit",
     "auth",
@@ -89,6 +90,15 @@ def classify_transport_error(error: BaseException) -> tuple[LLMErrorType, bool]:
 
 
 @dataclass(frozen=True, slots=True)
+class LLMImage:
+    """表示一次发给模型的图片输入。"""
+
+    source: str
+    media_type: str = ""
+    detail: str = "auto"
+
+
+@dataclass(frozen=True, slots=True)
 class LLMToolCall:
     """表示模型请求执行的一次结构化工具调用。"""
 
@@ -103,6 +113,7 @@ class LLMMessage:
 
     role: LLMRole
     content: str = ""
+    images: list[LLMImage] = field(default_factory=list)
     tool_calls: list[LLMToolCall] = field(default_factory=list)
     tool_call_id: str = ""
     tool_name: str = ""

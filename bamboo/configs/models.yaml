@@ -11,6 +11,7 @@ models:
   kimi-k3:
     provider: kimi
     model: kimi-k3
+    model_type: vision
     prompt_profile: kimi
     api_key: "${MOONSHOT_API_KEY}"
     base_url: https://api.moonshot.cn/v1
@@ -28,6 +29,7 @@ models:
   deepseek-chat:
     provider: deepseek
     model: deepseek-chat
+    model_type: text
     prompt_profile: deepseek
     api_key: ""
     base_url: https://api.deepseek.com/v1
@@ -44,6 +46,7 @@ models:
   minimax-m3:
     provider: minimax
     model: MiniMax-M3
+    model_type: text
     prompt_profile: minimax
     api_key: ""
     base_url: https://api.minimaxi.com/v1
@@ -60,6 +63,7 @@ models:
   mimo-default:
     provider: mimo
     model: mimo-v2.5-pro
+    model_type: vision
     prompt_profile: mimo
     api_key: ""
     base_url: https://api.xiaomimimo.com/v1
@@ -76,6 +80,7 @@ models:
   gpt-default:
     provider: gpt
     model: gpt-4.1-mini
+    model_type: text
     prompt_profile: gpt
     api_key: ""
     base_url: https://api.openai.com/v1
@@ -92,6 +97,7 @@ models:
   claude-default:
     provider: claude
     model: claude-sonnet-4-5
+    model_type: text
     prompt_profile: claude
     api_key: ""
     base_url: https://api.anthropic.com/v1
@@ -108,6 +114,7 @@ models:
   ollama-local:
     provider: ollama
     model: qwen2.5:7b
+    model_type: text
     prompt_profile: ollama
     api_key: ""
     base_url: http://localhost:11434/v1
@@ -124,6 +131,7 @@ models:
   vllm-local:
     provider: vllm
     model: Qwen/Qwen2.5-7B-Instruct
+    model_type: text
     prompt_profile: vllm
     api_key: ""
     base_url: http://localhost:8000/v1

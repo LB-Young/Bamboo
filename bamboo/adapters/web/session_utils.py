@@ -50,13 +50,23 @@ def load_session(record_dir: Path) -> Session:
     return load_session_record(record_dir)
 
 
-def serialize_messages(session: Session) -> list[dict[str, str]]:
+def serialize_messages(session: Session) -> list[dict[str, object]]:
     """Return displayable chat messages."""
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, object]] = []
     for message in session.messages:
         if message.role not in {"user", "assistant"}:
             continue
-        if message.compressed or not message.content.strip():
+        if message.compressed or (not message.content.strip() and not message.images):
             continue
-        rows.append({"role": message.role, "content": message.content, "time": message.created_at})
+        rows.append(
+            {
+                "role": message.role,
+                "content": message.content,
+                "time": message.created_at,
+                "images": [
+                    {"source": image.source, "media_type": image.media_type, "detail": image.detail}
+                    for image in message.images
+                ],
+            }
+        )
     return rows

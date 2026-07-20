@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from bamboo.bkn import BKNRegistry
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
+from bamboo.llms.media import image_summary
 from bamboo.llms.config import ModelCapabilities, ModelConfig
 from bamboo.memory.manager import MemoryManager
 from bamboo.prompts import PromptSection, read_provider_prompt_section_objects, render_prompt_sections
@@ -43,7 +44,12 @@ class AgentPrompt:
             "# Prompt Sections",
             self._render_section_metadata(),
             "# Messages",
-            "\n".join(f"[{message.role}] {message.content}" for message in self.messages) or "(none)",
+            "\n".join(
+                f"[{message.role}] {message.content}"
+                + (f"\n{image_summary(message.images)}" if message.images else "")
+                for message in self.messages
+            )
+            or "(none)",
             "# Available Tools",
             self.tool_catalog or "(none)",
             "# Available Skills",
@@ -127,6 +133,7 @@ class AgentPromptBuilder:
             LLMMessage(
                 role=message.role,
                 content=message.content,
+                images=list(message.images),
                 tool_calls=list(message.tool_calls),
                 tool_call_id=message.tool_call_id,
                 tool_name=message.tool_name,
@@ -330,6 +337,7 @@ class AgentPromptBuilder:
             "# Model Capabilities",
             f"- Provider: `{model_config.provider}`",
             f"- Prompt Profile: `{model_config.prompt_profile}`",
+            f"- Model Type: `{model_config.model_type}`",
             f"- Tool Calling: {'enabled' if capabilities.tool_calling else 'disabled'}",
             f"- JSON Schema: {'enabled' if capabilities.json_schema else 'disabled'}",
             f"- Vision: {'enabled' if capabilities.vision else 'disabled'}",

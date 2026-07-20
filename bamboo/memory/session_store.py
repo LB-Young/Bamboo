@@ -102,6 +102,7 @@ class SessionMemoryStore:
             "message_id": message.message_id,
             "role": message.role,
             "content": message.content,
+            "images": [self._to_plain(image) for image in getattr(message, "images", [])],
             "agent_name": message.agent_name,
             "message_type": message.message_type,
             "active_for_prompt": message.active_for_prompt,
@@ -242,6 +243,7 @@ class SessionMemoryStore:
             "time": getattr(message, "created_at", ""),
             "role": message.role,
             "content": message.content,
+            "images": [self._to_plain(image) for image in getattr(message, "images", [])],
             "agent_name": message.agent_name,
             "message_type": message.message_type,
             "active_for_prompt": message.active_for_prompt,
@@ -541,7 +543,7 @@ def _session_label(record_dir: Path, *, fallback: str) -> str:
 
 def _load_messages(path: Path):
     from bamboo.factory.message import Message
-    from bamboo.llms import LLMToolCall
+    from bamboo.llms import LLMImage, LLMToolCall
 
     messages: list[Message] = []
     for payload in _read_jsonl(path):
@@ -553,6 +555,7 @@ def _load_messages(path: Path):
             Message(
                 role=role,
                 content=content,
+                images=_restore_images(payload.get("images") or [], LLMImage),
                 agent_name=str(payload.get("agent_name") or ""),
                 message_id=str(payload.get("message_id") or ""),
                 created_at=str(payload.get("time") or payload.get("created_at") or utc_now()),
@@ -567,6 +570,29 @@ def _load_messages(path: Path):
             )
         )
     return messages
+
+
+def _restore_images(raw_images: Any, llm_image_type: Any) -> list[Any]:
+    if not isinstance(raw_images, list):
+        return []
+    images: list[Any] = []
+    for item in raw_images:
+        if isinstance(item, llm_image_type):
+            images.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source") or "")
+        if not source:
+            continue
+        images.append(
+            llm_image_type(
+                source=source,
+                media_type=str(item.get("media_type") or ""),
+                detail=str(item.get("detail") or "auto"),
+            )
+        )
+    return images
 
 
 def _restore_tool_calls(raw_tool_calls: Any, llm_tool_call_type: Any) -> list[Any]:

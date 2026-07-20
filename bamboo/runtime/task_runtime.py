@@ -31,6 +31,8 @@ from bamboo.helpers.logging import get_logger
 
 # RunParams 是 CLI 或调试入口整理后的运行参数。
 from bamboo.helpers.requests_params import RunParams
+from bamboo.llms.base import LLMImage
+from bamboo.llms.media import images_from_text, merge_images
 
 # LLMFactory 在 TaskRuntime 初始化时加载模型配置，并为本次执行提供模型路由。
 from bamboo.llms import LLMFactory
@@ -112,20 +114,22 @@ class TaskRuntime:
         self._annotate_prompt_metadata(task)
         return task
 
-    def create_followup_task(self, previous_task: Task, message: str) -> Task:
+    def create_followup_task(self, previous_task: Task, message: str, *, images: list[LLMImage] | None = None) -> Task:
         """基于已有 Session 创建下一轮用户输入对应的新 Task。"""
+        merged_images = merge_images(images or [], images_from_text(message))
         # task_id 每一轮都独立，便于事件、日志和任务状态按轮次追踪。
         task_id = str(uuid4())
         # run_params 保存本轮输入，同时沿用上一轮的 session_id 和其他入口参数。
         run_params = replace(
             previous_task.run_params,
             message=message,
+            images=merged_images,
             task_id=task_id,
             session_id=previous_task.session_id,
         )
         # 同一个交互会话内复用 Session，并把本轮用户消息追加到上下文末尾。
         previous_task.session.current_task_id = task_id
-        previous_task.session.add_message("user", message)
+        previous_task.session.add_message("user", message, images=merged_images)
         # 返回一个新的 Task 对象，避免在 CLI 层手动重置旧 Task 的运行状态字段。
         task = Task(
             platform=previous_task.platform,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import anyio
 import httpx
@@ -20,6 +21,7 @@ from bamboo.helpers.requests_params import RunParams
 from bamboo.llms import (
     LLMClient,
     LLMFactory,
+    LLMImage,
     LLMMessage,
     LLMRequest,
     LLMResponse,
@@ -93,6 +95,45 @@ def test_openai_compatible_client_builds_and_parses_request() -> None:
         assert response.content == "deepseek answer"
         assert response.provider == "deepseek"
         assert response.usage["total_tokens"] == 6
+
+    anyio.run(run_test)
+
+
+def test_openai_compatible_client_serializes_image_content(tmp_path: Path) -> None:
+    """验证 OpenAI-compatible 请求能发送 text + image_url content blocks。"""
+    image_path = tmp_path / "sample.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+    catalog = ModelCatalog.from_mapping(_model_document("kimi"))
+    config = catalog.models["test-model"]
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            content = payload["messages"][0]["content"]
+            assert content[0] == {"type": "text", "text": "describe this"}
+            assert content[1]["type"] == "image_url"
+            assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [{"message": {"content": "image answer"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = KimiClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="user",
+                        content="describe this",
+                        images=[LLMImage(source=str(image_path), media_type="image/png")],
+                    )
+                ]
+            )
+        )
+        assert response.content == "image answer"
 
     anyio.run(run_test)
 
@@ -252,6 +293,47 @@ def test_anthropic_client_builds_and_parses_request() -> None:
         assert response.content == "claude answer"
         assert response.provider == "claude"
         assert response.finish_reason == "end_turn"
+
+    anyio.run(run_test)
+
+
+def test_anthropic_client_serializes_image_content(tmp_path: Path) -> None:
+    """验证 Claude Messages 请求能发送 Anthropic image block。"""
+    image_path = tmp_path / "sample.jpg"
+    image_path.write_bytes(b"\xff\xd8\xff")
+    catalog = ModelCatalog.from_mapping(_model_document("claude"))
+    config = catalog.models["test-model"]
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            blocks = payload["messages"][0]["content"]
+            assert blocks[0] == {"type": "text", "text": "describe this"}
+            assert blocks[1]["type"] == "image"
+            assert blocks[1]["source"]["type"] == "base64"
+            assert blocks[1]["source"]["media_type"] == "image/jpeg"
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "content": [{"type": "text", "text": "image answer"}],
+                    "stop_reason": "end_turn",
+                },
+            )
+
+        client = ClaudeClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="user",
+                        content="describe this",
+                        images=[LLMImage(source=str(image_path), media_type="image/jpeg")],
+                    )
+                ]
+            )
+        )
+        assert response.content == "image answer"
 
     anyio.run(run_test)
 

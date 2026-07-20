@@ -113,6 +113,7 @@ models:
   kimi-k3:
     provider: kimi
     model: kimi-k3
+    model_type: vision
     prompt_profile: kimi
     api_key: "${MOONSHOT_API_KEY}"
     base_url: https://api.moonshot.cn/v1
@@ -135,6 +136,7 @@ models:
               <tr><td><code>default_model</code></td><td>默认模型注册名，必须存在于 <code>models</code> 下。</td></tr>
               <tr><td><code>provider</code></td><td>模型供应商。支持 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
               <tr><td><code>model</code></td><td>供应商侧的真实模型 ID。</td></tr>
+              <tr><td><code>model_type</code></td><td>模型类型。文本模型填 <code>text</code>；能看图的模型填 <code>vision</code>。</td></tr>
               <tr><td><code>prompt_profile</code></td><td>提示词适配配置，通常和 provider 同名。</td></tr>
               <tr><td><code>api_key</code></td><td>API Key。云模型通常必填；支持 <code>${ENV_NAME}</code> 环境变量引用。<code>ollama</code> 和 <code>vllm</code> 可以为空。</td></tr>
               <tr><td><code>base_url</code></td><td>接口地址。云模型填官方或兼容接口地址，本地模型填本地服务地址。</td></tr>
@@ -200,6 +202,7 @@ models:
   gpt-default:
     provider: gpt
     model: gpt-4.1-mini
+    model_type: text
     prompt_profile: gpt
     api_key: "${OPENAI_API_KEY}"
     base_url: https://api.openai.com/v1

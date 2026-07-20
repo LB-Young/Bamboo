@@ -95,6 +95,7 @@ def model_to_config(model: LocalModelInfo) -> dict[str, Any]:
     return {
         "provider": model.provider,
         "model": model.model,
+        "model_type": "text",
         "prompt_profile": model.provider,
         "api_key": "",
         "base_url": model.base_url,

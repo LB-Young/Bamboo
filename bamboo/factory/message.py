@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from bamboo.llms.base import LLMToolCall
+from bamboo.llms.base import LLMImage, LLMToolCall
 from bamboo.memory.session_store import utc_now
 
 MessageRole = Literal["system", "user", "assistant", "tool"]
@@ -18,6 +18,7 @@ class Message:
 
     role: MessageRole
     content: str
+    images: list[LLMImage] = field(default_factory=list)
     agent_name: str = ""
     message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: str = field(default_factory=utc_now)

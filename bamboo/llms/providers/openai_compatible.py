@@ -19,6 +19,7 @@ from bamboo.llms.base import (
     classify_transport_error,
 )
 from bamboo.llms.config import ModelConfig, ModelConfigError
+from bamboo.llms.media import to_openai_image_url
 
 
 class OpenAICompatibleClient(LLMClient):
@@ -113,7 +114,7 @@ class OpenAICompatibleClient(LLMClient):
                     }
                 )
                 continue
-            messages.append({"role": message.role, "content": message.content})
+            messages.append({"role": message.role, "content": _serialize_message_content(message.content, message.images)})
 
         payload: dict[str, Any] = {
             "model": self.config.model,
@@ -176,6 +177,17 @@ def _serialize_tool_call(tool_call: LLMToolCall) -> dict[str, Any]:
             "arguments": json.dumps(tool_call.arguments, ensure_ascii=False),
         },
     }
+
+
+def _serialize_message_content(content: str, images: list[Any]) -> str | list[dict[str, Any]]:
+    """Serialize text-only or text+image content for OpenAI-compatible APIs."""
+    if not images:
+        return content
+    blocks: list[dict[str, Any]] = []
+    if content:
+        blocks.append({"type": "text", "text": content})
+    blocks.extend(to_openai_image_url(image) for image in images)
+    return blocks
 
 
 def _parse_tool_calls(raw_tool_calls: Any) -> list[LLMToolCall]:

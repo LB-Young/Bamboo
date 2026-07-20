@@ -18,6 +18,7 @@ from bamboo.llms.base import (
     classify_transport_error,
 )
 from bamboo.llms.config import ModelConfig
+from bamboo.llms.media import to_anthropic_image_block
 
 ANTHROPIC_VERSION = "2023-06-01"
 
@@ -106,7 +107,11 @@ class AnthropicMessagesClient(LLMClient):
                 )
                 continue
             role = "assistant" if message.role == "assistant" else "user"
-            _append_message(messages, role, [{"type": "text", "text": message.content}])
+            blocks: list[dict[str, Any]] = []
+            if message.content:
+                blocks.append({"type": "text", "text": message.content})
+            blocks.extend(to_anthropic_image_block(image) for image in message.images)
+            _append_message(messages, role, blocks)
 
         payload: dict[str, Any] = {
             "model": self.config.model,

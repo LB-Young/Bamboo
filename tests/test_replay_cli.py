@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
+import bamboo.run as bamboo_run
 from bamboo.memory.get_memory_path import get_date_memory_path
 from bamboo.memory.session_store import SessionMemoryStore
 from bamboo.run import app
@@ -92,6 +94,78 @@ def test_replay_list_shows_negative_indices_and_session_topics() -> None:
     assert "-2" in result.output
     assert "session-older" in result.output
     assert "older topic" in result.output
+
+
+def test_main_resume_latest_uses_most_recent_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    _create_session_record(
+        session_id="session-older",
+        prompt="older topic",
+        updated_at="2026-07-08T01:00:00+00:00",
+    )
+    newest_record = _create_session_record(
+        session_id="session-newer",
+        prompt="newer topic",
+        updated_at="2026-07-08T02:00:00+00:00",
+    )
+    captured: dict[str, object] = {}
+
+    async def fake_start(run_params, *, record_dir=None):
+        captured["session_id"] = run_params.session_id
+        captured["record_dir"] = record_dir
+        captured["message"] = run_params.message
+        return SimpleNamespace(task_id="task", session_id=run_params.session_id)
+
+    monkeypatch.setattr(bamboo_run, "_start_resumed_session", fake_start)
+
+    result = CliRunner().invoke(app, ["main", "--resume", "latest", "--msg", "continue"])
+
+    assert result.exit_code == 0
+    assert captured["session_id"] == "session-newer"
+    assert captured["record_dir"] == str(newest_record)
+    assert captured["message"] == "continue"
+
+
+def test_main_resume_negative_index_selects_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    older_record = _create_session_record(
+        session_id="session-older",
+        prompt="older topic",
+        updated_at="2026-07-08T01:00:00+00:00",
+    )
+    _create_session_record(
+        session_id="session-newer",
+        prompt="newer topic",
+        updated_at="2026-07-08T02:00:00+00:00",
+    )
+    captured: dict[str, object] = {}
+
+    async def fake_start(run_params, *, record_dir=None):
+        captured["session_id"] = run_params.session_id
+        captured["record_dir"] = record_dir
+        return SimpleNamespace(task_id="task", session_id=run_params.session_id)
+
+    monkeypatch.setattr(bamboo_run, "_start_resumed_session", fake_start)
+
+    result = CliRunner().invoke(app, ["main", "--resume", "-2", "--msg", "continue"])
+
+    assert result.exit_code == 0
+    assert captured["session_id"] == "session-older"
+    assert captured["record_dir"] == str(older_record)
+
+
+def test_main_resume_list_prints_sessions_without_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    _create_session_record(session_id="session-a", prompt="first question")
+
+    async def fake_start(run_params, *, record_dir=None):  # pragma: no cover - must not run
+        raise AssertionError("resume list should not start a session")
+
+    monkeypatch.setattr(bamboo_run, "_start_resumed_interactive_session", fake_start)
+    monkeypatch.setattr(bamboo_run, "_start_resumed_session", fake_start)
+
+    result = CliRunner().invoke(app, ["main", "--resume", "list"])
+
+    assert result.exit_code == 0
+    assert "sessions" in result.output
+    assert "session-a" in result.output
 
 
 def _create_session_record(

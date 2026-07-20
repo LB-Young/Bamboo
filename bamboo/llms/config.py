@@ -6,9 +6,12 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, cast
+
+from bamboo.llms.base import LLMModelType
 
 SUPPORTED_PROVIDERS = frozenset({"deepseek", "kimi", "minimax", "gpt", "claude", "mimo", "ollama", "vllm"})
+SUPPORTED_MODEL_TYPES = frozenset({"text", "vision"})
 API_KEY_OPTIONAL_PROVIDERS = frozenset({"ollama", "vllm"})
 _ENV_REFERENCE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
@@ -36,6 +39,7 @@ class ModelConfig:
     model: str
     prompt_profile: str
     api_key: str = field(repr=False)
+    model_type: LLMModelType = "text"
     base_url: str = ""
     timeout: float = 60.0
     temperature: float | None = None
@@ -103,6 +107,12 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
         raise ModelConfigError(f"Model '{name}' uses unsupported provider '{provider}'; supported: {supported}")
 
     model = _required_string(raw_config, "model", name)
+    model_type = _optional_string(raw_config, "model_type", name) or "text"
+    if model_type not in SUPPORTED_MODEL_TYPES:
+        supported_model_types = ", ".join(sorted(SUPPORTED_MODEL_TYPES))
+        raise ModelConfigError(
+            f"Model '{name}' uses unsupported model_type '{model_type}'; supported: {supported_model_types}"
+        )
     prompt_profile = _optional_string(raw_config, "prompt_profile", name) or provider
     api_key = _optional_string(raw_config, "api_key", name)
     base_url = _optional_string(raw_config, "base_url", name)
@@ -132,6 +142,7 @@ def _parse_model_config(name: str, raw_config: Mapping[str, Any]) -> ModelConfig
         name=name,
         provider=provider,
         model=model,
+        model_type=cast(LLMModelType, model_type),
         prompt_profile=prompt_profile,
         api_key=api_key,
         base_url=base_url,

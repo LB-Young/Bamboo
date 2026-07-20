@@ -28,7 +28,7 @@ from bamboo.helpers.constant import (
     ToolErrorEvent,
     ToolResultEvent,
 )
-from bamboo.llms import LLMContextLengthError, LLMError, LLMRequest, LLMResponse, LLMToolCall
+from bamboo.llms import LLMContextLengthError, LLMError, LLMRequest, LLMRequestError, LLMResponse, LLMToolCall
 from bamboo.prompts import render_prompt_sections
 from bamboo.runtime.prompt import AgentPrompt
 from bamboo.runtime.runtime_context import RuntimeContext
@@ -207,6 +207,7 @@ class AgentRuntime:
 
     async def _call_llm_client(self, task: Task, request: LLMRequest, *, role: str) -> LLMResponse:
         """调用模型并发布脱敏 LLM trace 事件。"""
+        self._validate_image_request(request)
         request_event = LLMRequestEvent(
             session_id=task.session_id,
             task_id=task.task_id,
@@ -269,6 +270,22 @@ class AgentRuntime:
             )
         )
         return response
+
+    def _validate_image_request(self, request: LLMRequest) -> None:
+        """Reject image requests for text-only model registrations."""
+        image_count = sum(len(message.images) for message in request.messages)
+        if image_count == 0:
+            return
+        if self.model_config.model_type == "vision" and self.model_config.capabilities.vision:
+            return
+        raise LLMRequestError(
+            (
+                f"Model '{self.model_name}' is not configured for image input. "
+                "Set model_type: vision and capabilities.vision: true in models.yaml."
+            ),
+            error_type="request",
+            retryable=False,
+        )
 
     async def _reactive_compact_and_retry(self, task: Task, exc: LLMContextLengthError) -> LLMResponse:
         """模型明确返回上下文过长时，强制压缩后重建 prompt 并重试一次。"""

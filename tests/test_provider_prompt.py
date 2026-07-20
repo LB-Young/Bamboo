@@ -10,7 +10,9 @@ from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.requests_params import RunParams
+from bamboo.llms import LLMImage
 from bamboo.llms import LLMFactory, ModelCatalog
+from bamboo.llms.media import images_from_text
 from bamboo.prompts import read_provider_prompt_sections
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
 from bamboo.tools.buildin.base import Tool, ToolResult
@@ -33,10 +35,19 @@ def test_model_config_parses_prompt_profile_and_capabilities() -> None:
     config = catalog.models["agent-model"]
 
     assert config.prompt_profile == "ollama"
+    assert config.model_type == "text"
     assert config.capabilities.tool_calling is False
     assert config.capabilities.json_schema is False
     assert config.capabilities.vision is False
     assert config.capabilities.max_parallel_tools == 1
+
+
+def test_model_config_parses_model_type() -> None:
+    """验证 models.yaml 能声明模型类型。"""
+    catalog = ModelCatalog.from_mapping(_model_document(provider="kimi", prompt_profile="kimi", model_type="vision"))
+    config = catalog.models["agent-model"]
+
+    assert config.model_type == "vision"
 
 
 def test_provider_prompt_sections_can_be_overridden_in_userspace() -> None:
@@ -71,6 +82,43 @@ def test_runtime_prompt_includes_active_provider_prompt(tmp_path: Path) -> None:
     assert "DeepSeek Provider Notes" in prompt.system_prompt
     assert "Tool Calling: enabled" in prompt.system_prompt
     assert prompt.tools
+
+
+def test_runtime_prompt_carries_user_images(tmp_path: Path) -> None:
+    """验证用户图片输入能进入 LLMRequest。"""
+    document = _model_document(provider="kimi", prompt_profile="kimi", model_type="vision")
+    document["models"]["agent-model"]["capabilities"]["vision"] = True
+    factory = LLMFactory.from_mapping(document)
+    task = TaskFactory(config=_StubBambooConfig(document)).create(
+        RunParams(
+            message="what is in this image?",
+            images=[LLMImage(source=str(tmp_path / "image.png"), media_type="image/png")],
+            project=str(tmp_path),
+            session_mode=SessionMode.chat,
+            model="agent-model",
+        )
+    )
+
+    runtime_context = RuntimeContextBuilder(event_bus=EventBus(), llm_factory=factory).build(task)
+    request = runtime_context.prompt_builder.build(task.session).to_llm_request()
+
+    assert request.messages[-1].images[0].media_type == "image/png"
+
+
+def test_run_params_extracts_image_path_from_text() -> None:
+    """验证用户把图片路径直接写在问题里时会自动作为图片输入。"""
+    path = "/Users/liubaoyang/Documents/windows/something/1.jpg"
+    params = RunParams(message=f"你帮我看一下{path}图片的内容")
+
+    assert params.images[0].source == path
+    assert params.images[0].media_type == "image/jpeg"
+
+
+def test_images_from_text_extracts_http_image_url() -> None:
+    """验证文本中的图片 URL 也会被识别。"""
+    images = images_from_text("look at https://example.com/a/1.webp?x=1")
+
+    assert images[0].source == "https://example.com/a/1.webp?x=1"
 
 
 def test_mimo_provider_prompt_is_available() -> None:
@@ -121,6 +169,7 @@ def _model_document(
     provider: str = "ollama",
     prompt_profile: str = "ollama",
     tool_calling: bool = True,
+    model_type: str = "text",
 ) -> dict:
     """创建单模型测试配置。"""
     return {
@@ -129,6 +178,7 @@ def _model_document(
             "agent-model": {
                 "provider": provider,
                 "model": "provider-model-id",
+                "model_type": model_type,
                 "api_key": "" if provider in {"ollama", "vllm"} else "test-api-key",
                 "base_url": "http://localhost:11434/v1" if provider == "ollama" else "https://llm.test/v1",
                 "prompt_profile": prompt_profile,

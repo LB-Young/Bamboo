@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from bamboo.helpers.constant import SessionMode
+from bamboo.llms.base import LLMImage
+from bamboo.llms.media import images_from_text, merge_images
 
 
 @dataclass(slots=True)
@@ -19,6 +21,7 @@ class RunParams:
 
     platform: str = "cli"
     message: str = ""
+    images: list[LLMImage] = field(default_factory=list)
     project: str = field(default_factory=lambda: str(Path.cwd()))
     model: str = ""
     provider: str = ""
@@ -30,11 +33,16 @@ class RunParams:
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
+    def __post_init__(self) -> None:
+        """Attach image paths mentioned directly in the user message."""
+        self.images = merge_images(self.images, images_from_text(self.message))
+
     @classmethod
     def from_cli(
         cls,
         *,
         message: str = "",
+        images: list[LLMImage] | None = None,
         project: str | Path | None = None,
         model: str | None = None,
         provider: str | None = None,
@@ -48,6 +56,7 @@ class RunParams:
         return cls(
             platform="cli",
             message=message or "",
+            images=merge_images(images or [], images_from_text(message or "")),
             project=str(project or Path.cwd()),
             model=model or "",
             provider=provider or "",

@@ -24,8 +24,10 @@ from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
+from bamboo.llms.media import image_from_source, images_from_text, merge_images
 from bamboo.memory.session_store import (
     SessionRecord,
+    _load_record_metadata,
     build_replay_summary,
     find_latest_session_record,
     find_session_record,
@@ -37,14 +39,15 @@ setup_logging()
 
 console = Console()
 MSG_OPTION = typer.Option(None, "--msg", "-m", help="Initial message")
+IMAGE_OPTION = typer.Option(None, "--image", help="Attach an image path or URL. Can be used multiple times.")
 PROJECT_OPTION = typer.Option(None, "--project", "-p", help="Project path")
 MODEL_OPTION = typer.Option(None, "--model", help="Override model")
-PROVIDER_OPTION = typer.Option(None, "--provider", help="LLM provider: deepseek/minimax/gpt/claude")
+PROVIDER_OPTION = typer.Option(None, "--provider", help="LLM provider: kimi/deepseek/minimax/mimo/gpt/claude")
 PERMISSION_OPTION = typer.Option(None, "--permission", help="Permission mode: default/auto/bypass/yolo")
 NO_STREAM_OPTION = typer.Option(False, "--no-stream", help="Disable streaming")
 YES_ALL_OPTION = typer.Option(False, "--yes", "-y", help="Auto-confirm all permission prompts")
 DEBUG_EVENTS_OPTION = typer.Option(False, "--debug-events", help="Print raw EventBus events for this session")
-RESUME_OPTION = typer.Option(None, "--resume", help="Resume a persisted session id")
+RESUME_OPTION = typer.Option(None, "--resume", help="Resume session id, latest/last, -1, or list")
 RECORD_DIR_OPTION = typer.Option(None, "--record-dir", help="Explicit persisted session record directory")
 SESSION_MODE_OPTION = typer.Option(
     SessionMode.auto,
@@ -90,6 +93,7 @@ def init() -> None:
 @app.command()
 def run(
     task: str = typer.Argument("", help="Task description to execute"),
+    image: list[Path] | None = IMAGE_OPTION,
     debug_events: bool = DEBUG_EVENTS_OPTION,
     resume: str | None = RESUME_OPTION,
     record_dir: Path | None = RECORD_DIR_OPTION,
@@ -99,6 +103,12 @@ def run(
     run_params = RunParams()
     run_params.platform = "cli"
     run_params.message = task
+    run_params.images = merge_images(
+        [image_from_source(str(path)) for path in (image or [])],
+        images_from_text(run_params.message),
+    )
+    if run_params.images and not run_params.message.strip():
+        raise typer.BadParameter("--image requires a task message")
     run_params.project = str(Path.cwd())
     run_params.model = ""
     run_params.provider = ""
@@ -108,10 +118,25 @@ def run(
     run_params.debug_events = debug_events
     run_params.session_mode = SessionMode.chat
     run_params.task_id = str(uuid.uuid4())
-    run_params.session_id = resume or str(uuid.uuid4())
+    resolved_record_dir: str | None = str(record_dir) if record_dir else None
+    if resume:
+        selected = _resolve_resume_selector(
+            resume,
+            mode=run_params.session_mode_value,
+            project_path=None,
+            record_dir=record_dir,
+        )
+        if selected is None:
+            return
+        run_params.session_id = selected.session_id
+        run_params.session_mode = selected.mode or run_params.session_mode
+        run_params.project = str(selected.project_root or Path.cwd())
+        resolved_record_dir = str(selected.record_dir)
+    else:
+        run_params.session_id = str(uuid.uuid4())
 
     if resume:
-        created_task = anyio.run(_start_resumed_session, run_params, record_dir=str(record_dir) if record_dir else None)
+        created_task = anyio.run(_run_resumed_session, run_params, resolved_record_dir)
     else:
         created_task = anyio.run(_start_session, run_params)
     console.print(
@@ -122,6 +147,7 @@ def run(
 @app.command()
 def main(
     message: str | None = MSG_OPTION,
+    image: list[Path] | None = IMAGE_OPTION,
     project: Path | None = PROJECT_OPTION,
     model: str | None = MODEL_OPTION,
     provider: str | None = PROVIDER_OPTION,
@@ -137,6 +163,12 @@ def main(
     run_params = RunParams()
     run_params.platform = "cli"
     run_params.message = message or ""
+    run_params.images = merge_images(
+        [image_from_source(str(path)) for path in (image or [])],
+        images_from_text(run_params.message),
+    )
+    if run_params.images and not run_params.message.strip():
+        raise typer.BadParameter("--image requires --msg")
     run_params.project = str(project or Path.cwd())
     run_params.model = model or ""
     run_params.provider = provider or ""
@@ -146,17 +178,34 @@ def main(
     run_params.debug_events = debug_events
     run_params.session_mode = session_mode
     run_params.task_id = str(uuid.uuid4())
-    run_params.session_id = resume or str(uuid.uuid4())
+    mode_value = run_params.session_mode_value
+    project_path = Path(run_params.project) if mode_value == SessionMode.project.value else None
+    resolved_record_dir: str | None = str(record_dir) if record_dir else None
+    if resume:
+        selected = _resolve_resume_selector(
+            resume,
+            mode=mode_value,
+            project_path=project_path,
+            record_dir=record_dir,
+        )
+        if selected is None:
+            return
+        run_params.session_id = selected.session_id
+        run_params.session_mode = selected.mode or run_params.session_mode
+        run_params.project = str(selected.project_root or Path.cwd())
+        resolved_record_dir = str(selected.record_dir)
+    else:
+        run_params.session_id = str(uuid.uuid4())
 
     if run_params.message:
         if resume:
-            anyio.run(_start_resumed_session, run_params, record_dir=str(record_dir) if record_dir else None)
+            anyio.run(_run_resumed_session, run_params, resolved_record_dir)
         else:
             anyio.run(_start_session, run_params)
         return
 
     if resume:
-        anyio.run(_start_resumed_interactive_session, run_params, record_dir=str(record_dir) if record_dir else None)
+        anyio.run(_run_resumed_interactive_session, run_params, resolved_record_dir)
         return
 
     anyio.run(_start_interactive_session, run_params)
@@ -236,6 +285,42 @@ def _select_session_record(selector: str, *, mode: str, project_path: Path | Non
     return records[index - 1]
 
 
+def _resolve_resume_selector(
+    selector: str,
+    *,
+    mode: str,
+    project_path: Path | None,
+    record_dir: Path | None,
+) -> SessionRecord | None:
+    """Resolve main/run --resume using replay-compatible selectors."""
+    if selector == "list":
+        _print_recent_sessions(mode=mode, project_path=project_path, limit=1000)
+        return None
+    selected = _select_session_record(selector, mode=mode, project_path=project_path)
+    if selected is not None:
+        return selected
+    resolved = find_session_record(
+        selector,
+        mode=mode,
+        project_path=project_path,
+        record_dir=record_dir,
+    )
+    if resolved is None:
+        raise typer.BadParameter(f"Session not found: {selector}")
+    record = _load_record_metadata(resolved)
+    if record is None:
+        raise typer.BadParameter(f"Session record is invalid: {resolved}")
+    return record
+
+
+async def _run_resumed_session(run_params: RunParams, record_dir: str | None) -> object:
+    return await _start_resumed_session(run_params, record_dir=record_dir)
+
+
+async def _run_resumed_interactive_session(run_params: RunParams, record_dir: str | None) -> object:
+    return await _start_resumed_interactive_session(run_params, record_dir=record_dir)
+
+
 def _is_negative_index(value: str) -> bool:
     return len(value) > 1 and value.startswith("-") and value[1:].isdigit()
 
@@ -251,7 +336,8 @@ def _print_recent_sessions(*, mode: str, project_path: Path | None, limit: int) 
         console.print("[dim]Run a task first, for example: bamboo main --msg \"hello\"[/dim]")
         return
     console.print("[bold]sessions[/bold]")
-    console.print("[dim]Use: bamboo replay SESSION_ID | bamboo replay -1 | bamboo replay latest[/dim]\n")
+    console.print("[dim]Use: bamboo replay SESSION_ID | bamboo replay -1 | bamboo replay latest[/dim]")
+    console.print("[dim]Resume: bamboo main --resume SESSION_ID | --resume -1 | --resume latest[/dim]\n")
     table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
     table.add_column("index", no_wrap=True)
     table.add_column("session_id", no_wrap=True)

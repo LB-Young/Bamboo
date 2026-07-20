@@ -44,6 +44,7 @@ models:
   kimi-k3:
     provider: kimi
     model: kimi-k3
+    model_type: vision
     prompt_profile: kimi
     api_key: "${MOONSHOT_API_KEY}"
     base_url: https://api.moonshot.cn/v1
@@ -72,6 +73,12 @@ export MOONSHOT_API_KEY="your-kimi-api-key"
 bamboo main
 ```
 
+Ask about an image from the CLI:
+
+```bash
+bamboo main --msg "这张图里有什么？" --image /path/to/image.png
+```
+
 Or start the Web UI:
 
 ```bash
@@ -86,7 +93,7 @@ http://127.0.0.1:8899
 
 ## Other Models
 
-Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
+Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set `model_type` to `text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
 
 For the full model configuration and command reference, run:
 

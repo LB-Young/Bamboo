@@ -39,6 +39,8 @@ from bamboo.helpers.constant import (
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
 from bamboo.helpers.utils import BaseEvent
+from bamboo.llms.base import LLMImage
+from bamboo.llms.media import image_from_source, images_from_text, merge_images
 from bamboo.runtime import TaskRuntime
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
 from bamboo.runtime.store import get_task_store
@@ -51,6 +53,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 class ChatRequest(BaseModel):
     message: str
+    image_paths: list[str] = []
     mode: str = "chat"
     project_path: str | None = None
     session_id: str | None = None
@@ -151,6 +154,10 @@ def create_app(*, static_dir: Path = STATIC_DIR, title: str = "Bamboo Web") -> F
         if expanded.error:
             raise HTTPException(status_code=400, detail=expanded.error)
         message = expanded.message
+        images = merge_images(
+            [image_from_source(path) for path in payload.image_paths],
+            images_from_text(message),
+        )
         event_bus = get_event_bus()
         runtime = TaskRuntime(event_bus=event_bus)
         runtime.runtime_context_builder = RuntimeContextBuilder(
@@ -164,6 +171,7 @@ def create_app(*, static_dir: Path = STATIC_DIR, title: str = "Bamboo Web") -> F
                 runtime=runtime,
                 session_id=payload.session_id,
                 message=message,
+                images=images,
                 mode=mode,
                 project_path=project,
                 record_dir=payload.record_dir,
@@ -172,6 +180,7 @@ def create_app(*, static_dir: Path = STATIC_DIR, title: str = "Bamboo Web") -> F
             run_params = RunParams(
                 platform="web",
                 message=message,
+                images=images,
                 project=str(project),
                 permission="default",
                 yes_all=False,
@@ -238,6 +247,7 @@ def _restore_task(
     runtime: TaskRuntime,
     session_id: str,
     message: str,
+    images: list[LLMImage],
     mode: str,
     project_path: Path,
     record_dir: str | None,
@@ -270,7 +280,7 @@ def _restore_task(
         run_params=base_params,
         memory_dir=session.memory_store.memory_dir if session.memory_store else resolved.parent,
     )
-    return runtime.create_followup_task(previous, message)
+    return runtime.create_followup_task(previous, message, images=images)
 
 
 def _normalize_mode(mode: str) -> str:

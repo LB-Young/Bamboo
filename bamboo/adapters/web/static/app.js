@@ -158,14 +158,15 @@ function ensureAssistant() {
   return pendingAssistant;
 }
 
-async function sendMessage(text) {
+async function sendMessage(text, imagePaths = null) {
+  imagePaths = imagePaths ?? parseImagePaths(document.getElementById("imagePathsInput")?.value || "");
   state.streaming = true;
   state.stopRequested = false;
   state.currentTaskId = null;
   setStatus("running", "Running");
   pendingAssistant = null;
   resetToolEvents();
-  appendMessage("user", text);
+  appendMessage("user", imagePaths.length ? `${text}\n\n[images: ${imagePaths.length}]` : text);
 
   const payload = {
     message: text,
@@ -173,6 +174,7 @@ async function sendMessage(text) {
     project_path: state.mode === "project" ? state.projectPath : null,
     session_id: state.currentSessionId,
     record_dir: state.currentRecordDir,
+    image_paths: imagePaths,
   };
 
   try {
@@ -206,6 +208,13 @@ async function sendMessage(text) {
     state.stopRequested = false;
     setStatus("idle");
   }
+}
+
+function parseImagePaths(value) {
+  return value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function handleEvent(event) {
@@ -481,8 +490,11 @@ function bindEvents() {
     if (state.streaming) return;
     const text = els.messageInput.value.trim();
     if (!text) return;
+    const imagePaths = parseImagePaths(document.getElementById("imagePathsInput")?.value || "");
     els.messageInput.value = "";
-    await sendMessage(text);
+    const imagePathsInput = document.getElementById("imagePathsInput");
+    if (imagePathsInput) imagePathsInput.value = "";
+    await sendMessage(text, imagePaths);
   });
   els.messageInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
