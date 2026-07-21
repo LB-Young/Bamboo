@@ -48,6 +48,11 @@ PERMISSION_OPTION = typer.Option(None, "--permission", help="Permission mode: de
 NO_STREAM_OPTION = typer.Option(False, "--no-stream", help="Disable streaming")
 YES_ALL_OPTION = typer.Option(False, "--yes", "-y", help="Auto-confirm all permission prompts")
 DEBUG_EVENTS_OPTION = typer.Option(False, "--debug-events", help="Print raw EventBus events for this session")
+VERBOSITY_OPTION = typer.Option(
+    "simple",
+    "--verbosity",
+    help="CLI output verbosity: full / medium / simple",
+)
 RESUME_OPTION = typer.Option(None, "--resume", help="Resume session id, latest/last, -1, or list")
 RECORD_DIR_OPTION = typer.Option(None, "--record-dir", help="Explicit persisted session record directory")
 SESSION_MODE_OPTION = typer.Option(
@@ -159,6 +164,7 @@ def main(
     no_stream: bool = NO_STREAM_OPTION,
     yes_all: bool = YES_ALL_OPTION,
     debug_events: bool = DEBUG_EVENTS_OPTION,
+    verbosity: str = VERBOSITY_OPTION,
     session_mode: SessionMode = SESSION_MODE_OPTION,
     resume: str | None = RESUME_OPTION,
     record_dir: Path | None = RECORD_DIR_OPTION,
@@ -180,6 +186,10 @@ def main(
     run_params.no_stream = no_stream
     run_params.yes_all = yes_all
     run_params.debug_events = debug_events
+    normalized_verbosity = verbosity.strip().lower()
+    if normalized_verbosity not in {"full", "medium", "simple"}:
+        raise typer.BadParameter("--verbosity must be full, medium, or simple")
+    run_params.verbosity = normalized_verbosity
     run_params.session_mode = session_mode
     run_params.task_id = str(uuid.uuid4())
     mode_value = run_params.session_mode_value

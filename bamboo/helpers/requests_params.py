@@ -29,6 +29,7 @@ class RunParams:
     no_stream: bool = False
     yes_all: bool = False
     debug_events: bool = False
+    verbosity: str = "simple"
     session_mode: SessionMode | str = SessionMode.chat
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -50,8 +51,9 @@ class RunParams:
         no_stream: bool = False,
         yes_all: bool = False,
         debug_events: bool = False,
+        verbosity: str = "simple",
         session_mode: SessionMode | str = SessionMode.chat,
-    ) -> "RunParams":
+    ) -> RunParams:
         """根据 CLI 参数创建标准化运行参数。"""
         return cls(
             platform="cli",
@@ -64,6 +66,7 @@ class RunParams:
             no_stream=no_stream,
             yes_all=yes_all,
             debug_events=debug_events,
+            verbosity=verbosity,
             session_mode=session_mode,
         )
 

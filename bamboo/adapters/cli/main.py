@@ -6,14 +6,18 @@ TaskRuntime，最后把运行时事件渲染到终端。
 
 from __future__ import annotations
 
-import anyio
 import json
 from pathlib import Path
+
+import anyio
 from rich.console import Console
 
+from bamboo.adapters.cli.commands import expand_command_message
 from bamboo.factory.event_bus import EventBus, get_event_bus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
+    CronJobCompleteEvent,
+    CronJobStartEvent,
     PermissionRequestEvent,
     PermissionResultEvent,
     SessionStatusChangeEvent,
@@ -29,15 +33,12 @@ from bamboo.helpers.constant import (
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
-    CronJobCompleteEvent,
-    CronJobStartEvent,
 )
 from bamboo.helpers.logging import get_logger
 from bamboo.helpers.requests_params import RunParams
 from bamboo.helpers.utils import BaseEvent
-from bamboo.runtime import TaskRuntime
-from bamboo.adapters.cli.commands import expand_command_message
 from bamboo.memory.session_store import find_session_record, load_session_record
+from bamboo.runtime import TaskRuntime
 
 console = Console()
 
@@ -64,9 +65,10 @@ async def _start_session(run_params: RunParams) -> object:
         console.print(f"[dim]command expanded[/dim] /{expanded.command_name}")
         run_params.message = expanded.message
     event_bus = get_event_bus()
+    renderer = _cli_event_renderer(run_params)
     # 先订阅事件，再启动任务，确保 task-created 等早期事件不会丢失。
     unsubscribe = event_bus.subscribe(
-        _render_cli_event,
+        renderer,
         patterns=CLI_EVENT_PATTERNS,
         filter_fn=lambda event: event.session_id == run_params.session_id,
     )
@@ -100,8 +102,9 @@ async def _start_resumed_session(run_params: RunParams, *, record_dir: str | Non
     run_params.session_id = task.session_id
 
     event_bus = get_event_bus()
+    renderer = _cli_event_renderer(run_params)
     unsubscribe = event_bus.subscribe(
-        _render_cli_event,
+        renderer,
         patterns=CLI_EVENT_PATTERNS,
         filter_fn=lambda event: event.session_id == task.session_id,
     )
@@ -118,8 +121,9 @@ async def _start_interactive_session(run_params: RunParams) -> object:
     """启动交互式 CLI 会话，并在多轮输入之间复用同一个 Session。"""
     log = get_logger("cli")
     event_bus = get_event_bus()
+    renderer = _cli_event_renderer(run_params)
     unsubscribe = event_bus.subscribe(
-        _render_cli_event,
+        renderer,
         patterns=CLI_EVENT_PATTERNS,
         filter_fn=lambda event: event.session_id == run_params.session_id,
     )
@@ -187,8 +191,9 @@ async def _start_resumed_interactive_session(run_params: RunParams, *, record_di
     runtime = TaskRuntime(event_bus=event_bus)
     task = _restore_previous_task(runtime, run_params, record_dir=record_dir)
     run_params.session_id = task.session_id
+    renderer = _cli_event_renderer(run_params)
     unsubscribe = event_bus.subscribe(
-        _render_cli_event,
+        renderer,
         patterns=CLI_EVENT_PATTERNS,
         filter_fn=lambda event: event.session_id == task.session_id,
     )
@@ -296,6 +301,15 @@ def _render_debug_event(event: BaseEvent) -> None:
     console.print(f"[dim][event][/dim] {json.dumps(event.to_dict(), ensure_ascii=False)}")
 
 
+def _cli_event_renderer(run_params: RunParams):
+    """Return the terminal renderer selected by the CLI verbosity."""
+    if run_params.verbosity == "full":
+        return _render_cli_event
+    if run_params.verbosity == "medium":
+        return _render_medium_event
+    return _render_tools_only_event
+
+
 def _render_cli_event(event: BaseEvent) -> None:
     """把一条运行时事件渲染为终端输出。"""
     if isinstance(event, TaskCreateEvent):
@@ -325,20 +339,7 @@ def _render_cli_event(event: BaseEvent) -> None:
     if isinstance(event, TextFinishEvent):
         return
 
-    if isinstance(event, ToolCallEvent):
-        console.print(f"[dim]tool call[/dim] {event.tool_name} {event.tool_input}")
-        return
-
-    if isinstance(event, PermissionRequestEvent):
-        console.print(
-            f"[yellow]permission required[/yellow] {event.tool_name} "
-            f"[dim]risk={event.risk_level} reason={event.reason}[/dim]"
-        )
-        return
-
-    if isinstance(event, PermissionResultEvent):
-        status = "approved" if event.approved else "denied"
-        console.print(f"[dim]permission {status}[/dim] {event.tool_name} {event.reason}")
+    if _render_tool_or_permission_event(event):
         return
 
     if isinstance(event, SubagentStartEvent):
@@ -347,14 +348,6 @@ def _render_cli_event(event: BaseEvent) -> None:
 
     if isinstance(event, SubagentFinishEvent):
         console.print(f"[dim]subagent finish[/dim] {event.subagent_name} status={event.status}")
-        return
-
-    if isinstance(event, ToolResultEvent):
-        console.print(f"[dim]tool result[/dim] {event.tool_name}--{str(event.output).strip()[:30]}" + "……")
-        return
-
-    if isinstance(event, ToolErrorEvent):
-        console.print(f"[red]tool error[/red] {event.tool_name}: {event.error}")
         return
 
     if isinstance(event, StepFinishEvent):
@@ -368,3 +361,81 @@ def _render_cli_event(event: BaseEvent) -> None:
     if isinstance(event, CronJobCompleteEvent):
         color = "green" if event.status == "completed" else "red"
         console.print(f"[{color}]cron {event.status}[/{color}] {event.job_name} {event.error}")
+
+
+def _render_medium_event(event: BaseEvent) -> None:
+    """Render user-facing text and action events while suppressing low-level state changes."""
+    if isinstance(event, TextStartEvent):
+        console.print("[dim]assistant[/dim]")
+        return
+
+    if isinstance(event, TextDeltaEvent):
+        console.print(event.delta)
+        return
+
+    if isinstance(event, TextFinishEvent):
+        return
+
+    if _render_tool_or_permission_event(event):
+        return
+
+    if isinstance(event, SubagentStartEvent):
+        console.print(f"[dim]subagent start[/dim] {event.subagent_name} {event.description}")
+        return
+
+    if isinstance(event, SubagentFinishEvent):
+        console.print(f"[dim]subagent finish[/dim] {event.subagent_name} status={event.status}")
+        return
+
+    if isinstance(event, CronJobStartEvent):
+        console.print(f"[dim]cron start[/dim] {event.job_name} delivery={event.delivery}")
+        return
+
+    if isinstance(event, CronJobCompleteEvent):
+        color = "green" if event.status == "completed" else "red"
+        console.print(f"[{color}]cron {event.status}[/{color}] {event.job_name} {event.error}")
+
+
+def _render_tools_only_event(event: BaseEvent) -> None:
+    """Render assistant text plus tool and permission events, suppressing state chatter."""
+    if isinstance(event, TextStartEvent):
+        console.print("[dim]assistant[/dim]")
+        return
+
+    if isinstance(event, TextDeltaEvent):
+        console.print(event.delta)
+        return
+
+    if isinstance(event, TextFinishEvent):
+        return
+
+    _render_tool_or_permission_event(event)
+
+
+def _render_tool_or_permission_event(event: BaseEvent) -> bool:
+    """Render tool and permission events. Return whether the event was handled."""
+    if isinstance(event, ToolCallEvent):
+        console.print(f"[dim]tool call[/dim] {event.tool_name} {event.tool_input}")
+        return True
+
+    if isinstance(event, ToolResultEvent):
+        console.print(f"[dim]tool result[/dim] {event.tool_name}--{str(event.output).strip()[:30]}" + "……")
+        return True
+
+    if isinstance(event, ToolErrorEvent):
+        console.print(f"[red]tool error[/red] {event.tool_name}: {event.error}")
+        return True
+
+    if isinstance(event, PermissionRequestEvent):
+        console.print(
+            f"[yellow]permission required[/yellow] {event.tool_name} "
+            f"[dim]risk={event.risk_level} reason={event.reason}[/dim]"
+        )
+        return True
+
+    if isinstance(event, PermissionResultEvent):
+        status = "approved" if event.approved else "denied"
+        console.print(f"[dim]permission {status}[/dim] {event.tool_name} {event.reason}")
+        return True
+
+    return False
