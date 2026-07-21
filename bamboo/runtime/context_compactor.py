@@ -201,19 +201,19 @@ class ContextCompactor:
             return await self.llm_client.complete(request)
 
     def _select_messages(self, session: Session) -> list[Message]:
-        """选择最近保留区之前的所有活跃消息作为本轮压缩候选。"""
+        """选择最近保留区之前协议完整的活跃消息前缀作为压缩候选。"""
         active_messages = session.active_messages()
         preserve_count = self.policy.preserve_recent_messages
         if len(active_messages) <= preserve_count:
             return []
-        return active_messages[:-preserve_count]
+        return _select_valid_compaction_prefix(active_messages, len(active_messages) - preserve_count)
 
     def _select_force_messages(self, session: Session) -> list[Message]:
         """reactive compact 使用：至少保留最后一条活跃消息，尽量压缩其之前的历史。"""
         active_messages = session.active_messages()
         if len(active_messages) <= 1:
             return []
-        return active_messages[:-1]
+        return _select_valid_compaction_prefix(active_messages, len(active_messages) - 1)
 
     def _microcompact_messages(self, messages: list[Message]) -> bool:
         """Apply deterministic compaction before spending an LLM call on summaries."""
@@ -350,3 +350,42 @@ def _find_tool_call_assistant(session: Session, tool_call_id: str) -> Message | 
         if any(tool_call.id == tool_call_id for tool_call in message.tool_calls):
             return message
     return None
+
+
+def _select_valid_compaction_prefix(active_messages: list[Message], preferred_end: int) -> list[Message]:
+    """Return the longest prefix up to preferred_end that ends on a complete turn."""
+    end = min(max(preferred_end, 0), len(active_messages))
+    while end > 0:
+        if _has_valid_compaction_boundary(active_messages, end):
+            return active_messages[:end]
+        end -= 1
+    return []
+
+
+def _has_valid_compaction_boundary(active_messages: list[Message], end: int) -> bool:
+    """Validate that a compaction cut does not split turns or tool-call pairs."""
+    candidate = active_messages[:end]
+    if not candidate or not _has_valid_tool_boundaries(candidate):
+        return False
+
+    next_message = active_messages[end] if end < len(active_messages) else None
+    if next_message is not None and next_message.role in {"assistant", "tool"}:
+        return False
+    if candidate[-1].role == "user" and next_message is not None:
+        return False
+    return True
+
+
+def _has_valid_tool_boundaries(messages: list[Message]) -> bool:
+    """Validate OpenAI/Anthropic-style assistant tool calls and tool results stay together."""
+    expected_tool_call_ids: set[str] = set()
+    produced_tool_call_ids: set[str] = set()
+    for message in messages:
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                expected_tool_call_ids.add(tool_call.id)
+        if message.role == "tool":
+            if not message.tool_call_id or message.tool_call_id not in expected_tool_call_ids:
+                return False
+            produced_tool_call_ids.add(message.tool_call_id)
+    return expected_tool_call_ids.issubset(produced_tool_call_ids)
