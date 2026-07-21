@@ -11,7 +11,6 @@ from uuid import uuid4
 from bamboo.tools.buildin.base import Tool, ToolResult
 from bamboo.userspace.userspace import get_userspace_dir
 
-
 BROWSER_ACTIONS = {
     "open",
     "click",
@@ -36,7 +35,7 @@ class BrowserTool(Tool):
     risk_level = "unknown"
     tags = ("browser", "web", "automation")
 
-    def __init__(self, *, session: "BrowserSession | None" = None) -> None:
+    def __init__(self, *, session: BrowserSession | None = None) -> None:
         self.session = session or get_browser_session()
 
     def input_schema(self) -> dict[str, Any]:
@@ -184,10 +183,7 @@ class BrowserSession:
         except Exception as exc:
             await self.close()
             raise BrowserToolError(
-                (
-                    "Failed to launch Playwright browser. If browsers are missing, run "
-                    "`python -m playwright install chromium`."
-                ),
+                _format_browser_launch_error(exc),
                 error="browser_launch_failed",
             ) from exc
 
@@ -331,3 +327,14 @@ def _stringify_eval_result(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False, indent=2)
     except TypeError:
         return str(value)
+
+
+def _format_browser_launch_error(exc: Exception) -> str:
+    detail = str(exc).strip()
+    lines = [
+        "Failed to launch Playwright browser.",
+        "Install the browser runtime with: `python -m playwright install chromium`.",
+    ]
+    if detail:
+        lines.append(f"Underlying error: {detail}")
+    return "\n".join(lines)

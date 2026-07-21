@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import anyio
 
-from bamboo.tools.buildin.browser import BrowserAction, BrowserTool
 from bamboo.tools.buildin.base import ToolResult
+from bamboo.tools.buildin.browser import BrowserAction, BrowserTool, _format_browser_launch_error
 
 
 def test_browser_tool_dispatches_single_action_parameter() -> None:
@@ -34,6 +34,13 @@ def test_browser_tool_rejects_unknown_action() -> None:
         assert "click" in result.metadata["supported_actions"]  # type: ignore[index]
 
     anyio.run(run_test)
+
+
+def test_browser_launch_error_includes_underlying_detail() -> None:
+    message = _format_browser_launch_error(RuntimeError("Executable doesn't exist at /tmp/headless_shell"))
+
+    assert "python -m playwright install chromium" in message
+    assert "Executable doesn't exist" in message
 
 
 class _FakeBrowserSession:

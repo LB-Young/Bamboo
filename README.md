@@ -27,6 +27,8 @@ pip install -e .
 bamboo init
 ```
 
+`pip install -e .` also installs the Chromium runtime required by Bamboo's `browser` tool. If the download is skipped or fails in an offline environment, run `python -m playwright install chromium` manually.
+
 For development:
 
 ```bash
