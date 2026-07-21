@@ -252,23 +252,40 @@ def _build_environment_section(
     """生成当前会话的运行环境信息。"""
     shell = os.environ.get("SHELL", "unknown")
     today = datetime.date.today().isoformat()
+    display_project_root = str(project_root) if prompt_mode == "project" else ""
+    working_directory = resolve_workspace_directory(project_root)
     lines = [
         "# Runtime Environment",
         f"- Prompt Mode: {prompt_mode}",
-        f"- Project Root (authoritative project directory): `{project_root}`",
-        "- In project mode, treat Project Root as the only project directory. Inspect and modify files under Project Root unless the user explicitly gives another path.",
-        "- Working Directory is only the Bamboo process directory. Do not use it to infer the current project.",
+        f"- Project Root (authoritative project directory): `{display_project_root}`",
+        f"- Working Directory: `{working_directory}`",
         f"- OS: {platform.system()} {platform.release()} ({platform.machine()})",
         f"- Shell: `{shell}`",
-        f"- Working Directory: `{Path.cwd()}`",
         f"- Memory Directory: `{memory_dir}`",
         f"- Today's Date: {today}",
     ]
+    if prompt_mode == "project":
+        lines.insert(
+            4,
+            "- In project mode, treat Project Root as the only project directory. Inspect and modify files under Project Root unless the user explicitly gives another path.",
+        )
+    else:
+        lines.insert(
+            4,
+            "- In chat mode, there is no authoritative project root. Use Working Directory for scratch files unless the user explicitly gives another path.",
+        )
     if model:
         lines.append(f"- Model: `{model}`")
     if provider:
         lines.append(f"- Provider: `{provider}`")
     return "\n".join(lines)
+
+
+def resolve_workspace_directory(project_root: Path) -> Path:
+    """Return Bamboo's stable per-session working directory."""
+    from bamboo.userspace.userspace import get_userspace_dir
+
+    return get_userspace_dir() / "workspace"
 
 
 def _read_project_instruction_sections(project_root: Path) -> list[PromptSection]:

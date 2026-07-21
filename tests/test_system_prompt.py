@@ -63,7 +63,9 @@ def test_build_project_prompt_includes_project_instructions(tmp_path: Path) -> N
     assert "# Tool Results" in prompt
     assert "# Runtime Environment" in prompt
     assert f"Project Root (authoritative project directory): `{tmp_path}`" in prompt
-    assert "Working Directory is only the Bamboo process directory" in prompt
+    assert "Working Directory: `" in prompt
+    assert "/.bamboo/workspace`" in prompt
+    assert "treat Project Root as the only project directory" in prompt
     assert "deepseek-chat" in prompt
     assert "项目内回答必须先读代码。" in prompt
 
@@ -114,6 +116,10 @@ def test_build_chat_prompt_excludes_project_instructions(tmp_path: Path) -> None
     assert "可靠、清晰、直接的 AI 助手" in prompt
     assert "面向软件工程项目的自主 Agent" not in prompt
     assert "项目专属规则" not in prompt
+    assert "Project Root (authoritative project directory): ``" in prompt
+    assert "Working Directory: `" in prompt
+    assert "/.bamboo/workspace`" in prompt
+    assert "there is no authoritative project root" in prompt
 
 
 def test_build_prompt_includes_committed_bkn_docs(tmp_path: Path) -> None:
@@ -205,6 +211,7 @@ def test_session_factory_sets_prompt_mode_metadata(tmp_path: Path) -> None:
     assert session.context.metadata["prompt_mode"] == "project"
     assert "面向软件工程项目的自主 Agent" in session.context.system_prompt
     assert session.messages[0].content == "hello"
+    assert (tmp_path / "home" / ".bamboo" / "workspace").is_dir()
 
 
 def test_agent_prompt_render_includes_section_metadata(tmp_path: Path) -> None:

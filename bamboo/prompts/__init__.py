@@ -3,13 +3,14 @@
 from bamboo.prompts.system_prompt import (
     PromptSection,
     SystemPromptBuilder,
-    build_system_prompt_sections,
     build_system_prompt,
+    build_system_prompt_sections,
     hash_prompt_text,
-    read_provider_prompt_sections,
     read_provider_prompt_section_objects,
+    read_provider_prompt_sections,
     render_prompt_sections,
     resolve_prompt_mode,
+    resolve_workspace_directory,
 )
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "read_provider_prompt_sections",
     "read_provider_prompt_section_objects",
     "render_prompt_sections",
+    "resolve_workspace_directory",
     "resolve_prompt_mode",
 ]

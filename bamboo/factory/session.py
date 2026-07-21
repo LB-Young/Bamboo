@@ -11,7 +11,7 @@ from bamboo.factory.message import Message, MessageRole
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms.base import LLMImage, LLMToolCall
 from bamboo.memory.session_store import SessionMemoryStore, current_time_record_name
-from bamboo.prompts import build_system_prompt, resolve_prompt_mode
+from bamboo.prompts import build_system_prompt, resolve_prompt_mode, resolve_workspace_directory
 
 
 @dataclass(slots=True)
@@ -143,7 +143,7 @@ class Session:
             "time": message.created_at,
             "role": message.role,
             "content": message.content,
-            "images": [self._image_snapshot(image) for image in message.images],
+            "images": [SessionFactory._image_snapshot(image) for image in message.images],
             "agent_name": message.agent_name,
             "message_type": message.message_type,
             "active_for_prompt": message.active_for_prompt,
@@ -167,6 +167,7 @@ class SessionFactory:
         """创建 Session，并写入用户初始消息。"""
         project_root = Path(run_params.project)
         prompt_mode = resolve_prompt_mode(run_params.session_mode, project_root)
+        resolve_workspace_directory(project_root).mkdir(parents=True, exist_ok=True)
         system_prompt = build_system_prompt(
             session_mode=run_params.session_mode,
             project_root=project_root,
