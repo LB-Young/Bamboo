@@ -21,6 +21,7 @@ from bamboo.adapters.cli.main import (
 )
 from bamboo.bkn.cli import app as bkn_app
 from bamboo.cron import CronScheduler, CronStore, HeartbeatConfig
+from bamboo.cron.autostart import start_embedded_cron
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
@@ -99,6 +100,7 @@ def run(
     record_dir: Path | None = RECORD_DIR_OPTION,
 ) -> None:
     """运行一个命令行任务。"""
+    _start_default_cron()
     # CLI 命令只负责组装参数；任务生命周期由 TaskRuntime 负责。
     run_params = RunParams()
     run_params.platform = "cli"
@@ -197,6 +199,7 @@ def main(
     else:
         run_params.session_id = str(uuid.uuid4())
 
+    _start_default_cron()
     if run_params.message:
         if resume:
             anyio.run(_run_resumed_session, run_params, resolved_record_dir)
@@ -418,6 +421,7 @@ def web(
     """启动 Bamboo Web 对话入口。"""
     import uvicorn
 
+    _start_default_cron()
     url = f"http://{host}:{port}"
     console.print(f"[green]Bamboo Web[/green] {url}")
     if not no_browser:
@@ -435,6 +439,7 @@ def web_fancy(
     """启动 Bamboo Fancy Web 对话入口。"""
     import uvicorn
 
+    _start_default_cron()
     url = f"http://{host}:{port}"
     console.print(f"[green]Bamboo Fancy Web[/green] {url}")
     if not no_browser:
@@ -456,6 +461,7 @@ def docs(
         return
     import uvicorn
 
+    _start_default_cron()
     console.print(f"[green]Bamboo docs[/green] {url}")
     console.print("[dim]Starting Bamboo Web for docs. Press Ctrl+C to stop.[/dim]")
     _open_url_later(url)
@@ -472,6 +478,10 @@ def _open_url(url: str) -> None:
     opened = webbrowser.open(url)
     if not opened:
         console.print("[yellow]browser open request was not accepted; open the URL manually[/yellow]")
+
+
+def _start_default_cron() -> None:
+    start_embedded_cron(interval_seconds=30.0)
 
 
 @cron_app.command("start")

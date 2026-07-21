@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from bamboo.bkn import BKNRegistry
 from bamboo.factory.session import Session
 from bamboo.llms import LLMMessage, LLMRequest
-from bamboo.llms.media import image_summary
 from bamboo.llms.config import ModelCapabilities, ModelConfig
+from bamboo.llms.media import image_summary
 from bamboo.memory.manager import MemoryManager
 from bamboo.prompts import PromptSection, read_provider_prompt_section_objects, render_prompt_sections
 from bamboo.skills import SkillRegistry
@@ -193,7 +193,10 @@ class AgentPromptBuilder:
         """Render committed BKN.md files as a compact BKN directory."""
         if self.bkn_registry is None:
             return ""
-        definitions = self.bkn_registry.list()
+        try:
+            definitions = self.bkn_registry.list()
+        except OSError:
+            return ""
         chunks = [
             "# Available BKNs",
             "",

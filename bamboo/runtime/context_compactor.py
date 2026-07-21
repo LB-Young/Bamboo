@@ -34,6 +34,17 @@ class HeuristicTokenCounter:
         token_count += self.count_text(json.dumps(request.tools, ensure_ascii=False))
         for message in request.messages:
             token_count += 4 + self.count_text(message.role) + self.count_text(message.content)
+            if message.images:
+                token_count += len(message.images) * 1024
+                token_count += self.count_text(
+                    json.dumps(
+                        [
+                            {"source": image.source, "media_type": image.media_type, "detail": image.detail}
+                            for image in message.images
+                        ],
+                        ensure_ascii=False,
+                    )
+                )
             token_count += self.count_text(
                 json.dumps(
                     [
@@ -61,6 +72,10 @@ class ContextBudgetPolicy:
     minimum_remaining_tokens: int = 20000
     preserve_recent_messages: int = 4
     max_compaction_passes: int = 2
+    max_inline_message_tokens: int = 8000
+    preserve_message_head_chars: int = 4000
+    preserve_message_tail_chars: int = 2000
+    max_image_placeholders: int = 8
 
     def __post_init__(self) -> None:
         """校验压缩策略，避免无效阈值导致无限压缩。"""
@@ -72,6 +87,14 @@ class ContextBudgetPolicy:
             raise ValueError("preserve_recent_messages must be at least 1")
         if self.max_compaction_passes < 1:
             raise ValueError("max_compaction_passes must be at least 1")
+        if self.max_inline_message_tokens < 1:
+            raise ValueError("max_inline_message_tokens must be positive")
+        if self.preserve_message_head_chars < 0:
+            raise ValueError("preserve_message_head_chars cannot be negative")
+        if self.preserve_message_tail_chars < 0:
+            raise ValueError("preserve_message_tail_chars cannot be negative")
+        if self.max_image_placeholders < 1:
+            raise ValueError("max_image_placeholders must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +156,9 @@ class ContextCompactor:
         if not selected_messages:
             return False
 
+        if self._microcompact_messages(selected_messages):
+            return True
+
         source_text = self._render_messages(selected_messages)
         try:
             response = await self._complete_with_fallback(source_text)
@@ -156,9 +182,12 @@ class ContextCompactor:
     async def _complete_with_fallback(self, source_text: str):
         request = LLMRequest(
             system_prompt=(
-                "Compress the conversation history into a concise factual summary. "
-                "Preserve user requirements, decisions, errors, tool results and unresolved work. "
-                "Do not answer the user or add new information."
+                "Compress the conversation history into structured Bamboo session memory. "
+                "Preserve only facts that are needed to continue the task correctly. "
+                "Use these sections when relevant: Goal, User Requirements, Decisions, "
+                "Files And Commands, Tool Results, Errors And Fixes, Current State, Open Work. "
+                "Preserve file paths, commands, important outputs, model/provider constraints, "
+                "and unresolved questions. Do not answer the user or add new information."
             ),
             messages=[LLMMessage(role="user", content=source_text)],
         )
@@ -185,6 +214,83 @@ class ContextCompactor:
         if len(active_messages) <= 1:
             return []
         return active_messages[:-1]
+
+    def _microcompact_messages(self, messages: list[Message]) -> bool:
+        """Apply deterministic compaction before spending an LLM call on summaries."""
+        changed = False
+        for message in messages:
+            if message.metadata.get("context_microcompacted"):
+                continue
+            message_changed = False
+            original_content = message.content
+            original_image_count = len(message.images)
+            if message.images:
+                image_sources = self._image_sources(message, limit=self.policy.max_image_placeholders)
+                message.content = self._append_image_placeholders(message)
+                message.images = []
+                message.metadata.update(
+                    {
+                        "context_microcompact_images": original_image_count,
+                        "context_microcompact_image_sources": image_sources,
+                    }
+                )
+                message_changed = True
+
+            content_tokens = self.token_counter.count_text(message.content)
+            if content_tokens > self.policy.max_inline_message_tokens:
+                message.content = self._truncate_message_content(message.content, content_tokens)
+                message.metadata.update(
+                    {
+                        "context_microcompact_original_length": len(original_content),
+                        "context_microcompact_original_tokens": content_tokens,
+                    }
+                )
+                message_changed = True
+
+            if message_changed:
+                message.metadata["context_microcompacted"] = True
+                changed = True
+        return changed
+
+    def _append_image_placeholders(self, message: Message) -> str:
+        sources = self._image_sources(message, limit=self.policy.max_image_placeholders)
+        omitted = max(0, len(message.images) - len(sources))
+        lines = [
+            "",
+            "[images compacted from older context]",
+            f"count={len(message.images)}",
+        ]
+        if sources:
+            lines.append("sources=" + ", ".join(sources))
+        if omitted:
+            lines.append(f"omitted_sources={omitted}")
+        return message.content.rstrip() + "\n".join(lines)
+
+    @staticmethod
+    def _image_sources(message: Message, *, limit: int) -> list[str]:
+        return [image.source for image in message.images[:limit]]
+
+    def _truncate_message_content(self, content: str, original_tokens: int) -> str:
+        head = content[: self.policy.preserve_message_head_chars] if self.policy.preserve_message_head_chars else ""
+        tail = content[-self.policy.preserve_message_tail_chars :] if self.policy.preserve_message_tail_chars else ""
+        omitted_chars = max(0, len(content) - len(head) - len(tail))
+        notice = (
+            "\n[message microcompacted: older message exceeded context budget "
+            f"original_tokens={original_tokens} omitted_chars={omitted_chars}]\n"
+        )
+        compacted = f"{head}{notice}{tail}"
+        while self.token_counter.count_text(compacted) > self.policy.max_inline_message_tokens and (head or tail):
+            if head:
+                head = head[: max(0, len(head) // 2)]
+            elif tail:
+                tail = tail[len(tail) // 2 :]
+            omitted_chars = max(0, len(content) - len(head) - len(tail))
+            notice = (
+                "\n[message microcompacted: older message exceeded context budget "
+                f"original_tokens={original_tokens} omitted_chars={omitted_chars}]\n"
+            )
+            compacted = f"{head}{notice}{tail}"
+        return compacted
 
     @staticmethod
     def _drop_low_value_message(session: Session) -> bool:

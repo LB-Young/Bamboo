@@ -115,11 +115,14 @@ def test_main_resume_latest_uses_most_recent_session(monkeypatch: pytest.MonkeyP
         captured["message"] = run_params.message
         return SimpleNamespace(task_id="task", session_id=run_params.session_id)
 
+    cron_started: list[bool] = []
+    monkeypatch.setattr(bamboo_run, "_start_default_cron", lambda: cron_started.append(True))
     monkeypatch.setattr(bamboo_run, "_start_resumed_session", fake_start)
 
     result = CliRunner().invoke(app, ["main", "--resume", "latest", "--msg", "continue"])
 
     assert result.exit_code == 0
+    assert cron_started == [True]
     assert captured["session_id"] == "session-newer"
     assert captured["record_dir"] == str(newest_record)
     assert captured["message"] == "continue"
@@ -143,11 +146,14 @@ def test_main_resume_negative_index_selects_session(monkeypatch: pytest.MonkeyPa
         captured["record_dir"] = record_dir
         return SimpleNamespace(task_id="task", session_id=run_params.session_id)
 
+    cron_started: list[bool] = []
+    monkeypatch.setattr(bamboo_run, "_start_default_cron", lambda: cron_started.append(True))
     monkeypatch.setattr(bamboo_run, "_start_resumed_session", fake_start)
 
     result = CliRunner().invoke(app, ["main", "--resume", "-2", "--msg", "continue"])
 
     assert result.exit_code == 0
+    assert cron_started == [True]
     assert captured["session_id"] == "session-older"
     assert captured["record_dir"] == str(older_record)
 
@@ -158,6 +164,7 @@ def test_main_resume_list_prints_sessions_without_running(monkeypatch: pytest.Mo
     async def fake_start(run_params, *, record_dir=None):  # pragma: no cover - must not run
         raise AssertionError("resume list should not start a session")
 
+    monkeypatch.setattr(bamboo_run, "_start_default_cron", lambda: (_ for _ in ()).throw(AssertionError("unexpected cron")))
     monkeypatch.setattr(bamboo_run, "_start_resumed_interactive_session", fake_start)
     monkeypatch.setattr(bamboo_run, "_start_resumed_session", fake_start)
 
