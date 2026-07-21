@@ -88,7 +88,7 @@ def init() -> None:
             raise typer.Exit(0)
     layout = ensure_userspace(overwrite=overwrite)
     console.print(f"[green]✓ 用户目录已就绪：{layout.root}[/green]")
-    console.print("[dim]browser 工具依赖的 Chromium 运行时会在 pip install 时自动安装；如曾跳过或失败，可执行：[/dim]")
+    console.print("[dim]如需使用 browser 工具，可按需安装 Playwright Chromium 运行时：[/dim]")
     console.print("[bold dim]python -m playwright install chromium[/bold dim]")
     console.print("\n接下来请编辑配置文件，填写你的 LLM API Key等信息。")
 

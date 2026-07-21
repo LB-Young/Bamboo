@@ -89,9 +89,8 @@ export MOONSHOT_API_KEY="your-kimi-api-key"
 
 bamboo main --msg "帮我分析这个项目"</code></pre>
           <p>
-            <code>pip install -e .</code> 会同时安装 <code>browser</code>
-            工具需要的 Chromium 运行时。如果离线环境跳过或下载失败，再手动执行
-            <code>python -m playwright install chromium</code>。
+            如果需要使用 <code>browser</code> 工具打开网页、截图或提取页面内容，再执行
+            <code>python -m playwright install chromium</code> 安装 Playwright 的 Chromium 运行时。
           </p>
           <p>
             如果你要使用 DeepSeek、GPT、Claude、MiniMax、Mimo、Ollama 或 vLLM，需要先在

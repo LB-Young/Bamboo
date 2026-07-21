@@ -27,7 +27,11 @@ pip install -e .
 bamboo init
 ```
 
-`pip install -e .` also installs the Chromium runtime required by Bamboo's `browser` tool. If the download is skipped or fails in an offline environment, run `python -m playwright install chromium` manually.
+If you want to use browser automation, install the Playwright Chromium runtime manually after installing Bamboo:
+
+```bash
+python -m playwright install chromium
+```
 
 For development:
 
@@ -134,6 +138,44 @@ models:
 ```
 
 For a multimodal vLLM model, add the model-specific vision options such as `--limit-mm-per-prompt image=4`, set `model_type: vision`, and set `capabilities.vision: true`. Tool calling still requires the parser/template supported by that specific model.
+
+Example Gemma4 vLLM server with tool calling and reasoning parsing enabled:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 vllm serve gemma-4-31B-it \
+  --tensor-parallel-size 2 \
+  --trust-remote-code \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name gemma-4-31b \
+  --gpu-memory-utilization 0.8 \
+  --enable-auto-tool-choice \
+  --tool-call-parser gemma4 \
+  --reasoning-parser gemma4 \
+  --chat-template gemma-4-31B-it/chat_template.jinja
+```
+
+Register the served Gemma4 model in `~/.bamboo/configs/models.yaml`:
+
+```yaml
+models:
+  gemma-4-31b:
+    provider: vllm
+    model: gemma-4-31b
+    model_type: text
+    prompt_profile: vllm
+    api_key: "EMPTY"
+    base_url: http://localhost:8000/v1
+    timeout: 120
+    context_window: 131072
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      reasoning: true
+      max_parallel_tools: 1
+```
 
 For the full model configuration and command reference, run:
 
