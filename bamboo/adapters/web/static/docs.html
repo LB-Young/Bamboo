@@ -160,6 +160,7 @@ models:
           <pre><code>model: kimi-k3
 fallback_model: ""
 compaction_model: ""
+tool_call_timeout_seconds: 120
 compaction_fallback_model: ""
 
 auxiliary_models:
@@ -192,6 +193,7 @@ auxiliary_models:
               <tr><td><code>model</code></td><td>主 Agent 使用的模型注册名，必须在 <code>models.yaml</code> 中存在。</td></tr>
               <tr><td><code>fallback_model</code></td><td>主模型遇到 rate limit、server error、timeout 等可重试错误时的备用模型；留空表示不启用。</td></tr>
               <tr><td><code>compaction_model</code></td><td>上下文压缩使用的模型；留空时复用 <code>model</code>。</td></tr>
+              <tr><td><code>tool_call_timeout_seconds</code></td><td>单次工具调用的全局超时时间；超时后写入 tool error，让 Agent 下一轮选择其他方案。</td></tr>
               <tr><td><code>compaction_fallback_model</code></td><td>上下文压缩的备用模型；留空表示不启用。</td></tr>
               <tr><td><code>auxiliary_models</code></td><td>为 memory、skills_hub、vision 等辅助任务指定模型；未配置时默认复用主模型。</td></tr>
             </tbody>

@@ -108,6 +108,7 @@ class AgentRuntime:
         self.permission_resolver = runtime_context.permission_resolver
         self.audit_logger = runtime_context.audit_logger
         self.tool_result_budgeter = ToolResultBudgeter()
+        self.tool_call_timeout_seconds = runtime_context.tool_call_timeout_seconds
         self.run_state = AgentRunState()
 
     async def run(self, task: Task) -> Task:
@@ -462,7 +463,22 @@ class AgentRuntime:
 
         started_at = time.perf_counter()
         try:
-            result = await tool.execute(**tool_call.arguments)
+            result = await asyncio.wait_for(
+                tool.execute(**tool_call.arguments),
+                timeout=self.tool_call_timeout_seconds,
+            )
+        except TimeoutError:
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+            error = f"Tool call timed out after {self.tool_call_timeout_seconds:g}s"
+            await self._audit_tool_call(
+                task,
+                tool_call,
+                permission,
+                success=False,
+                error=error,
+                duration_ms=duration_ms,
+            )
+            return self._tool_error_outcome(task, tool_call, error)
         except Exception as exc:
             duration_ms = int((time.perf_counter() - started_at) * 1000)
             await self._audit_tool_call(

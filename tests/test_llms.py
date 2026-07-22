@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from bamboo.helpers.constant import (
     SessionCompactEvent,
     SessionStatusChangeEvent,
     ToolCallEvent,
+    ToolErrorEvent,
     ToolResultEvent,
 )
 from bamboo.helpers.requests_params import RunParams
@@ -34,8 +36,8 @@ from bamboo.llms.providers import (
     DeepSeekClient,
     GPTClient,
     KimiClient,
-    MiniMaxClient,
     MimoClient,
+    MiniMaxClient,
     OllamaClient,
     VLLMClient,
 )
@@ -745,6 +747,45 @@ def test_agent_runtime_executes_tool_and_continues_ota_loop() -> None:
     )
 
 
+def test_agent_runtime_times_out_slow_tool_and_continues_ota_loop() -> None:
+    """验证工具超时会写入 tool error，并让下一轮模型继续决策。"""
+    config = _StubBambooConfig(
+        _model_document("deepseek", model_name="tool-timeout-model"),
+        agent_document={"tool_call_timeout_seconds": 0.01},
+    )
+    factory = LLMFactory.from_mapping(config.models_document)
+    llm_client = _TimeoutToolLoopLLMClient()
+    factory.register_provider("deepseek", lambda model_config: llm_client, replace=True)
+    tool_registry = ToolRegistry()
+    slow_tool = _SlowTool()
+    tool_registry.register(slow_tool, source="test")
+    event_bus = EventBus()
+    emitted_events: list[object] = []
+    event_bus.subscribe(emitted_events.append)
+    task = TaskFactory(config=config).create(RunParams(message="try slow tool", model="tool-timeout-model"))
+
+    async def run_test() -> None:
+        runtime_context = RuntimeContextBuilder(
+            event_bus=event_bus,
+            llm_factory=factory,
+            tool_registry=tool_registry,
+        ).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
+        completed_task = await runtime.run(task)
+        assert completed_task.output == "工具超时，改用替代方案"
+        assert runtime.run_state.iteration == 2
+
+    anyio.run(run_test)
+
+    assert slow_tool.started is True
+    assert len(llm_client.requests) == 2
+    second_messages = llm_client.requests[1].messages
+    assert [message.role for message in second_messages] == ["user", "assistant", "tool"]
+    assert "Tool call timed out after" in second_messages[2].content
+    assert any(isinstance(event, ToolErrorEvent) and "timed out" in event.error for event in emitted_events)
+    assert not any(isinstance(event, ToolResultEvent) and event.tool_name == "slow" for event in emitted_events)
+
+
 class _StubLLMClient(LLMClient):
     """记录 Agent 发出的请求并返回固定模型响应。"""
 
@@ -838,6 +879,19 @@ class _EchoTool(Tool):
         return ToolResult(content=f"echoed: {value}")
 
 
+class _SlowTool(Tool):
+    name = "slow"
+    description = "Sleep longer than the runtime timeout."
+
+    def __init__(self) -> None:
+        self.started = False
+
+    async def execute(self) -> ToolResult:
+        self.started = True
+        await asyncio.sleep(1)
+        return ToolResult(content="too late")
+
+
 class _ToolLoopLLMClient(LLMClient):
     """第一轮请求工具，第二轮根据工具结果返回最终结论。"""
 
@@ -865,6 +919,32 @@ class _ToolLoopLLMClient(LLMClient):
             )
         return LLMResponse(
             content="工具返回了 echoed: hello",
+            model="provider-model-id",
+            provider="deepseek",
+            finish_reason="stop",
+        )
+
+
+class _TimeoutToolLoopLLMClient(LLMClient):
+    """第一轮请求慢工具，第二轮根据 timeout tool message 返回替代方案。"""
+
+    def __init__(self) -> None:
+        self.requests: list[LLMRequest] = []
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        self.requests.append(request)
+        if len(self.requests) == 1:
+            assert request.tools[0]["name"] == "slow"
+            return LLMResponse(
+                content="",
+                model="provider-model-id",
+                provider="deepseek",
+                finish_reason="tool_calls",
+                tool_calls=[LLMToolCall(id="call-slow-1", name="slow", arguments={})],
+            )
+        assert "Tool call timed out after" in request.messages[-1].content
+        return LLMResponse(
+            content="工具超时，改用替代方案",
             model="provider-model-id",
             provider="deepseek",
             finish_reason="stop",

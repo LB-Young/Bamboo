@@ -45,6 +45,7 @@ class RuntimeContext:
     tool_registry: ToolRegistry
     prompt_builder: AgentPromptBuilder
     context_compactor: ContextCompactor
+    tool_call_timeout_seconds: float = 120.0
     bkn_registry: BKNRegistry | None = None
     memory_manager: object | None = None
     skill_registry: SkillRegistry | None = None
@@ -194,6 +195,7 @@ class RuntimeContextBuilder:
             tool_registry=self.tool_registry,
             prompt_builder=self.prompt_builder,
             context_compactor=context_compactor,
+            tool_call_timeout_seconds=self._resolve_tool_call_timeout_seconds(task),
             bkn_registry=self.bkn_registry,
             memory_manager=self.memory_manager,
             skill_registry=self.skill_registry,
@@ -272,6 +274,22 @@ class RuntimeContextBuilder:
         ):
             return configured_name
         return ""
+
+    def _resolve_tool_call_timeout_seconds(self, task: Task) -> float:
+        """读取单次 tool call 全局超时；无效配置回退到默认 120 秒。"""
+        main_agent_config = task.config.get("bamboo_main_agent", {})
+        configured_timeout = (
+            main_agent_config.get("tool_call_timeout_seconds")
+            if isinstance(main_agent_config, dict)
+            else None
+        )
+        try:
+            timeout = float(configured_timeout)
+        except (TypeError, ValueError):
+            return 120.0
+        if timeout <= 0:
+            return 120.0
+        return timeout
 
 def _mcp_cleanup_result(manager: MCPManager) -> str:
     """Render a concise cleanup summary for audit events."""

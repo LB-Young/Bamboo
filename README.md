@@ -70,7 +70,10 @@ Confirm the main agent uses that model in `~/.bamboo/configs/bamboo_main_agent.y
 
 ```yaml
 model: kimi-k3
+tool_call_timeout_seconds: 120
 ```
+
+`tool_call_timeout_seconds` is the global timeout for one tool call. When a tool exceeds it, Bamboo records a tool error and lets the agent continue with another approach.
 
 Run Bamboo:
 

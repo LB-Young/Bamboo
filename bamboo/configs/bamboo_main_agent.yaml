@@ -7,6 +7,9 @@ fallback_model: ""
 # 可选。留空时复用 model；填写时必须引用 models.yaml 中的注册名。
 compaction_model: ""
 
+# 可选。单次工具调用的全局超时时间，超过后记录 tool error 并让 Agent 继续下一轮决策。
+tool_call_timeout_seconds: 120
+
 # 可选。预留给 compaction 辅助模型路由使用。
 compaction_fallback_model: ""
 
