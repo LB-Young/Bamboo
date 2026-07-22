@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bamboo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <header class="brand">
+          <div class="mark">B</div>
+          <div>
+            <strong>Bamboo</strong>
+            <span>Desktop</span>
+          </div>
+        </header>
+
+        <button id="newSession" class="primary-action" type="button">New chat</button>
+
+        <section class="project-box">
+          <label for="projectPath">Project path</label>
+          <div class="path-row">
+            <input id="projectPath" type="text" placeholder="留空为 Chat 模式" />
+            <button id="applyProject" type="button">Apply</button>
+          </div>
+        </section>
+
+        <section class="session-section">
+          <div class="section-title">
+            <span id="sessionScope">Chat history</span>
+            <small id="sessionCount">0</small>
+          </div>
+          <nav id="sessionList" class="session-list"></nav>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h1 id="chatTitle">New chat</h1>
+            <p id="chatMeta">Chat mode</p>
+          </div>
+          <div id="statusPill" class="status idle">Idle</div>
+        </header>
+
+        <section id="chatHistory" class="chat-history"></section>
+
+        <section id="permissionDock" class="permission-dock" hidden></section>
+
+        <footer class="composer">
+          <textarea id="messageInput" rows="4" placeholder="Do anything"></textarea>
+          <div class="composer-actions">
+            <input id="imagePaths" type="text" placeholder="图片路径，多个用逗号分隔" />
+            <button id="sendButton" type="button">Send</button>
+          </div>
+        </footer>
+      </main>
+
+      <aside class="inspector">
+        <section class="inspector-card">
+          <div class="section-title">
+            <span>Environment</span>
+            <button id="refreshChanges" type="button">Refresh</button>
+          </div>
+          <div id="envRows" class="env-rows"></div>
+        </section>
+        <section class="inspector-card grow">
+          <div class="section-title">
+            <span>Changes</span>
+            <span id="changeSummary" class="change-summary">+0 -0</span>
+          </div>
+          <div id="changeList" class="change-list"></div>
+        </section>
+        <section class="inspector-card diff-card">
+          <div class="section-title">
+            <span id="diffTitle">Diff</span>
+          </div>
+          <pre id="diffView" class="diff-view">No file selected.</pre>
+        </section>
+      </aside>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
