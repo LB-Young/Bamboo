@@ -434,7 +434,7 @@ def _render_tool_or_permission_event(event: BaseEvent) -> bool:
         return True
 
     if isinstance(event, ToolResultEvent):
-        console.print(f"[dim]tool result[/dim] {event.tool_name}--{str(event.output).strip()[:30]}" + "……")
+        console.print(f"[dim]tool result[/dim] {event.tool_name}--{str(event.output).strip()[:300]}" + "……")
         return True
 
     if isinstance(event, ToolErrorEvent):
