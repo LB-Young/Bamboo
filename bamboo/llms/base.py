@@ -135,6 +135,7 @@ class LLMResponse:
     content: str
     model: str
     provider: str
+    reasoning_content: str = ""
     finish_reason: str = ""
     tool_calls: list[LLMToolCall] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=dict)

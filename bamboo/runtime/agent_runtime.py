@@ -18,6 +18,9 @@ from bamboo.helpers.constant import (
     LLMResponseEvent,
     PermissionRequestEvent,
     PermissionResultEvent,
+    ReasoningDeltaEvent,
+    ReasoningFinishEvent,
+    ReasoningStartEvent,
     SessionCompactEvent,
     SessionStatusChangeEvent,
     TextDeltaEvent,
@@ -371,12 +374,14 @@ class AgentRuntime:
             raise RuntimeError("Injected mock acting error")
 
         if decision.tool_calls:
-            task.session.add_message(
+            message = task.session.add_message(
                 "assistant",
                 decision.content,
                 agent_name=f"llm:{self.model_name}",
+                metadata={"reasoning_content": decision.reasoning_content} if decision.reasoning_content else None,
                 tool_calls=list(decision.tool_calls),
             )
+            await self._emit_reasoning(task, message.message_id, decision.reasoning_content)
             await self._transition(task, AgentState.TOOL_CALLING, "execute model tool calls")
             if self._can_parallelize_tool_calls(task, decision.tool_calls):
                 await self._execute_tool_calls_parallel(task, decision.tool_calls)
@@ -389,7 +394,13 @@ class AgentRuntime:
 
         content = decision.content
 
-        message = task.session.add_message("assistant", content, agent_name=f"llm:{self.model_name}")
+        message = task.session.add_message(
+            "assistant",
+            content,
+            agent_name=f"llm:{self.model_name}",
+            metadata={"reasoning_content": decision.reasoning_content} if decision.reasoning_content else None,
+        )
+        await self._emit_reasoning(task, message.message_id, decision.reasoning_content)
         await self.event_bus.emit(
             TextStartEvent(
                 session_id=task.session_id,
@@ -417,6 +428,33 @@ class AgentRuntime:
         task.metadata["llm_model"] = decision.model
         task.metadata["llm_provider"] = decision.provider
         return True
+
+    async def _emit_reasoning(self, task: Task, message_id: str, content: str) -> None:
+        """Emit reasoning as a separate stream so renderers can fold it independently."""
+        if not content:
+            return
+        await self.event_bus.emit(
+            ReasoningStartEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                message_id=message_id,
+            )
+        )
+        await self.event_bus.emit(
+            ReasoningDeltaEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                delta=content,
+            )
+        )
+        await self.event_bus.emit(
+            ReasoningFinishEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                message_id=message_id,
+                content=content,
+            )
+        )
 
     async def _execute_tool_calls_parallel(self, task: Task, tool_calls: list[LLMToolCall]) -> None:
         """Execute same-turn read-only tool calls concurrently and write results in model order."""

@@ -138,6 +138,13 @@ class AnthropicMessagesClient(LLMClient):
                 for block in content_blocks
                 if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)
             )
+            reasoning_content = "".join(
+                block["thinking"]
+                for block in content_blocks
+                if isinstance(block, dict)
+                and block.get("type") == "thinking"
+                and isinstance(block.get("thinking"), str)
+            )
             tool_calls = [
                 LLMToolCall(
                     id=block["id"],
@@ -154,7 +161,7 @@ class AnthropicMessagesClient(LLMClient):
         except (KeyError, TypeError, ValueError) as exc:
             raise LLMResponseError("claude returned an invalid Messages API response") from exc
 
-        if not content and not tool_calls:
+        if not content and not reasoning_content and not tool_calls:
             raise LLMResponseError("claude returned an empty response")
 
         usage = data.get("usage", {})
@@ -165,6 +172,7 @@ class AnthropicMessagesClient(LLMClient):
             content=content,
             model=str(data.get("model") or self.config.model),
             provider=self.config.provider,
+            reasoning_content=reasoning_content,
             finish_reason=str(data.get("stop_reason") or ""),
             tool_calls=tool_calls,
             usage=normalized_usage,

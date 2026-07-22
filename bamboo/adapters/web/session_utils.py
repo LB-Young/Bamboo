@@ -63,6 +63,7 @@ def serialize_messages(session: Session) -> list[dict[str, object]]:
                 "role": message.role,
                 "content": message.content,
                 "time": message.created_at,
+                "metadata": dict(message.metadata),
                 "images": [
                     {"source": image.source, "media_type": image.media_type, "detail": image.detail}
                     for image in message.images

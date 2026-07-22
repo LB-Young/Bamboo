@@ -22,6 +22,9 @@ from bamboo.helpers.constant import (
     CronJobStartEvent,
     PermissionRequestEvent,
     PermissionResultEvent,
+    ReasoningDeltaEvent,
+    ReasoningFinishEvent,
+    ReasoningStartEvent,
     SessionMode,
     SessionStatusChangeEvent,
     StepFinishEvent,
@@ -307,6 +310,7 @@ def _stream_event_patterns(*, debug_events: bool) -> set[str] | str:
         "session.*",
         "step.*",
         "text.*",
+        "reasoning.*",
         "permission.*",
         "subagent.*",
         "tool.*",
@@ -315,6 +319,12 @@ def _stream_event_patterns(*, debug_events: bool) -> set[str] | str:
 
 
 def _event_payload(event: BaseEvent) -> dict[str, Any]:
+    if isinstance(event, ReasoningStartEvent):
+        return {"type": "reasoning_start", "message_id": event.message_id}
+    if isinstance(event, ReasoningDeltaEvent):
+        return {"type": "reasoning_delta", "text": event.delta}
+    if isinstance(event, ReasoningFinishEvent):
+        return {"type": "reasoning_finish", "text": event.content, "message_id": event.message_id}
     if isinstance(event, TextDeltaEvent):
         return {"type": "delta", "text": event.delta}
     if isinstance(event, TextFinishEvent):

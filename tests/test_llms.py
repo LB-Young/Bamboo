@@ -13,6 +13,7 @@ import pytest
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
 from bamboo.helpers.constant import (
+    ReasoningDeltaEvent,
     SessionCompactEvent,
     SessionStatusChangeEvent,
     ToolCallEvent,
@@ -257,6 +258,65 @@ def test_kimi_client_respects_configured_extra_body() -> None:
         client = KimiClient(config, transport=httpx.MockTransport(handler))
         response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
         assert response.content == "configured"
+
+    anyio.run(run_test)
+
+
+def test_openai_compatible_client_extracts_reasoning_content_field() -> None:
+    """验证 OpenAI-compatible 响应的 reasoning_content 会和最终答案分离。"""
+    config = ModelCatalog.from_mapping(_model_document("deepseek")).models["test-model"]
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [
+                        {
+                            "message": {
+                                "reasoning_content": "先分析问题。",
+                                "content": "最终答案。",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                },
+            )
+
+        client = DeepSeekClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+        assert response.reasoning_content == "先分析问题。"
+        assert response.content == "最终答案。"
+
+    anyio.run(run_test)
+
+
+def test_openai_compatible_client_splits_tagged_reasoning_from_content() -> None:
+    """验证混在正文里的 think 标签会被拆成 reasoning 和最终答案。"""
+    config = ModelCatalog.from_mapping(_model_document("vllm")).models["test-model"]
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "<think>先想一下。</think>\n最终答案。",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                },
+            )
+
+        client = VLLMClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+        assert response.reasoning_content == "先想一下。"
+        assert response.content == "最终答案。"
 
     anyio.run(run_test)
 
@@ -786,6 +846,29 @@ def test_agent_runtime_times_out_slow_tool_and_continues_ota_loop() -> None:
     assert not any(isinstance(event, ToolResultEvent) and event.tool_name == "slow" for event in emitted_events)
 
 
+def test_agent_runtime_emits_reasoning_separately_from_final_text() -> None:
+    """验证推理过程通过 reasoning 事件输出，assistant 正文只保留最终答案。"""
+    factory = LLMFactory.from_mapping(_model_document("deepseek", model_name="reasoning-model"))
+    llm_client = _RecordingLLMClient(content="最终答案", provider="deepseek", reasoning_content="推理过程")
+    factory.register_provider("deepseek", lambda model_config: llm_client, replace=True)
+    event_bus = EventBus()
+    emitted_events: list[object] = []
+    event_bus.subscribe(emitted_events.append)
+    task = TaskFactory().create(RunParams(message="question", model="reasoning-model"))
+
+    async def run_test() -> None:
+        runtime_context = RuntimeContextBuilder(event_bus=event_bus, llm_factory=factory).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
+        completed_task = await runtime.run(task)
+        assert completed_task.output == "最终答案"
+
+    anyio.run(run_test)
+
+    assert task.session.messages[-1].content == "最终答案"
+    assert task.session.messages[-1].metadata["reasoning_content"] == "推理过程"
+    assert any(isinstance(event, ReasoningDeltaEvent) and event.delta == "推理过程" for event in emitted_events)
+
+
 class _StubLLMClient(LLMClient):
     """记录 Agent 发出的请求并返回固定模型响应。"""
 
@@ -824,10 +907,11 @@ class _StubBambooConfig:
 class _RecordingLLMClient(LLMClient):
     """记录请求并返回指定内容，用于区分执行模型和压缩模型。"""
 
-    def __init__(self, *, content: str, provider: str) -> None:
+    def __init__(self, *, content: str, provider: str, reasoning_content: str = "") -> None:
         """初始化固定响应内容、平台名和请求记录。"""
         self.content = content
         self.provider = provider
+        self.reasoning_content = reasoning_content
         self.requests: list[LLMRequest] = []
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
@@ -837,6 +921,7 @@ class _RecordingLLMClient(LLMClient):
             content=self.content,
             model="provider-model-id",
             provider=self.provider,
+            reasoning_content=self.reasoning_content,
             finish_reason="stop",
         )
 

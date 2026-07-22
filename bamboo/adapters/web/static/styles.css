@@ -408,6 +408,20 @@ textarea {
   color: #175cd3;
 }
 
+.reasoning-row {
+  background: #fbfaf7;
+}
+
+.reasoning-row .tool-status {
+  background: #f4efe4;
+  color: #7a5b12;
+}
+
+.reasoning-icon {
+  background: #f4efe4;
+  color: #8a6414;
+}
+
 .tool-preview {
   min-width: 0;
   overflow: hidden;
@@ -473,6 +487,10 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.55;
+}
+
+.reasoning-output {
+  color: #5f5542;
 }
 
 .composer {

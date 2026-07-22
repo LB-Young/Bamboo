@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -145,11 +146,14 @@ class OpenAICompatibleClient(LLMClient):
             choice = data["choices"][0]
             response_message = choice["message"]
             content = _normalize_content(response_message.get("content"))
+            reasoning_content = _normalize_content(_extract_reasoning_value(response_message))
+            tagged_reasoning, content = _split_tagged_reasoning(content)
+            reasoning_content = _join_reasoning(reasoning_content, tagged_reasoning)
             tool_calls = _parse_tool_calls(response_message.get("tool_calls", []))
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMResponseError(f"{self.config.provider} returned an invalid chat completion response") from exc
 
-        if not content and not tool_calls:
+        if not content and not reasoning_content and not tool_calls:
             raise LLMResponseError(f"{self.config.provider} returned an empty response")
 
         usage = data.get("usage", {})
@@ -160,6 +164,7 @@ class OpenAICompatibleClient(LLMClient):
             content=content,
             model=str(data.get("model") or self.config.model),
             provider=self.config.provider,
+            reasoning_content=reasoning_content,
             finish_reason=str(choice.get("finish_reason") or ""),
             tool_calls=tool_calls,
             usage=normalized_usage,
@@ -234,6 +239,38 @@ def _normalize_content(content: Any) -> str:
         if isinstance(item, dict) and isinstance(item.get("text"), str):
             parts.append(item["text"])
     return "".join(parts)
+
+
+def _extract_reasoning_value(message: dict[str, Any]) -> Any:
+    for key in ("reasoning_content", "reasoning", "reasoning_text"):
+        value = message.get(key)
+        if value:
+            return value
+    return ""
+
+
+def _split_tagged_reasoning(content: str) -> tuple[str, str]:
+    if not content:
+        return "", ""
+    reasoning_parts: list[str] = []
+
+    def replace(match: re.Match[str]) -> str:
+        reasoning = match.group("reasoning").strip()
+        if reasoning:
+            reasoning_parts.append(reasoning)
+        return ""
+
+    cleaned = re.sub(
+        r"<(?P<tag>think|thinking|reasoning)>\s*(?P<reasoning>.*?)\s*</(?P=tag)>",
+        replace,
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
+    return "\n\n".join(reasoning_parts), cleaned
+
+
+def _join_reasoning(*parts: str) -> str:
+    return "\n\n".join(part.strip() for part in parts if part and part.strip())
 
 
 def _response_error_detail(response: httpx.Response) -> str:

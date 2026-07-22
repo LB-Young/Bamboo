@@ -33,6 +33,7 @@ const els = {
 let pendingAssistant = null;
 const toolRows = new Map();
 let activeToolStack = null;
+let activeReasoning = null;
 
 function applyModeUI() {
   const isProject = state.mode === "project";
@@ -117,7 +118,8 @@ async function selectSession(session) {
   const data = await res.json();
   state.currentRecordDir = data.record_dir || state.currentRecordDir;
   els.chatHistory.innerHTML = "";
-  for (const msg of data.messages || []) appendMessage(msg.role, msg.content);
+  resetToolEvents();
+  for (const msg of data.messages || []) appendRestoredMessage(msg);
   els.chatTitle.textContent = session.label || "Conversation";
   els.chatMeta.textContent = `${state.mode === "project" ? "Project" : "Chat"} · ${session.session_id}`;
   scrollToBottom();
@@ -129,6 +131,7 @@ function newSession() {
   state.currentTaskId = null;
   state.stopRequested = false;
   pendingAssistant = null;
+  activeReasoning = null;
   resetToolEvents();
   els.chatHistory.innerHTML = "";
   els.chatTitle.textContent = "New chat";
@@ -146,6 +149,15 @@ function appendMessage(role, text) {
   els.chatHistory.appendChild(bubble);
   scrollToBottom();
   return bubble;
+}
+
+function appendRestoredMessage(message) {
+  const reasoning = message?.metadata?.reasoning_content || "";
+  if (message.role === "assistant" && reasoning.trim()) {
+    startReasoning();
+    finishReasoning(reasoning);
+  }
+  appendMessage(message.role, message.content || "");
 }
 
 function showSystem(text) {
@@ -248,6 +260,18 @@ function handleEvent(event) {
     scrollToBottom();
     return;
   }
+  if (event.type === "reasoning_start") {
+    startReasoning();
+    return;
+  }
+  if (event.type === "reasoning_delta") {
+    appendReasoning(event.text || "");
+    return;
+  }
+  if (event.type === "reasoning_finish") {
+    finishReasoning(event.text || "");
+    return;
+  }
   if (event.type === "message") {
     ensureAssistant().textContent = event.text || "";
     pendingAssistant = null;
@@ -291,6 +315,60 @@ function handleEvent(event) {
 function resetToolEvents() {
   toolRows.clear();
   activeToolStack = null;
+  activeReasoning = null;
+}
+
+function startReasoning() {
+  const stack = ensureToolStack();
+  const row = document.createElement("details");
+  row.className = "tool-row reasoning-row done";
+
+  const summary = document.createElement("summary");
+  summary.className = "tool-summary";
+
+  const name = document.createElement("span");
+  name.className = "tool-name";
+  name.textContent = "推理过程";
+
+  const status = document.createElement("span");
+  status.className = "tool-status";
+  status.textContent = "已折叠";
+
+  const preview = document.createElement("code");
+  preview.className = "tool-preview";
+  preview.textContent = "模型内部推理摘要";
+
+  const output = document.createElement("pre");
+  output.className = "tool-output reasoning-output";
+
+  summary.append(reasoningIcon(), name, status, preview);
+  row.append(summary, output);
+  stack.appendChild(row);
+  activeReasoning = { row, status, preview, output };
+  scrollToBottom();
+}
+
+function appendReasoning(text) {
+  if (!activeReasoning) startReasoning();
+  activeReasoning.output.textContent += text;
+  const content = activeReasoning.output.textContent.trim();
+  activeReasoning.preview.textContent = content ? summarizeToolOutput(content) : "模型内部推理摘要";
+  scrollToBottom();
+}
+
+function finishReasoning(text) {
+  if (!activeReasoning && text) startReasoning();
+  if (!activeReasoning) return;
+  if (text && !activeReasoning.output.textContent.trim()) {
+    activeReasoning.output.textContent = text;
+  }
+  activeReasoning.row.classList.remove("running", "failed");
+  activeReasoning.row.classList.add("done");
+  activeReasoning.status.textContent = "已折叠";
+  const content = activeReasoning.output.textContent.trim();
+  activeReasoning.preview.textContent = content ? summarizeToolOutput(content) : "模型内部推理摘要";
+  activeReasoning = null;
+  scrollToBottom();
 }
 
 function ensureToolStack() {
@@ -444,6 +522,13 @@ function toolIcon() {
   const icon = document.createElement("span");
   icon.className = "tool-icon";
   icon.textContent = ">";
+  return icon;
+}
+
+function reasoningIcon() {
+  const icon = document.createElement("span");
+  icon.className = "tool-icon reasoning-icon";
+  icon.textContent = "?";
   return icon;
 }
 

@@ -20,6 +20,9 @@ from bamboo.helpers.constant import (
     CronJobStartEvent,
     PermissionRequestEvent,
     PermissionResultEvent,
+    ReasoningDeltaEvent,
+    ReasoningFinishEvent,
+    ReasoningStartEvent,
     SessionStatusChangeEvent,
     StepFinishEvent,
     StepStartEvent,
@@ -47,6 +50,7 @@ CLI_EVENT_PATTERNS = {
     "session.*",
     "step.*",
     "text.*",
+    "reasoning.*",
     "permission.*",
     "subagent.*",
     "tool.*",
@@ -326,6 +330,17 @@ def _render_cli_event(event: BaseEvent) -> None:
 
     if isinstance(event, StepStartEvent):
         console.print(f"[dim]step start[/dim] {event.step_id}")
+        return
+
+    if isinstance(event, ReasoningStartEvent):
+        console.print("[dim]reasoning[/dim]")
+        return
+
+    if isinstance(event, ReasoningDeltaEvent):
+        console.print(f"[dim]{event.delta}[/dim]")
+        return
+
+    if isinstance(event, ReasoningFinishEvent):
         return
 
     if isinstance(event, TextStartEvent):
