@@ -13,6 +13,7 @@ const state = {
   context: { used_tokens: 0, context_window: 128000, percent: 0, estimated: true },
   activeView: "chat",
   logs: [],
+  stopRequested: false,
 };
 
 const els = {
@@ -31,6 +32,7 @@ const els = {
   chatHistory: document.getElementById("chatHistory"),
   permissionDock: document.getElementById("permissionDock"),
   messageInput: document.getElementById("messageInput"),
+  stopButton: document.getElementById("stopButton"),
   sendButton: document.getElementById("sendButton"),
   contextPercent: document.getElementById("contextPercent"),
   contextRing: document.querySelector(".ring"),
@@ -171,6 +173,7 @@ async function sendMessage() {
   els.messageInput.value = "";
   resetTurnState();
   resetRunTimeline();
+  state.stopRequested = false;
   setStatus("running", "Executing");
   els.runTitle.textContent = message || "Image task";
   updateRunStage("planning", "active", "Preparing request");
@@ -196,13 +199,22 @@ function handleEvent(event) {
     return;
   }
   if (event.type === "run_finish") {
+    const cancelled = Boolean(event.cancelled || state.stopRequested);
     setStatus("idle");
+    state.stopRequested = false;
     stopTimer();
     renderSessions(event.sessions || []);
     renderChanges(event.changes || {});
     refreshContext();
-    updateRunStage("executing", "done", "Task finished");
-    updateRunStage("review", (event.changes?.files || []).length ? "active" : "done", (event.changes?.files || []).length ? "Review changes" : "No changes");
+    updateRunStage("executing", cancelled ? "error" : "done", cancelled ? "Cancelled" : "Task finished");
+    updateRunStage("review", cancelled ? "idle" : ((event.changes?.files || []).length ? "active" : "done"), cancelled ? "Cancelled by user" : ((event.changes?.files || []).length ? "Review changes" : "No changes"));
+    return;
+  }
+  if (event.type === "cancelled") {
+    state.stopRequested = true;
+    setStatus("running", "Stopping");
+    showSystem(event.message || "cancelled by user");
+    updateRunStage("executing", "error", "Cancelling");
     return;
   }
   if (event.type === "error") {
@@ -240,12 +252,12 @@ function handleEvent(event) {
   if (event.type === "reasoning_delta") return appendReasoning(event.text || "");
   if (event.type === "reasoning_finish") return finishReasoning(event.text || "");
   if (event.type === "text_delta") {
-    ensureAssistant().textContent += event.text || "";
+    appendAssistantText(event.text || "");
     bumpContextEstimate(event.text || "", 0);
     return scrollToBottom();
   }
   if (event.type === "text_finish") {
-    if (event.text) ensureAssistant().textContent = event.text;
+    if (event.text) renderMessageContent(ensureAssistant(), "assistant", event.text);
     state.pendingAssistant = null;
     return scrollToBottom();
   }
@@ -272,7 +284,15 @@ function handleEvent(event) {
 function appendMessage(role, text) {
   const article = document.createElement("article");
   article.className = `message ${role}`;
-  article.textContent = text;
+  const body = document.createElement("div");
+  body.className = "message-body";
+  const copy = document.createElement("button");
+  copy.className = "copy-message";
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", () => copyMessage(article, copy));
+  article.append(body, copy);
+  renderMessageContent(article, role, text);
   els.chatHistory.appendChild(article);
   scrollToBottom();
   return article;
@@ -294,6 +314,118 @@ function showSystem(text, kind = "system") {
 function ensureAssistant() {
   if (!state.pendingAssistant) state.pendingAssistant = appendMessage("assistant", "");
   return state.pendingAssistant;
+}
+
+function appendAssistantText(text) {
+  const article = ensureAssistant();
+  renderMessageContent(article, "assistant", `${article.dataset.raw || ""}${text}`);
+}
+
+function renderMessageContent(element, role, text) {
+  element.dataset.raw = text || "";
+  const body = element.querySelector(".message-body") || element;
+  if (role === "assistant") {
+    body.innerHTML = markdownToHtml(text || "");
+  } else {
+    body.textContent = text || "";
+  }
+}
+
+async function copyMessage(article, button) {
+  const text = article.dataset.raw || "";
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  const previous = button.textContent;
+  button.textContent = "Copied";
+  setTimeout(() => {
+    button.textContent = previous;
+  }, 1200);
+}
+
+function markdownToHtml(markdown) {
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const html = [];
+  let paragraph = [];
+  let listItems = [];
+  let codeLines = [];
+  let inCode = false;
+  let codeLang = "";
+
+  for (const line of lines) {
+    const fence = /^```([\w-]*)\s*$/.exec(line);
+    if (fence) {
+      if (inCode) {
+        html.push(`<pre><code${codeLang ? ` data-lang="${escapeHtml(codeLang)}"` : ""}>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        codeLines = [];
+        codeLang = "";
+        inCode = false;
+      } else {
+        flushParagraph();
+        flushList();
+        inCode = true;
+        codeLang = fence[1] || "";
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    const heading = /^(#{1,4})\s+(.+)$/.exec(line);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+    const bullet = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (bullet) {
+      flushParagraph();
+      listItems.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+    paragraph.push(line);
+  }
+  if (inCode) html.push(`<pre><code${codeLang ? ` data-lang="${escapeHtml(codeLang)}"` : ""}>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+  flushParagraph();
+  flushList();
+  return html.join("");
+
+  function flushParagraph() {
+    if (!paragraph.length) return;
+    html.push(`<p>${inlineMarkdown(paragraph.join("\n"))}</p>`);
+    paragraph = [];
+  }
+
+  function flushList() {
+    if (!listItems.length) return;
+    html.push(`<ul>${listItems.join("")}</ul>`);
+    listItems = [];
+  }
+}
+
+function inlineMarkdown(text) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
 }
 
 function resetTurnState() {
@@ -629,6 +761,8 @@ function setStatus(status, text = "") {
   els.runBadge.textContent = busy ? "Executing" : "Idle";
   els.runBadge.classList.toggle("busy", busy);
   els.sendButton.disabled = busy;
+  els.stopButton.hidden = !busy;
+  els.stopButton.disabled = !busy || state.stopRequested;
 }
 
 function startTimer() {
@@ -761,6 +895,7 @@ els.applyProject.addEventListener("click", async () => {
 });
 els.newSession.addEventListener("click", newSession);
 els.sendButton.addEventListener("click", sendMessage);
+els.stopButton.addEventListener("click", stopCurrentTask);
 els.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
@@ -768,6 +903,20 @@ els.messageInput.addEventListener("keydown", (event) => {
   }
 });
 els.tabs.forEach((tab) => tab.addEventListener("click", () => setActiveView(tab.dataset.view)));
+
+async function stopCurrentTask() {
+  if (state.stopRequested) return;
+  state.stopRequested = true;
+  setStatus("running", "Stopping");
+  try {
+    const result = await apiCall("stop_current_task");
+    if (!result.ok) throw new Error(result.error || "stop failed");
+  } catch (error) {
+    state.stopRequested = false;
+    setStatus("running", "Executing");
+    showSystem(`停止任务失败：${error.message || error}`, "error");
+  }
+}
 document.querySelectorAll("[data-project]").forEach((button) => {
   button.addEventListener("click", async () => {
     els.projectPath.value = button.dataset.project || "";

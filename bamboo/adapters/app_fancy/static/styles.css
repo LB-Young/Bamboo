@@ -752,21 +752,108 @@ textarea {
 }
 
 .message {
+  position: relative;
   margin-bottom: 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  padding: 10px;
+  padding: 10px 64px 10px 10px;
   white-space: pre-wrap;
   line-height: 1.5;
 }
 
+.message-body {
+  min-width: 0;
+}
+
+.copy-message {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-strong);
+  color: var(--muted);
+  padding: 3px 7px;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.message:hover .copy-message,
+.copy-message:focus {
+  opacity: 1;
+}
+
 .message.user {
-  border-color: rgba(99, 217, 164, 0.3);
-  background: rgba(99, 217, 164, 0.08);
+  border-color: rgba(99, 217, 164, 0.45);
+  background: rgba(99, 217, 164, 0.13);
 }
 
 .message.assistant {
   background: #10191d;
+  white-space: normal;
+}
+
+.message.assistant p,
+.message.assistant ul,
+.message.assistant pre,
+.message.assistant h1,
+.message.assistant h2,
+.message.assistant h3,
+.message.assistant h4 {
+  margin: 0 0 10px;
+}
+
+.message.assistant p:last-child,
+.message.assistant ul:last-child,
+.message.assistant pre:last-child {
+  margin-bottom: 0;
+}
+
+.message.assistant h1 {
+  font-size: 18px;
+}
+
+.message.assistant h2 {
+  font-size: 16px;
+}
+
+.message.assistant h3,
+.message.assistant h4 {
+  font-size: 14px;
+}
+
+.message.assistant ul {
+  padding-left: 20px;
+}
+
+.message.assistant code {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+  background: #0a1114;
+  padding: 1px 4px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.message.assistant pre {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0a1114;
+  padding: 10px;
+}
+
+.message.assistant pre code {
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  white-space: pre;
+}
+
+.message.assistant a {
+  color: var(--accent-2);
 }
 
 .message.system {
@@ -907,7 +994,7 @@ textarea {
 
 .composer {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-rows: auto auto;
   gap: 8px;
   margin-top: 8px;
@@ -928,8 +1015,21 @@ textarea {
   height: 44px;
 }
 
+.stop-button {
+  min-width: 68px;
+  height: 44px;
+  border-color: rgba(228, 111, 111, 0.45) !important;
+  color: #ffd8d8 !important;
+  background: rgba(228, 111, 111, 0.16) !important;
+}
+
+.stop-button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 .permission-mode {
-  grid-column: 2 / 4;
+  grid-column: 2 / 5;
   justify-self: end;
   color: var(--muted);
   font-size: 12px;

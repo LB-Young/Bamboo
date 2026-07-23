@@ -6,13 +6,18 @@ This adapter intentionally keeps its frontend separate from
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
+import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
 from bamboo.adapters.app.main import AppDependencyError, BambooAppBridge, _parse_numstat
+from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import LLMResponseEvent, SessionMode
 from bamboo.helpers.logging import setup_logging
+from bamboo.helpers.requests_params import RunParams
 from bamboo.runtime.context_compactor import HeuristicTokenCounter
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -65,6 +70,10 @@ class BambooFancyAppBridge(BambooAppBridge):
         super().__init__(**kwargs)
         self.latest_usage: dict[str, int] = {}
         self.token_counter = HeuristicTokenCounter()
+        self.worker_loop: asyncio.AbstractEventLoop | None = None
+        self.worker_task: asyncio.Task[Task] | None = None
+        self.worker_lock = threading.Lock()
+        self.stop_requested = False
         self.llm_unsubscribe = self.event_bus.subscribe(
             self._handle_llm_event,
             event_types={"llm-response"},
@@ -135,9 +144,75 @@ class BambooFancyAppBridge(BambooAppBridge):
             self.latest_usage = dict(event.usage)
             self._emit_ui({"type": "context_usage", "context": self.get_context_usage()})
 
+    def stop_current_task(self) -> dict[str, Any]:
+        """Request cancellation of the currently running desktop task."""
+        if not self.running:
+            return {"ok": False, "error": "no task is running"}
+        self.stop_requested = True
+        for pending in list(self.pending_permissions.values()):
+            pending.decision = "deny"
+            pending.event.set()
+        with self.worker_lock:
+            loop = self.worker_loop
+            task = self.worker_task
+        if loop is not None and task is not None and not task.done():
+            loop.call_soon_threadsafe(task.cancel)
+        self._emit_ui({"type": "cancelled", "message": "cancelled by user"})
+        return {"ok": True, "status": "cancelling"}
+
     def _run_message(self, message: str, images: list[Any], project: Path, mode: SessionMode) -> None:
-        super()._run_message(message, images, project, mode)
-        self._emit_ui({"type": "context_usage", "context": self.get_context_usage()})
+        async def run_turn() -> Task:
+            if self.current_task is None:
+                params = RunParams(
+                    platform="app",
+                    message=message,
+                    images=images,
+                    project=str(project),
+                    model=self.model,
+                    provider=self.provider,
+                    permission=self.permission,
+                    session_mode=mode,
+                    task_id=str(uuid.uuid4()),
+                    session_id=self.session_id,
+                )
+                task = self.runtime.create_task(params)
+            else:
+                task = self.runtime.create_followup_task(self.current_task, message, images=images)
+            return await self.runtime.run_existing_task(task)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        task = loop.create_task(run_turn())
+        with self.worker_lock:
+            self.worker_loop = loop
+            self.worker_task = task
+            if self.stop_requested:
+                loop.call_soon(task.cancel)
+        try:
+            self.current_task = loop.run_until_complete(task)
+        except asyncio.CancelledError:
+            self._emit_ui({"type": "cancelled", "message": "cancelled by user"})
+        except Exception as exc:  # pragma: no cover - surfaced in desktop UI
+            if not self.stop_requested:
+                self._emit_ui({"type": "error", "error": str(exc)})
+        finally:
+            with self.worker_lock:
+                self.worker_loop = None
+                self.worker_task = None
+            loop.close()
+            self.running = False
+            stopped = self.stop_requested
+            self.stop_requested = False
+            self._emit_ui(
+                {
+                    "type": "run_finish",
+                    "session_id": self.session_id,
+                    "cancelled": stopped,
+                    "sessions": self.list_sessions("" if self.active_session_mode == SessionMode.chat else str(self.active_project)),
+                    "changes": self.get_changes("" if self.active_session_mode == SessionMode.chat else str(self.active_project)),
+                }
+            )
+            self._emit_ui({"type": "context_usage", "context": self.get_context_usage()})
 
     def _context_window(self) -> int:
         if self.current_task is None:
