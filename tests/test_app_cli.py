@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from bamboo.adapters.app import AppDependencyError
 from bamboo.adapters.app.main import _event_payload, _parse_numstat
+from bamboo.adapters.app_fancy.main import _changed_files_expanded, _file_diff_summary, _untracked_file_diff
 from bamboo.helpers.constant import ReasoningDeltaEvent, SessionMode, ToolResultEvent
 from bamboo.run import app
 
@@ -48,6 +52,46 @@ def test_app_command_reports_missing_desktop_dependency(monkeypatch) -> None:
     assert "Traceback" not in result.output
 
 
+def test_app_fancy_command_launches_fancy_adapter(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+    cron_started: list[bool] = []
+    monkeypatch.setattr("bamboo.run._start_default_cron", lambda: cron_started.append(True))
+    monkeypatch.setattr("bamboo.adapters.app_fancy.launch_app", lambda **kwargs: calls.append(kwargs))
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "app-fancy",
+            "--msg",
+            "hello",
+            "--project",
+            "/tmp/project",
+            "--model",
+            "kimi-k3",
+            "--provider",
+            "kimi",
+            "--permission",
+            "default",
+            "--session-mode",
+            "project",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert cron_started == [True]
+    assert calls == [
+        {
+            "project": Path("/tmp/project"),
+            "model": "kimi-k3",
+            "provider": "kimi",
+            "permission": "default",
+            "session_mode": SessionMode.project,
+            "initial_message": "hello",
+            "image_paths": [],
+        }
+    ]
+
+
 def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
     reasoning = _event_payload(ReasoningDeltaEvent(session_id="session-1", task_id="task-1", delta="推理过程"))
     tool = _event_payload(
@@ -75,3 +119,22 @@ def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
 def test_app_numstat_parser_ignores_binary_markers() -> None:
     assert _parse_numstat("12") == 12
     assert _parse_numstat("-") == 0
+
+
+def test_app_fancy_expands_untracked_directories_and_shows_new_file_diff(tmp_path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    html = tmp_path / "bayon_note" / "index.html"
+    html.parent.mkdir()
+    html.write_text("<!doctype html>\n<title>Bayon Note</title>\n", encoding="utf-8")
+
+    assert _changed_files_expanded(tmp_path) == ["bayon_note/index.html"]
+    assert _file_diff_summary(tmp_path, "bayon_note/index.html") == {
+        "file": "bayon_note/index.html",
+        "additions": 2,
+        "deletions": 0,
+    }
+
+    diff = _untracked_file_diff(tmp_path, "bayon_note/index.html")
+
+    assert "+++ b/bayon_note/index.html" in diff
+    assert "+<title>Bayon Note</title>" in diff

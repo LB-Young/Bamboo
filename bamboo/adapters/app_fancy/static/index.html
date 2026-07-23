@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bamboo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <strong>Bamboo</strong>
+        </div>
+        <div class="top-controls">
+          <label>Project <input id="projectPath" type="text" placeholder="留空为 Chat 模式" /></label>
+          <label>Agent <select id="agentSelect"><option>Bamboo Core</option></select></label>
+          <label>Status <span id="statusPill" class="status idle">Idle</span></label>
+        </div>
+        <div class="metrics">
+          <span>CPU <b>--</b></span>
+          <span>RAM <b>--</b></span>
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <button id="newSession" class="new-chat" type="button">+ New Chat</button>
+
+        <section class="panel active-chat">
+          <div class="panel-head">
+            <span>Active Chats</span>
+            <small id="sessionCount">0</small>
+          </div>
+          <button class="agent-card" type="button">
+            <span class="presence"></span>
+            <span><strong>Main Agent</strong><small id="agentScope">Chat mode</small></span>
+            <span class="chevron">›</span>
+          </button>
+        </section>
+
+        <section class="panel current-run">
+          <div class="panel-head"><span>Current Run</span><small id="runTimer">Ready</small></div>
+          <div class="run-title">
+            <strong id="runTitle">No active task</strong>
+            <span id="runBadge">Idle</span>
+          </div>
+          <ol class="timeline">
+            <li class="done"><span></span><div><strong>Planning</strong><small>Analyze request</small></div></li>
+            <li class="active"><span></span><div><strong>Executing</strong><small>Waiting for task</small></div></li>
+            <li><span></span><div><strong>Review</strong><small>Pending changes</small></div></li>
+          </ol>
+          <div class="workers">
+            <small>Sub-agents</small>
+            <div><i></i><i></i><i></i><i></i></div>
+          </div>
+        </section>
+
+        <section class="panel history">
+          <div class="panel-head">
+            <span id="sessionScope">Recent Sessions</span>
+            <button id="applyProject" type="button">Refresh</button>
+          </div>
+          <nav id="sessionList" class="session-list"></nav>
+        </section>
+
+        <section class="panel projects">
+          <div class="panel-head"><span>Projects</span></div>
+          <button type="button" data-project="">Chat mode</button>
+          <button type="button" data-project=".">Current directory</button>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="workspace-head">
+          <div>
+            <small>Workspace</small>
+            <h1 id="chatTitle">Chat</h1>
+          </div>
+          <div class="workspace-tabs">
+            <button type="button" data-view="diff">Diff</button>
+            <button class="selected" type="button" data-view="chat">Chat</button>
+            <button type="button" data-view="logs">Logs</button>
+          </div>
+        </section>
+
+        <section id="diffViewPane" class="view-pane diff-pane">
+          <section class="canvas">
+            <aside class="file-tree">
+              <div class="search">Search files</div>
+              <ul id="fileTree">
+                <li class="folder">app/</li>
+                <li class="selected">file_handler.py <b>M</b></li>
+                <li>db_module.py</li>
+                <li>requirements.txt</li>
+              </ul>
+            </aside>
+            <div class="diff-area">
+              <header class="diff-head">
+                <strong id="diffFile">Workspace Preview</strong>
+                <span id="diffCount">No file selected</span>
+              </header>
+              <div id="diffView" class="diff-view">Open a project to review git changes.</div>
+              <div class="review-card">
+                <div>
+                  <strong>Review & Permissions</strong>
+                  <p id="reviewText">Bamboo will ask before applying risky file or shell changes.</p>
+                </div>
+                <button class="approve" type="button">Approve</button>
+                <button class="reject" type="button">Reject</button>
+                <button type="button">Details</button>
+              </div>
+            </div>
+          </section>
+          <section id="diffChatSlot" class="chat-slot"></section>
+        </section>
+
+        <section id="chatViewPane" class="view-pane chat-pane" hidden></section>
+        <section id="logsViewPane" class="view-pane logs-pane" hidden>
+          <div id="logList" class="log-list"></div>
+        </section>
+        <section id="chatHistory" class="chat-history"></section>
+        <section id="permissionDock" class="permission-dock" hidden></section>
+
+        <footer class="composer">
+          <button class="attach" type="button" title="Attach files by typing their paths in the message">+</button>
+          <textarea id="messageInput" rows="2" placeholder="Ask Bamboo Core or type / for commands..."></textarea>
+          <button id="sendButton" type="button">Send</button>
+          <div class="permission-mode">Permission Mode: <b>Review</b></div>
+        </footer>
+      </main>
+
+      <aside class="inspector">
+        <section class="panel context-panel">
+          <div class="panel-head"><span>Context</span></div>
+          <div class="ring"><span id="contextPercent">0%</span><small>context usage</small></div>
+          <button class="folded" type="button">Reasoning <b id="reasoningCount">0</b></button>
+          <button class="folded" type="button">Tools <b id="toolCount">0</b></button>
+        </section>
+
+        <section class="panel changes-panel">
+          <div class="panel-head">
+            <span>Changes</span>
+            <span id="changeSummary" class="change-summary">+0 -0</span>
+          </div>
+          <div id="changeList" class="change-list"></div>
+        </section>
+
+        <section class="panel tools-panel">
+          <div class="panel-head"><span>Tools Monitor</span><button type="button">View all</button></div>
+          <div id="toolMonitor" class="tool-monitor"></div>
+        </section>
+
+        <section class="panel sources sources-panel">
+          <div class="panel-head"><span>Sources</span></div>
+          <div id="sourceList"></div>
+        </section>
+      </aside>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

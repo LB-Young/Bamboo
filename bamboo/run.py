@@ -452,6 +452,35 @@ def desktop_app(
         raise typer.Exit(1) from exc
 
 
+@app.command("app-fancy")
+def desktop_app_fancy(
+    message: str | None = MSG_OPTION,
+    image: list[Path] | None = IMAGE_OPTION,
+    project: Path | None = PROJECT_OPTION,
+    model: str | None = MODEL_OPTION,
+    provider: str | None = PROVIDER_OPTION,
+    permission: str | None = PERMISSION_OPTION,
+    session_mode: SessionMode = SESSION_MODE_OPTION,
+) -> None:
+    """启动 Bamboo 高级本地桌面 App 窗口。"""
+    from bamboo.adapters.app_fancy import AppDependencyError, launch_app
+
+    _start_default_cron()
+    try:
+        launch_app(
+            project=project,
+            model=model or "",
+            provider=provider or "",
+            permission=permission or "default",
+            session_mode=session_mode,
+            initial_message=message or "",
+            image_paths=image or [],
+        )
+    except AppDependencyError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
 @app.command()
 def web(
     host: str = typer.Option("127.0.0.1", "--host", help="Web server host"),
