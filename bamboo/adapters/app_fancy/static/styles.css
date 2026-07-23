@@ -796,6 +796,8 @@ textarea {
 
 .message.assistant p,
 .message.assistant ul,
+.message.assistant .md-table-wrap,
+.message.assistant .mermaid-wrap,
 .message.assistant pre,
 .message.assistant h1,
 .message.assistant h2,
@@ -806,6 +808,8 @@ textarea {
 
 .message.assistant p:last-child,
 .message.assistant ul:last-child,
+.message.assistant .md-table-wrap:last-child,
+.message.assistant .mermaid-wrap:last-child,
 .message.assistant pre:last-child {
   margin-bottom: 0;
 }
@@ -854,6 +858,54 @@ textarea {
 
 .message.assistant a {
   color: var(--accent-2);
+}
+
+.message.assistant .mermaid-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0a1114;
+  padding: 12px;
+}
+
+.message.assistant .mermaid {
+  min-width: 360px;
+  text-align: center;
+}
+
+.message.assistant .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.message.assistant .md-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.message.assistant table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  background: #0d1518;
+}
+
+.message.assistant th,
+.message.assistant td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 7px 9px;
+  vertical-align: top;
+}
+
+.message.assistant th {
+  background: #142026;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.message.assistant td {
+  color: #d6e0e4;
 }
 
 .message.system {

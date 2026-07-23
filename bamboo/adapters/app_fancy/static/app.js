@@ -62,6 +62,8 @@ window.BambooDesktop = {
   },
 };
 
+initMermaid();
+
 async function apiCall(name, ...args) {
   if (!window.pywebview?.api) throw new Error("pywebview bridge is not ready");
   return await window.pywebview.api[name](...args);
@@ -326,6 +328,7 @@ function renderMessageContent(element, role, text) {
   const body = element.querySelector(".message-body") || element;
   if (role === "assistant") {
     body.innerHTML = markdownToHtml(text || "");
+    renderMermaidBlocks(body);
   } else {
     body.textContent = text || "";
   }
@@ -361,11 +364,12 @@ function markdownToHtml(markdown) {
   let inCode = false;
   let codeLang = "";
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const fence = /^```([\w-]*)\s*$/.exec(line);
     if (fence) {
       if (inCode) {
-        html.push(`<pre><code${codeLang ? ` data-lang="${escapeHtml(codeLang)}"` : ""}>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        html.push(renderCodeBlock(codeLang, codeLines.join("\n")));
         codeLines = [];
         codeLang = "";
         inCode = false;
@@ -386,6 +390,14 @@ function markdownToHtml(markdown) {
       flushList();
       continue;
     }
+    if (isTableStart(lines, index)) {
+      flushParagraph();
+      flushList();
+      const table = collectTable(lines, index);
+      html.push(table.html);
+      index = table.nextIndex - 1;
+      continue;
+    }
     const heading = /^(#{1,4})\s+(.+)$/.exec(line);
     if (heading) {
       flushParagraph();
@@ -402,7 +414,7 @@ function markdownToHtml(markdown) {
     }
     paragraph.push(line);
   }
-  if (inCode) html.push(`<pre><code${codeLang ? ` data-lang="${escapeHtml(codeLang)}"` : ""}>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+  if (inCode) html.push(renderCodeBlock(codeLang, codeLines.join("\n")));
   flushParagraph();
   flushList();
   return html.join("");
@@ -420,12 +432,86 @@ function markdownToHtml(markdown) {
   }
 }
 
+function renderCodeBlock(language, code) {
+  const normalized = String(language || "").toLowerCase();
+  if (normalized === "mermaid" || normalized === "mmd") {
+    return `<div class="mermaid-wrap"><div class="mermaid">${escapeHtml(code)}</div></div>`;
+  }
+  return `<pre><code${language ? ` data-lang="${escapeHtml(language)}"` : ""}>${escapeHtml(code)}</code></pre>`;
+}
+
+function initMermaid() {
+  if (!window.mermaid) return;
+  try {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: "dark",
+      securityLevel: "strict",
+      flowchart: { useMaxWidth: true, curve: "basis" },
+      sequence: { useMaxWidth: true },
+    });
+  } catch (error) {
+    console.warn("mermaid init failed", error);
+  }
+}
+
+function renderMermaidBlocks(root) {
+  const nodes = Array.from(root.querySelectorAll(".mermaid:not([data-processed])"));
+  if (!nodes.length || !window.mermaid?.run) return;
+  try {
+    window.mermaid.run({ nodes });
+  } catch (error) {
+    console.warn("mermaid render failed", error);
+  }
+}
+
 function inlineMarkdown(text) {
   return escapeHtml(text)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
+}
+
+function isTableStart(lines, index) {
+  return splitTableRow(lines[index]).length > 1 && isTableDivider(lines[index + 1] || "");
+}
+
+function collectTable(lines, startIndex) {
+  const headers = splitTableRow(lines[startIndex]);
+  const alignments = splitTableRow(lines[startIndex + 1]).map((cell) => {
+    const trimmed = cell.trim();
+    if (trimmed.startsWith(":") && trimmed.endsWith(":")) return "center";
+    if (trimmed.endsWith(":")) return "right";
+    return "left";
+  });
+  const rows = [];
+  let index = startIndex + 2;
+  while (index < lines.length && splitTableRow(lines[index]).length > 1) {
+    rows.push(splitTableRow(lines[index]));
+    index += 1;
+  }
+  const headerHtml = headers
+    .map((cell, cellIndex) => `<th style="text-align:${alignments[cellIndex] || "left"}">${inlineMarkdown(cell.trim())}</th>`)
+    .join("");
+  const bodyHtml = rows
+    .map((row) => `<tr>${headers.map((_, cellIndex) => `<td style="text-align:${alignments[cellIndex] || "left"}">${inlineMarkdown((row[cellIndex] || "").trim())}</td>`).join("")}</tr>`)
+    .join("");
+  return {
+    html: `<div class="md-table-wrap"><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
+    nextIndex: index,
+  };
+}
+
+function splitTableRow(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed.includes("|")) return [];
+  return trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|");
+}
+
+function isTableDivider(line) {
+  const cells = splitTableRow(line);
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
 }
 
 function resetTurnState() {
