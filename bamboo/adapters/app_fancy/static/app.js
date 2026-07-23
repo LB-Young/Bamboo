@@ -42,7 +42,6 @@ const els = {
   changeList: document.getElementById("changeList"),
   fileTree: document.getElementById("fileTree"),
   sourceList: document.getElementById("sourceList"),
-  toolMonitor: document.getElementById("toolMonitor"),
   diffFile: document.getElementById("diffFile"),
   diffCount: document.getElementById("diffCount"),
   diffView: document.getElementById("diffView"),
@@ -71,7 +70,6 @@ async function apiCall(name, ...args) {
 
 async function init() {
   setStatus("loading", "Loading");
-  seedMonitor();
   setActiveView("chat");
   resetRunTimeline();
   const data = await apiCall("get_initial_state");
@@ -522,7 +520,6 @@ function resetTurnState() {
   state.toolRows.clear();
   els.reasoningCount.textContent = "0";
   els.toolCount.textContent = "0";
-  seedMonitor();
 }
 
 function startReasoning() {
@@ -554,7 +551,6 @@ function showToolCall(event) {
   const row = createDetails(`Tool · ${event.name}`, "running");
   row.output.textContent = JSON.stringify(event.input || {}, null, 2);
   state.toolRows.set(event.id || event.name, row);
-  addToolMonitor(event.name, "Running", "active");
 }
 
 function showToolResult(event) {
@@ -563,7 +559,6 @@ function showToolResult(event) {
   row.output.textContent = event.output || "";
   row.preview.textContent = summarize(event.output || "");
   bumpContextEstimate(event.output || "", 0);
-  addToolMonitor(event.name, "Success", "success");
 }
 
 function showToolError(event) {
@@ -571,7 +566,6 @@ function showToolError(event) {
   row.status.textContent = "error";
   row.details.classList.add("failed");
   row.output.textContent = event.error || "";
-  addToolMonitor(event.name, "Error", "error");
 }
 
 function createDetails(titleText, statusText) {
@@ -822,21 +816,6 @@ function compactNumber(value) {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}m`;
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
   return `${value}`;
-}
-
-function seedMonitor() {
-  els.toolMonitor.innerHTML = "";
-  addToolMonitor("git_status", "Ready", "idle");
-  addToolMonitor("file_read", "Ready", "idle");
-  addToolMonitor("pytest", "Pending", "idle");
-}
-
-function addToolMonitor(name, status, kind) {
-  const row = document.createElement("div");
-  row.className = `tool-row ${kind}`;
-  row.innerHTML = `<span>${escapeHtml(name)}</span><b>${escapeHtml(status)}</b>`;
-  els.toolMonitor.prepend(row);
-  while (els.toolMonitor.children.length > 6) els.toolMonitor.lastElementChild.remove();
 }
 
 function setStatus(status, text = "") {
