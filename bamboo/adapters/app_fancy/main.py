@@ -26,6 +26,7 @@ from bamboo.runtime.context_compactor import HeuristicTokenCounter
 
 STATIC_DIR = Path(__file__).parent / "static"
 ASSET_DIR = STATIC_DIR / "assets"
+WINDOWS_APP_USER_MODEL_ID = "YoungL.Bamboo.AppFancy"
 
 
 def _app_icon_path() -> Path:
@@ -36,6 +37,18 @@ def _app_icon_path() -> Path:
     if system == "Darwin":
         return ASSET_DIR / "bamboo_app_icon.icns"
     return ASSET_DIR / "bamboo_app_icon.png"
+
+
+def _set_windows_app_user_model_id() -> None:
+    """Give Windows a stable app identity so taskbar icons do not group under python.exe."""
+    if platform.system() != "Windows":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(WINDOWS_APP_USER_MODEL_ID)
+    except Exception:
+        return
 
 
 def launch_app(
@@ -50,6 +63,7 @@ def launch_app(
 ) -> None:
     """Open the polished Bamboo desktop application window."""
     setup_logging()
+    _set_windows_app_user_model_id()
     try:
         import webview
     except ImportError as exc:  # pragma: no cover - depends on local optional extra

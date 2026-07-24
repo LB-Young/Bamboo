@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import ctypes
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
 from bamboo.adapters.app import AppDependencyError
 from bamboo.adapters.app.main import _event_payload, _parse_numstat
 from bamboo.adapters.app_fancy.main import (
+    WINDOWS_APP_USER_MODEL_ID,
     _app_icon_path,
     _changed_files_expanded,
     _file_diff_summary,
+    _set_windows_app_user_model_id,
     _untracked_file_diff,
 )
 from bamboo.helpers.constant import ReasoningDeltaEvent, SessionMode, ToolResultEvent
@@ -106,6 +110,17 @@ def test_app_fancy_icon_uses_platform_specific_format(monkeypatch) -> None:
 
     monkeypatch.setattr("bamboo.adapters.app_fancy.main.platform.system", lambda: "Linux")
     assert _app_icon_path().name == "bamboo_app_icon.png"
+
+
+def test_app_fancy_sets_windows_app_user_model_id(monkeypatch) -> None:
+    calls: list[str] = []
+    shell32 = SimpleNamespace(SetCurrentProcessExplicitAppUserModelID=lambda app_id: calls.append(app_id))
+    monkeypatch.setattr("bamboo.adapters.app_fancy.main.platform.system", lambda: "Windows")
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(shell32=shell32), raising=False)
+
+    _set_windows_app_user_model_id()
+
+    assert calls == [WINDOWS_APP_USER_MODEL_ID]
 
 
 def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:

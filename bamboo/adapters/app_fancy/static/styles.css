@@ -1163,10 +1163,6 @@ textarea {
   pointer-events: none;
 }
 
-.ring.context-active {
-  --float-speed: 3.8s;
-}
-
 .ring.context-warning {
   --context-color: var(--amber);
   --float-speed: 3.1s;

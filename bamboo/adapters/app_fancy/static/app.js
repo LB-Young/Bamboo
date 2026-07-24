@@ -796,14 +796,13 @@ function renderContext(context) {
   const small = els.contextRing.querySelector("small");
   if (small) small.textContent = `${label}${state.context.estimated ? " est." : ""}`;
   els.contextRing.style.setProperty("--context-percent", `${percent}%`);
-  els.contextRing.classList.remove("context-calm", "context-active", "context-warning", "context-critical");
+  els.contextRing.classList.remove("context-calm", "context-warning", "context-critical");
   els.contextRing.classList.add(contextMood(percent));
 }
 
 function contextMood(percent) {
   if (percent >= 90) return "context-critical";
-  if (percent >= 75) return "context-warning";
-  if (percent >= 40) return "context-active";
+  if (percent >= 40) return "context-warning";
   return "context-calm";
 }
 
