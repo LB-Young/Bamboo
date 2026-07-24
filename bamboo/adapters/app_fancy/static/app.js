@@ -11,6 +11,7 @@ const state = {
   startedAt: null,
   timer: null,
   context: { used_tokens: 0, context_window: 128000, percent: 0, estimated: true },
+  models: { selected: "", configured: "", options: [] },
   activeView: "chat",
   logs: [],
   stopRequested: false,
@@ -18,6 +19,7 @@ const state = {
 
 const els = {
   projectPath: document.getElementById("projectPath"),
+  modelSelect: document.getElementById("modelSelect"),
   applyProject: document.getElementById("applyProject"),
   newSession: document.getElementById("newSession"),
   sessionScope: document.getElementById("sessionScope"),
@@ -81,6 +83,7 @@ async function init() {
   renderSessions(data.sessions || []);
   renderChanges(data.changes || {});
   renderContext(data.context || {});
+  renderModels(data.models || {});
   newSessionView();
   setStatus("idle");
   if (data.initial_message || (data.initial_image_paths || []).length) {
@@ -141,6 +144,7 @@ async function loadSession(session) {
   renderSessions(state.sessions);
   renderChanges(data.changes || {});
   renderContext(data.context || {});
+  renderModels(data.models || {});
 }
 
 async function newSession() {
@@ -151,6 +155,7 @@ async function newSession() {
   renderSessions(data.sessions || []);
   renderChanges(data.changes || {});
   renderContext(data.context || {});
+  renderModels(data.models || {});
   newSessionView();
 }
 
@@ -177,10 +182,12 @@ async function sendMessage() {
   setStatus("running", "Executing");
   els.runTitle.textContent = message || "Image task";
   updateRunStage("planning", "active", "Preparing request");
-  const result = await apiCall("send_message", message, state.projectPath, []);
+  const result = await apiCall("send_message", message, state.projectPath, [], els.modelSelect.value || "");
   if (!result.ok) {
     showSystem(result.error || "Send failed", "error");
     setStatus("idle");
+  } else if (result.model) {
+    setSelectedModel(result.model);
   }
 }
 
@@ -188,6 +195,7 @@ function handleEvent(event) {
   addLog(event);
   if (event.type === "run_start") {
     state.currentSessionId = event.session_id;
+    if (event.model) setSelectedModel(event.model);
     state.startedAt = Date.now();
     startTimer();
     renderScope();
@@ -790,6 +798,49 @@ function renderContext(context) {
   els.contextRing.style.background = `radial-gradient(circle at center, #10181c 58%, transparent 59%), conic-gradient(var(--accent) 0 ${percent}%, #28373d ${percent}% 100%)`;
 }
 
+function renderModels(models) {
+  const options = Array.isArray(models.options) ? models.options : [];
+  state.models = {
+    selected: models.selected || "",
+    configured: models.configured || "",
+    options,
+  };
+  els.modelSelect.innerHTML = "";
+  for (const option of options) {
+    const item = document.createElement("option");
+    item.value = option.name || "";
+    item.textContent = option.name || "";
+    const type = option.model_type ? ` · ${option.model_type}` : "";
+    const provider = option.provider ? `${option.provider}` : "";
+    const actualModel = option.model && option.model !== option.name ? ` · ${option.model}` : "";
+    item.title = `${provider}${actualModel}${type}`.replace(/^ · /, "");
+    if (option.name === state.models.configured) item.textContent = `${item.textContent} (default)`;
+    els.modelSelect.appendChild(item);
+  }
+  setSelectedModel(state.models.selected || state.models.configured);
+  updateContextWindowForSelectedModel();
+}
+
+function setSelectedModel(modelName) {
+  if (!modelName) return;
+  const existing = Array.from(els.modelSelect.options).some((option) => option.value === modelName);
+  if (existing) {
+    els.modelSelect.value = modelName;
+    state.models.selected = modelName;
+  }
+}
+
+function updateContextWindowForSelectedModel() {
+  const selected = state.models.options.find((option) => option.name === els.modelSelect.value);
+  if (!selected?.context_window) return;
+  renderContext({
+    used_tokens: state.context.used_tokens || 0,
+    context_window: selected.context_window,
+    percent: Math.round(((state.context.used_tokens || 0) / selected.context_window) * 100),
+    estimated: state.context.estimated,
+  });
+}
+
 function bumpContextEstimate(text, imageCount = 0) {
   const total = state.context.context_window || 128000;
   const added = estimateTokens(text) + imageCount * 1024;
@@ -961,6 +1012,10 @@ els.applyProject.addEventListener("click", async () => {
 els.newSession.addEventListener("click", newSession);
 els.sendButton.addEventListener("click", sendMessage);
 els.stopButton.addEventListener("click", stopCurrentTask);
+els.modelSelect.addEventListener("change", () => {
+  state.models.selected = els.modelSelect.value;
+  updateContextWindowForSelectedModel();
+});
 els.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();

@@ -14,10 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from bamboo.adapters.app.main import AppDependencyError, BambooAppBridge, _parse_numstat
+from bamboo.adapters.cli.commands import expand_command_message
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import LLMResponseEvent, SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
+from bamboo.llms.media import image_from_source, images_from_text, merge_images
+from bamboo.prompts import build_system_prompt
 from bamboo.runtime.context_compactor import HeuristicTokenCounter
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -68,6 +71,7 @@ class BambooFancyAppBridge(BambooAppBridge):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        self.startup_model = self.model
         self.latest_usage: dict[str, int] = {}
         self.token_counter = HeuristicTokenCounter()
         self.worker_loop: asyncio.AbstractEventLoop | None = None
@@ -83,17 +87,91 @@ class BambooFancyAppBridge(BambooAppBridge):
     def get_initial_state(self) -> dict[str, Any]:
         state = super().get_initial_state()
         state["context"] = self.get_context_usage()
+        state["models"] = self.get_model_selector_state()
         return state
 
     def new_session(self, project_path: str = "") -> dict[str, Any]:
         result = super().new_session(project_path)
         result["context"] = self.get_context_usage()
+        result["models"] = self.get_model_selector_state()
         return result
 
     def load_session(self, record_dir: str) -> dict[str, Any]:
         result = super().load_session(record_dir)
         result["context"] = self.get_context_usage()
+        result["models"] = self.get_model_selector_state()
         return result
+
+    def get_model_selector_state(self) -> dict[str, Any]:
+        """Return available model registrations and the model selected for new turns."""
+        llm_factory = self.runtime.llm_factory
+        selected = self._selected_model_name()
+        options: list[dict[str, Any]] = []
+        for name in llm_factory.list_model_names():
+            config = llm_factory.get_model_config(name)
+            options.append(
+                {
+                    "name": name,
+                    "provider": config.provider,
+                    "model": config.model,
+                    "model_type": config.model_type,
+                    "context_window": config.context_window,
+                }
+            )
+        return {
+            "selected": selected,
+            "configured": self._configured_default_model_name(),
+            "options": options,
+        }
+
+    def send_message(
+        self,
+        message: str,
+        project_path: str = "",
+        image_paths: list[str] | None = None,
+        model_name: str = "",
+    ) -> dict[str, Any]:
+        """Run a user message with an optional per-turn model override."""
+        message = (message or "").strip()
+        if not message and not image_paths:
+            return {"ok": False, "error": "message is empty"}
+        if self.running:
+            return {"ok": False, "error": "task is running"}
+        selected_model = self._resolve_requested_model(model_name)
+        if selected_model is None:
+            return {"ok": False, "error": f"Model is not configured: {model_name}"}
+        project, mode = self._resolve_scope(project_path)
+        if mode == SessionMode.project and not project.is_dir():
+            return {"ok": False, "error": f"Project path does not exist: {project}"}
+        if self._scope_changed(project, mode):
+            self.session_id = str(uuid.uuid4())
+            self.current_task = None
+        self.model = selected_model
+        self.provider = self.runtime.llm_factory.get_model_config(selected_model).provider
+        self.active_project = project
+        self.active_session_mode = mode
+        expanded = expand_command_message(message, project=str(project))
+        if expanded.error:
+            return {"ok": False, "error": expanded.error}
+        message = expanded.message
+        images = merge_images(
+            [image_from_source(path) for path in (image_paths or [])],
+            images_from_text(message),
+        )
+        self._apply_selected_model_to_current_session(selected_model, project, mode)
+        self.running = True
+        self._emit_ui(
+            {
+                "type": "run_start",
+                "session_id": self.session_id,
+                "mode": mode.value,
+                "project_path": "" if mode == SessionMode.chat else str(project),
+                "message": message,
+                "model": selected_model,
+            }
+        )
+        threading.Thread(target=self._run_message, args=(message, images, project, mode), daemon=True).start()
+        return {"ok": True, "session_id": self.session_id, "model": selected_model}
 
     def get_changes(self, project_path: str = "") -> dict[str, Any]:
         """Return changed files, expanding untracked directories into concrete files."""
@@ -244,6 +322,52 @@ class BambooFancyAppBridge(BambooAppBridge):
             total += len(message.images) * 1024
             total += self.token_counter.count_text(message.tool_call_id)
         return total
+
+    def _configured_default_model_name(self) -> str:
+        llm_factory = self.runtime.llm_factory
+        if self.startup_model and llm_factory.has_model(self.startup_model):
+            return self.startup_model
+        main_agent_config = self.runtime.task_factory.config.get("bamboo_main_agent", {})
+        configured_name = main_agent_config.get("model") if isinstance(main_agent_config, dict) else None
+        if isinstance(configured_name, str) and configured_name and llm_factory.has_model(configured_name):
+            return configured_name
+        return llm_factory.default_model_name
+
+    def _selected_model_name(self) -> str:
+        if self.current_task is not None and self.current_task.session.model:
+            return self.current_task.session.model
+        return self._configured_default_model_name()
+
+    def _resolve_requested_model(self, model_name: str = "") -> str | None:
+        selected = (model_name or "").strip() or self._selected_model_name()
+        if self.runtime.llm_factory.has_model(selected):
+            return selected
+        return None
+
+    def _apply_selected_model_to_current_session(self, model_name: str, project: Path, mode: SessionMode) -> None:
+        if self.current_task is None:
+            return
+        config = self.runtime.llm_factory.get_model_config(model_name)
+        self.current_task.run_params.model = model_name
+        self.current_task.run_params.provider = config.provider
+        self.current_task.session.model = model_name
+        self.current_task.session.provider = config.provider
+        self.current_task.session.context.system_prompt = build_system_prompt(
+            session_mode=mode,
+            project_root=project,
+            memory_dir=self.current_task.memory_dir,
+            model=model_name,
+            provider=config.provider,
+        )
+        if self.current_task.session.memory_store is not None:
+            self.current_task.session.memory_store.save_session(
+                mode=mode.value,
+                project_root=project,
+                model=model_name,
+                provider=config.provider,
+                system_prompt=self.current_task.session.context.system_prompt,
+                metadata=self.current_task.session.context.metadata,
+            )
 
 
 def _usage_input_tokens(usage: dict[str, int]) -> int:

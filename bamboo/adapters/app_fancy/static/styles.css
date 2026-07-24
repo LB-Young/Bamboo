@@ -58,7 +58,7 @@ button {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 250px;
+  grid-template-columns: 300px minmax(0, 1fr) 180px;
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid var(--line);
@@ -107,7 +107,7 @@ button {
 
 .top-controls {
   display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 0.9fr) minmax(150px, 0.9fr);
+  grid-template-columns: minmax(180px, 1.25fr) minmax(120px, 0.72fr) minmax(150px, 0.88fr) minmax(120px, 0.68fr);
   gap: 10px;
 }
 
