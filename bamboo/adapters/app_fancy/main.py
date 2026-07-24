@@ -24,6 +24,7 @@ from bamboo.prompts import build_system_prompt
 from bamboo.runtime.context_compactor import HeuristicTokenCounter
 
 STATIC_DIR = Path(__file__).parent / "static"
+APP_ICON = STATIC_DIR / "assets" / "bamboo_app_icon.icns"
 
 
 def launch_app(
@@ -63,7 +64,7 @@ def launch_app(
         min_size=(1120, 720),
     )
     bridge.attach_window(window)
-    webview.start(debug=False)
+    webview.start(debug=False, icon=str(APP_ICON))
 
 
 class BambooFancyAppBridge(BambooAppBridge):

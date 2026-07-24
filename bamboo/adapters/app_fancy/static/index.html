@@ -10,9 +10,7 @@
     <div id="app">
       <header class="topbar">
         <div class="brand">
-          <div class="logo" aria-hidden="true">
-            <span></span><span></span><span></span>
-          </div>
+          <img class="logo" src="./assets/bamboo_app_icon.png" alt="" aria-hidden="true" />
           <strong>Bamboo</strong>
         </div>
         <div class="top-controls">
@@ -137,7 +135,20 @@
       <aside class="inspector">
         <section class="panel context-panel">
           <div class="panel-head"><span>Context</span></div>
-          <div class="ring"><span id="contextPercent">0%</span><small>context usage</small></div>
+          <div class="ring context-calm" aria-label="Context usage">
+            <div class="spirit-orbit" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </div>
+            <div class="bamboo-spirit" aria-hidden="true">
+              <img src="./assets/bamboo_context_spirit.png" alt="" />
+              <span class="spirit-sweat"></span>
+              <span class="spirit-shadow"></span>
+            </div>
+            <div class="context-readout">
+              <span id="contextPercent">0%</span>
+              <small>context usage</small>
+            </div>
+          </div>
           <button class="folded" type="button">Reasoning <b id="reasoningCount">0</b></button>
           <button class="folded" type="button">Tools <b id="toolCount">0</b></button>
         </section>

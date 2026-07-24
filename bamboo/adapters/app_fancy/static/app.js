@@ -795,7 +795,16 @@ function renderContext(context) {
   const label = formatTokens(used, total);
   const small = els.contextRing.querySelector("small");
   if (small) small.textContent = `${label}${state.context.estimated ? " est." : ""}`;
-  els.contextRing.style.background = `radial-gradient(circle at center, #10181c 58%, transparent 59%), conic-gradient(var(--accent) 0 ${percent}%, #28373d ${percent}% 100%)`;
+  els.contextRing.style.setProperty("--context-percent", `${percent}%`);
+  els.contextRing.classList.remove("context-calm", "context-active", "context-warning", "context-critical");
+  els.contextRing.classList.add(contextMood(percent));
+}
+
+function contextMood(percent) {
+  if (percent >= 90) return "context-critical";
+  if (percent >= 75) return "context-warning";
+  if (percent >= 40) return "context-active";
+  return "context-calm";
 }
 
 function renderModels(models) {

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Bamboo app icon">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="32%" r="70%">
+      <stop offset="0%" stop-color="#203a36"/>
+      <stop offset="55%" stop-color="#0f1a1d"/>
+      <stop offset="100%" stop-color="#081013"/>
+    </radialGradient>
+    <linearGradient id="leafA" x1="178" y1="238" x2="808" y2="776" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9ff5c5"/>
+      <stop offset="48%" stop-color="#63d9a4"/>
+      <stop offset="100%" stop-color="#2faa7b"/>
+    </linearGradient>
+    <linearGradient id="leafB" x1="336" y1="148" x2="708" y2="826" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c1ffe0"/>
+      <stop offset="45%" stop-color="#66c7e8"/>
+      <stop offset="100%" stop-color="#4ac18f"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#020708" flood-opacity="0.42"/>
+    </filter>
+    <filter id="coreGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bgGlow)"/>
+  <path d="M126 262C287 178 493 221 564 386C421 424 243 424 126 262Z" fill="#19302e" opacity="0.7"/>
+  <path d="M248 755C187 579 250 391 437 334C473 510 438 681 248 755Z" fill="url(#leafA)" filter="url(#softShadow)"/>
+  <path d="M510 175C666 308 697 531 537 701C412 549 374 350 510 175Z" fill="url(#leafB)" filter="url(#softShadow)"/>
+  <path d="M789 757C594 700 520 531 588 337C776 412 869 589 789 757Z" fill="url(#leafA)" filter="url(#softShadow)"/>
+  <path d="M318 575C399 557 470 515 511 431C553 519 622 560 704 575C617 640 411 640 318 575Z" fill="#112426" opacity="0.44"/>
+  <circle cx="512" cy="548" r="64" fill="#d7fff0" opacity="0.9" filter="url(#coreGlow)"/>
+  <circle cx="512" cy="548" r="30" fill="#63d9a4"/>
+  <path d="M325 356C374 407 431 436 494 445" fill="none" stroke="#dffff4" stroke-width="26" stroke-linecap="round" opacity="0.23"/>
+  <path d="M547 256C574 326 574 392 537 461" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" opacity="0.22"/>
+  <path d="M655 383C616 438 578 471 524 492" fill="none" stroke="#dffff4" stroke-width="22" stroke-linecap="round" opacity="0.18"/>
+</svg>
