@@ -7,6 +7,7 @@ This adapter intentionally keeps its frontend separate from
 from __future__ import annotations
 
 import asyncio
+import platform
 import subprocess
 import threading
 import uuid
@@ -24,7 +25,17 @@ from bamboo.prompts import build_system_prompt
 from bamboo.runtime.context_compactor import HeuristicTokenCounter
 
 STATIC_DIR = Path(__file__).parent / "static"
-APP_ICON = STATIC_DIR / "assets" / "bamboo_app_icon.icns"
+ASSET_DIR = STATIC_DIR / "assets"
+
+
+def _app_icon_path() -> Path:
+    """Return a pywebview-compatible app icon for the current platform."""
+    system = platform.system()
+    if system == "Windows":
+        return ASSET_DIR / "bamboo_app_icon.ico"
+    if system == "Darwin":
+        return ASSET_DIR / "bamboo_app_icon.icns"
+    return ASSET_DIR / "bamboo_app_icon.png"
 
 
 def launch_app(
@@ -64,7 +75,7 @@ def launch_app(
         min_size=(1120, 720),
     )
     bridge.attach_window(window)
-    webview.start(debug=False, icon=str(APP_ICON))
+    webview.start(debug=False, icon=str(_app_icon_path()))
 
 
 class BambooFancyAppBridge(BambooAppBridge):

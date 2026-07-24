@@ -72,6 +72,7 @@ bamboo = [
     "adapters/app_fancy/static/*.html",
     "adapters/app_fancy/static/*.js",
     "adapters/app_fancy/static/*.css",
+    "adapters/app_fancy/static/assets/*.ico",
     "adapters/app_fancy/static/assets/*.icns",
     "adapters/app_fancy/static/assets/*.png",
     "adapters/app_fancy/static/assets/*.svg",

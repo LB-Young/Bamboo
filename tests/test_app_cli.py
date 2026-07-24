@@ -9,7 +9,12 @@ from typer.testing import CliRunner
 
 from bamboo.adapters.app import AppDependencyError
 from bamboo.adapters.app.main import _event_payload, _parse_numstat
-from bamboo.adapters.app_fancy.main import _changed_files_expanded, _file_diff_summary, _untracked_file_diff
+from bamboo.adapters.app_fancy.main import (
+    _app_icon_path,
+    _changed_files_expanded,
+    _file_diff_summary,
+    _untracked_file_diff,
+)
 from bamboo.helpers.constant import ReasoningDeltaEvent, SessionMode, ToolResultEvent
 from bamboo.run import app
 
@@ -90,6 +95,17 @@ def test_app_fancy_command_launches_fancy_adapter(monkeypatch) -> None:
             "image_paths": [],
         }
     ]
+
+
+def test_app_fancy_icon_uses_platform_specific_format(monkeypatch) -> None:
+    monkeypatch.setattr("bamboo.adapters.app_fancy.main.platform.system", lambda: "Windows")
+    assert _app_icon_path().name == "bamboo_app_icon.ico"
+
+    monkeypatch.setattr("bamboo.adapters.app_fancy.main.platform.system", lambda: "Darwin")
+    assert _app_icon_path().name == "bamboo_app_icon.icns"
+
+    monkeypatch.setattr("bamboo.adapters.app_fancy.main.platform.system", lambda: "Linux")
+    assert _app_icon_path().name == "bamboo_app_icon.png"
 
 
 def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
