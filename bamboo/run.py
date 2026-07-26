@@ -518,6 +518,32 @@ def web_fancy(
 
 
 @app.command()
+def wechat(
+    project: Path | None = PROJECT_OPTION,
+    model: str | None = MODEL_OPTION,
+    provider: str | None = PROVIDER_OPTION,
+    permission: str | None = PERMISSION_OPTION,
+    session_mode: SessionMode = SESSION_MODE_OPTION,
+    yes_all: bool = YES_ALL_OPTION,
+    relogin: bool = typer.Option(False, "--relogin", help="Ignore stored token and scan a fresh WeChat QR code"),
+) -> None:
+    """启动 Bamboo 微信个人号 Bot 入口。"""
+    from bamboo.adapters.wechat import launch_wechat
+
+    _start_default_cron()
+    console.print("[green]Bamboo WeChat[/green] starting")
+    launch_wechat(
+        project=project,
+        model=model or "",
+        provider=provider or "",
+        permission=permission or "default",
+        session_mode=session_mode,
+        yes_all=yes_all,
+        relogin=relogin,
+    )
+
+
+@app.command()
 def docs(
     host: str = typer.Option("127.0.0.1", "--host", help="Web server host"),
     port: int = typer.Option(8899, "--port", "-p", help="Web server port"),

@@ -15,7 +15,10 @@ const state = {
   activeView: "chat",
   logs: [],
   stopRequested: false,
+  theme: localStorage.getItem("bamboo.app.theme") || "dark",
 };
+
+applyTheme(state.theme);
 
 const els = {
   projectPath: document.getElementById("projectPath"),
@@ -28,6 +31,7 @@ const els = {
   agentScope: document.getElementById("agentScope"),
   chatTitle: document.getElementById("chatTitle"),
   statusPill: document.getElementById("statusPill"),
+  themeToggle: document.getElementById("themeToggle"),
   runTimer: document.getElementById("runTimer"),
   runTitle: document.getElementById("runTitle"),
   runBadge: document.getElementById("runBadge"),
@@ -99,6 +103,21 @@ function renderScope() {
   const label = state.mode === "project" ? state.projectPath : "Chat mode";
   els.agentScope.textContent = label;
   els.sessionScope.textContent = state.mode === "project" ? "Project Sessions" : "Recent Sessions";
+}
+
+function toggleTheme() {
+  applyTheme(state.theme === "dark" ? "light" : "dark");
+}
+
+function applyTheme(theme) {
+  state.theme = theme === "light" ? "light" : "dark";
+  document.body.dataset.theme = state.theme;
+  localStorage.setItem("bamboo.app.theme", state.theme);
+  const toggle = document.getElementById("themeToggle");
+  if (!toggle) return;
+  const nextTheme = state.theme === "dark" ? "light" : "dark";
+  toggle.textContent = nextTheme === "light" ? "Light" : "Dark";
+  toggle.setAttribute("aria-label", `Switch to ${nextTheme} theme`);
 }
 
 async function refreshSidebar() {
@@ -1032,6 +1051,7 @@ els.applyProject.addEventListener("click", async () => {
 els.newSession.addEventListener("click", newSession);
 els.sendButton.addEventListener("click", sendMessage);
 els.stopButton.addEventListener("click", stopCurrentTask);
+els.themeToggle.addEventListener("click", toggleTheme);
 els.modelSelect.addEventListener("change", () => {
   state.models.selected = els.modelSelect.value;
   updateContextWindowForSelectedModel();
