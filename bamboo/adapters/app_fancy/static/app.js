@@ -16,12 +16,16 @@ const state = {
   logs: [],
   stopRequested: false,
   theme: localStorage.getItem("bamboo.app.theme") || "dark",
+  recentProjects: [],
+  projectMenuOpen: false,
 };
 
 applyTheme(state.theme);
 
 const els = {
   projectPath: document.getElementById("projectPath"),
+  projectMenuToggle: document.getElementById("projectMenuToggle"),
+  projectMenu: document.getElementById("projectMenu"),
   modelSelect: document.getElementById("modelSelect"),
   applyProject: document.getElementById("applyProject"),
   newSession: document.getElementById("newSession"),
@@ -84,7 +88,9 @@ async function init() {
   state.projectPath = data.project_path || "";
   state.mode = data.mode || "chat";
   state.currentSessionId = data.session_id || null;
+  state.recentProjects = Array.isArray(data.recent_projects) ? data.recent_projects : [];
   els.projectPath.value = state.projectPath;
+  renderProjectOptions();
   renderScope();
   renderSessions(data.sessions || []);
   renderChanges(data.changes || {});
@@ -104,6 +110,78 @@ function renderScope() {
   const label = state.mode === "project" ? state.projectPath : "Chat mode";
   els.agentScope.textContent = label;
   els.sessionScope.textContent = state.mode === "project" ? "Project Sessions" : "Recent Sessions";
+}
+
+function renderProjectOptions() {
+  if (!els.projectMenu) return;
+  const paths = uniqueProjectPaths(state.recentProjects);
+  els.projectMenu.innerHTML = "";
+  els.projectMenu.appendChild(projectMenuItem("Chat mode", "", "空路径，使用 Chat 模式"));
+  for (const path of paths) {
+    els.projectMenu.appendChild(projectMenuItem(path, path, path));
+  }
+}
+
+function projectMenuItem(label, value, title) {
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "project-menu-item";
+  item.dataset.projectPath = value;
+  item.textContent = label;
+  item.title = title;
+  item.addEventListener("click", async () => {
+    els.projectPath.value = value;
+    closeProjectMenu();
+    await applyProjectPath();
+  });
+  return item;
+}
+
+async function applyProjectPath() {
+  renderScope();
+  rememberProjectPath(state.projectPath);
+  await refreshSidebar();
+  renderChanges(await apiCall("get_changes", state.projectPath));
+}
+
+function toggleProjectMenu() {
+  if (state.projectMenuOpen) {
+    closeProjectMenu();
+  } else {
+    openProjectMenu();
+  }
+}
+
+function openProjectMenu() {
+  renderProjectOptions();
+  state.projectMenuOpen = true;
+  els.projectMenu.hidden = false;
+  els.projectMenuToggle.setAttribute("aria-expanded", "true");
+}
+
+function closeProjectMenu() {
+  state.projectMenuOpen = false;
+  els.projectMenu.hidden = true;
+  els.projectMenuToggle.setAttribute("aria-expanded", "false");
+}
+
+function rememberProjectPath(path) {
+  const normalized = String(path || "").trim();
+  if (!normalized) return;
+  state.recentProjects = uniqueProjectPaths([normalized, ...state.recentProjects]);
+  renderProjectOptions();
+}
+
+function uniqueProjectPaths(paths) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of paths || []) {
+    const path = String(raw || "").trim();
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    result.push(path);
+  }
+  return result;
 }
 
 function toggleTheme() {
@@ -156,6 +234,7 @@ async function loadSession(session) {
   state.mode = data.mode || "chat";
   state.projectPath = data.project_path || "";
   els.projectPath.value = state.projectPath;
+  rememberProjectPath(state.projectPath);
   renderScope();
   els.chatHistory.innerHTML = "";
   resetTurnState();
@@ -170,6 +249,7 @@ async function loadSession(session) {
 
 async function newSession() {
   renderScope();
+  rememberProjectPath(state.projectPath);
   const data = await apiCall("new_session", state.projectPath);
   if (!data.ok) return showSystem(data.error || "New session failed", "error");
   state.currentSessionId = data.session_id;
@@ -194,6 +274,7 @@ async function sendMessage() {
   const message = els.messageInput.value.trim();
   if (!message) return;
   renderScope();
+  rememberProjectPath(state.projectPath);
   appendMessage("user", message);
   bumpContextEstimate(message, 0);
   els.messageInput.value = "";
@@ -1100,14 +1181,42 @@ function logSummary(event) {
 }
 
 els.applyProject.addEventListener("click", async () => {
-  renderScope();
-  await refreshSidebar();
-  renderChanges(await apiCall("get_changes", state.projectPath));
+  await applyProjectPath();
 });
 els.newSession.addEventListener("click", newSession);
 els.sendButton.addEventListener("click", sendMessage);
 els.stopButton.addEventListener("click", stopCurrentTask);
 els.themeToggle.addEventListener("click", toggleTheme);
+els.projectMenuToggle.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  toggleProjectMenu();
+});
+els.projectMenu.addEventListener("click", (event) => {
+  event.stopPropagation();
+});
+els.projectPath.addEventListener("change", async () => {
+  await applyProjectPath();
+});
+els.projectPath.addEventListener("keydown", async (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    closeProjectMenu();
+    await applyProjectPath();
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    openProjectMenu();
+  }
+  if (event.key === "Escape") {
+    closeProjectMenu();
+  }
+});
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest?.(".project-picker")) return;
+  closeProjectMenu();
+});
 els.modelSelect.addEventListener("change", () => {
   state.models.selected = els.modelSelect.value;
   updateContextWindowForSelectedModel();
@@ -1133,14 +1242,6 @@ async function stopCurrentTask() {
     showSystem(`停止任务失败：${error.message || error}`, "error");
   }
 }
-document.querySelectorAll("[data-project]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    els.projectPath.value = button.dataset.project || "";
-    await refreshSidebar();
-    renderChanges(await apiCall("get_changes", state.projectPath));
-  });
-});
-
 window.addEventListener("pywebviewready", () => {
   init().catch((error) => {
     console.error(error);

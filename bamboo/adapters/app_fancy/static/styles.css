@@ -147,6 +147,8 @@ button {
 
 .topbar {
   grid-column: 1 / -1;
+  position: relative;
+  z-index: 100;
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr) auto 180px;
   align-items: center;
@@ -209,6 +211,80 @@ textarea {
   border: 0;
   background: transparent;
   color: var(--text);
+}
+
+.project-control {
+  position: relative;
+  z-index: 110;
+}
+
+.project-picker {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  align-items: center;
+  min-width: 0;
+}
+
+.project-picker input {
+  padding-right: 4px;
+}
+
+.project-menu-toggle {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-strong);
+  color: var(--muted);
+  line-height: 1;
+}
+
+.project-menu {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 4px;
+  width: min(760px, calc(100vw - 40px));
+  max-height: 340px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.36);
+  pointer-events: auto;
+}
+
+.project-menu[hidden] {
+  display: none;
+}
+
+.project-menu-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.project-menu-item:first-child {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.project-menu-item:hover,
+.project-menu-item:focus {
+  border-color: rgba(99, 217, 164, 0.45);
+  background: var(--panel-strong);
+  outline: none;
 }
 
 .metrics {
@@ -338,7 +414,6 @@ textarea {
 
 .new-chat,
 .agent-card,
-.projects button,
 .session-item,
 .change-row,
 .source-row,
@@ -557,7 +632,6 @@ textarea {
 }
 
 .session-item,
-.projects button,
 .change-row,
 .source-row,
 .folded {
@@ -581,16 +655,11 @@ textarea {
 
 .session-item.active,
 .session-item:hover,
-.projects button:hover,
 .change-row:hover,
 .source-row:hover,
 .folded:hover {
   border-color: rgba(99, 217, 164, 0.45);
   background: var(--panel-strong);
-}
-
-.projects button {
-  margin-top: 8px;
 }
 
 .workspace {

@@ -168,6 +168,31 @@ def test_app_bridge_opens_only_external_web_links(monkeypatch) -> None:
     assert blocked["ok"] is False
 
 
+def test_app_bridge_lists_recent_project_paths(monkeypatch) -> None:
+    monkeypatch.setattr(BambooAppBridge, "_create_runtime", lambda self: SimpleNamespace())
+    monkeypatch.setattr(
+        "bamboo.adapters.app.main.list_sessions",
+        lambda **kwargs: [
+            {"mode": "project", "project_root": "/tmp/project-a"},
+            {"mode": "chat", "project_root": "/tmp/chat-cwd"},
+            {"mode": "project", "project_root": "/tmp/project-b"},
+            {"mode": "project", "project_root": "/tmp/project-a"},
+            {"mode": "project", "project_root": ""},
+        ],
+    )
+    bridge = BambooAppBridge(
+        project=None,
+        model="",
+        provider="",
+        permission="default",
+        session_mode=SessionMode.chat,
+        initial_message="",
+        image_paths=[],
+    )
+
+    assert bridge.recent_projects() == ["/tmp/project-a", "/tmp/project-b"]
+
+
 def test_app_numstat_parser_ignores_binary_markers() -> None:
     assert _parse_numstat("12") == 12
     assert _parse_numstat("-") == 0

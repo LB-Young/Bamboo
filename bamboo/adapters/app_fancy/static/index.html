@@ -14,7 +14,14 @@
           <strong>Bamboo</strong>
         </div>
         <div class="top-controls">
-          <label>Project <input id="projectPath" type="text" placeholder="留空为 Chat 模式" /></label>
+          <label class="project-control">
+            <span>Project</span>
+            <span class="project-picker">
+              <input id="projectPath" type="text" placeholder="留空为 Chat 模式" autocomplete="off" />
+              <button id="projectMenuToggle" class="project-menu-toggle" type="button" aria-label="Show recent projects" aria-expanded="false">v</button>
+              <span id="projectMenu" class="project-menu" hidden></span>
+            </span>
+          </label>
           <label>Agent <select id="agentSelect"><option>Bamboo Core</option></select></label>
           <label>Model <select id="modelSelect"></select></label>
           <label>Status <span id="statusPill" class="status idle">Idle</span></label>
@@ -64,12 +71,6 @@
             <button id="applyProject" type="button">Refresh</button>
           </div>
           <nav id="sessionList" class="session-list"></nav>
-        </section>
-
-        <section class="panel projects">
-          <div class="panel-head"><span>Projects</span></div>
-          <button type="button" data-project="">Chat mode</button>
-          <button type="button" data-project=".">Current directory</button>
         </section>
       </aside>
 

@@ -193,6 +193,7 @@ class BambooAppBridge:
             "mode": "project" if self.initial_project_path else "chat",
             "initial_message": self.initial_message,
             "initial_image_paths": self.initial_image_paths,
+            "recent_projects": self.recent_projects(),
             "sessions": self.list_sessions(self.initial_project_path),
             "changes": self.get_changes(self.initial_project_path),
         }
@@ -201,6 +202,20 @@ class BambooAppBridge:
         """List persisted sessions for the current desktop scope."""
         project, mode = self._resolve_scope(project_path)
         return list_sessions(mode=mode.value, project_path=project if mode == SessionMode.project else None, limit=80)
+
+    def recent_projects(self) -> list[str]:
+        """Return recently used project roots from persisted project sessions."""
+        paths: list[str] = []
+        seen: set[str] = set()
+        for session in list_sessions(mode=SessionMode.project.value, project_path=None, limit=1000):
+            if session.get("mode") != SessionMode.project.value:
+                continue
+            raw = str(session.get("project_root") or "").strip()
+            if not raw or raw in seen:
+                continue
+            seen.add(raw)
+            paths.append(raw)
+        return paths
 
     def new_session(self, project_path: str = "") -> dict[str, Any]:
         """Start a new local session without running a task."""
