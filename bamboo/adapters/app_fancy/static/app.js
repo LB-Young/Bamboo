@@ -38,6 +38,7 @@ const els = {
   sendButton: document.getElementById("sendButton"),
   contextPercent: document.getElementById("contextPercent"),
   contextRing: document.querySelector(".ring"),
+  contextSpirit: document.getElementById("contextSpirit"),
   reasoningCount: document.getElementById("reasoningCount"),
   toolCount: document.getElementById("toolCount"),
   changeSummary: document.getElementById("changeSummary"),
@@ -797,13 +798,24 @@ function renderContext(context) {
   if (small) small.textContent = `${label}${state.context.estimated ? " est." : ""}`;
   els.contextRing.style.setProperty("--context-percent", `${percent}%`);
   els.contextRing.classList.remove("context-calm", "context-warning", "context-critical");
-  els.contextRing.classList.add(contextMood(percent));
+  const mood = contextMood(percent);
+  els.contextRing.classList.add(mood);
+  renderContextSpirit(mood);
 }
 
 function contextMood(percent) {
   if (percent >= 90) return "context-critical";
   if (percent >= 40) return "context-warning";
   return "context-calm";
+}
+
+function renderContextSpirit(mood) {
+  const sources = {
+    "context-calm": "./assets/bamboo_context_spirit_calm.png",
+    "context-warning": "./assets/bamboo_context_spirit_warning.png",
+    "context-critical": "./assets/bamboo_context_spirit_critical.png",
+  };
+  if (els.contextSpirit) els.contextSpirit.src = sources[mood] || sources["context-calm"];
 }
 
 function renderModels(models) {

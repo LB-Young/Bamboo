@@ -1238,19 +1238,6 @@ textarea {
   pointer-events: none;
 }
 
-.spirit-sweat {
-  position: absolute;
-  right: 21px;
-  top: 50px;
-  width: 7px;
-  height: 10px;
-  border-radius: 8px 8px 8px 1px;
-  background: #66c7e8;
-  opacity: 0;
-  transform: rotate(22deg);
-  box-shadow: 0 0 8px rgba(102, 199, 232, 0.45);
-}
-
 .spirit-shadow {
   position: absolute;
   left: 50%;
@@ -1316,11 +1303,6 @@ textarea {
     drop-shadow(0 0 20px color-mix(in srgb, var(--context-color) 42%, transparent));
 }
 
-.ring.context-critical .spirit-sweat {
-  opacity: 1;
-  animation: sweat-drop 1.4s ease-in-out infinite;
-}
-
 @keyframes spirit-float {
   0%,
   100% {
@@ -1346,16 +1328,6 @@ textarea {
   50% {
     opacity: 0.18;
     transform: translateX(-50%) scaleX(0.76);
-  }
-}
-
-@keyframes sweat-drop {
-  0%,
-  100% {
-    transform: translateY(0) rotate(22deg);
-  }
-  50% {
-    transform: translateY(3px) rotate(22deg);
   }
 }
 
