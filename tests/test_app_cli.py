@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from bamboo.adapters.app import AppDependencyError
-from bamboo.adapters.app.main import _event_payload, _parse_numstat
+from bamboo.adapters.app.main import BambooAppBridge, _event_payload, _parse_numstat
 from bamboo.adapters.app_fancy.main import (
     WINDOWS_APP_USER_MODEL_ID,
     _app_icon_path,
@@ -145,6 +145,27 @@ def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
         "output": "摘要输出",
         "truncated": True,
     }
+
+
+def test_app_bridge_opens_only_external_web_links(monkeypatch) -> None:
+    opened_urls: list[str] = []
+    monkeypatch.setattr(BambooAppBridge, "_create_runtime", lambda self: SimpleNamespace())
+    monkeypatch.setattr("bamboo.adapters.app.main.webbrowser.open", lambda url: opened_urls.append(url) or True)
+    bridge = BambooAppBridge(
+        project=None,
+        model="",
+        provider="",
+        permission="default",
+        session_mode=SessionMode.chat,
+        initial_message="",
+        image_paths=[],
+    )
+
+    assert bridge.open_external_url("https://example.com/docs") == {"ok": True}
+    blocked = bridge.open_external_url("file:///etc/passwd")
+
+    assert opened_urls == ["https://example.com/docs"]
+    assert blocked["ok"] is False
 
 
 def test_app_numstat_parser_ignores_binary_markers() -> None:

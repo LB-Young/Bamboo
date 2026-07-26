@@ -12,6 +12,7 @@ import json
 import subprocess
 import threading
 import uuid
+import webbrowser
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
@@ -175,6 +176,14 @@ class BambooAppBridge:
     def attach_window(self, window: Any) -> None:
         """Attach the pywebview window after creation."""
         self.window = window
+
+    def open_external_url(self, url: str) -> dict[str, Any]:
+        """Open an HTTP(S) URL outside the embedded desktop webview."""
+        normalized = (url or "").strip()
+        if not normalized.lower().startswith(("http://", "https://")):
+            return {"ok": False, "error": "only http and https links can be opened"}
+        opened = webbrowser.open(normalized)
+        return {"ok": bool(opened)}
 
     def get_initial_state(self) -> dict[str, Any]:
         """Return initial app state to the frontend."""

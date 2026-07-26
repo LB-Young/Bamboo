@@ -69,6 +69,7 @@ window.BambooDesktop = {
 };
 
 initMermaid();
+installExternalLinkHandler();
 
 async function apiCall(name, ...args) {
   if (!window.pywebview?.api) throw new Error("pywebview bridge is not ready");
@@ -501,6 +502,26 @@ function initMermaid() {
   }
 }
 
+function installExternalLinkHandler() {
+  els.chatHistory.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const link = target?.closest?.("a[href]");
+    if (!link || !els.chatHistory.contains(link)) return;
+    const href = link.href || "";
+    if (!/^https?:\/\//i.test(href)) return;
+    event.preventDefault();
+    try {
+      if (window.pywebview?.api?.open_external_url) {
+        const result = await window.pywebview.api.open_external_url(href);
+        if (result?.ok) return;
+      }
+    } catch (error) {
+      console.warn("external link open failed", error);
+    }
+    window.open(href, "_blank", "noopener,noreferrer");
+  });
+}
+
 function renderMermaidBlocks(root) {
   const nodes = Array.from(root.querySelectorAll(".mermaid:not([data-processed])"));
   if (!nodes.length || !window.mermaid?.run) return;
@@ -516,7 +537,7 @@ function inlineMarkdown(text) {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
 function isTableStart(lines, index) {
