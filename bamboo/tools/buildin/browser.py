@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from bamboo.helpers.config import BambooConfig
 from bamboo.tools.buildin.base import Tool, ToolResult
 from bamboo.userspace.userspace import get_userspace_dir
 
@@ -77,7 +78,7 @@ class BrowserTool(Tool):
         wait_until: str = "load",
         screenshot_path: str = "",
         full_page: bool = True,
-        headless: bool = True,
+        headless: bool | None = None,
     ) -> ToolResult:
         normalized_action = action.strip().lower()
         if normalized_action not in BROWSER_ACTIONS:
@@ -100,7 +101,7 @@ class BrowserTool(Tool):
                     wait_until=wait_until or "load",
                     screenshot_path=screenshot_path,
                     full_page=full_page,
-                    headless=headless,
+                    headless=_browser_headless_default() if headless is None else bool(headless),
                 )
             )
         except BrowserToolError as exc:
@@ -300,6 +301,32 @@ def reset_browser_session() -> None:
 
 def _timeout(value: int) -> int:
     return max(100, min(int(value or 10000), 120000))
+
+
+def _browser_headless_default() -> bool:
+    """Load the default browser launch mode from tools_buildin.yaml."""
+    try:
+        tools_config = BambooConfig().get("tools_buildin", {})
+    except Exception:
+        return True
+    if not isinstance(tools_config, dict):
+        return True
+    browser_config = tools_config.get("browser", {})
+    if not isinstance(browser_config, dict):
+        return True
+    return _as_bool(browser_config.get("headless"), default=True)
+
+
+def _as_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return default
 
 
 def _require_selector(action: BrowserAction) -> str:

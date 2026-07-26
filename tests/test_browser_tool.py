@@ -36,6 +36,34 @@ def test_browser_tool_rejects_unknown_action() -> None:
     anyio.run(run_test)
 
 
+def test_browser_tool_uses_configured_headless_default(monkeypatch) -> None:
+    fake = _FakeBrowserSession()
+    monkeypatch.setattr("bamboo.tools.buildin.browser.BambooConfig", lambda: _StubConfig({"browser": {"headless": False}}))
+    tool = BrowserTool(session=fake)
+
+    async def run_test() -> None:
+        result = await tool.execute(action="open", url="https://example.com")
+
+        assert result.success
+        assert fake.actions[0].headless is False
+
+    anyio.run(run_test)
+
+
+def test_browser_tool_call_headless_overrides_config(monkeypatch) -> None:
+    fake = _FakeBrowserSession()
+    monkeypatch.setattr("bamboo.tools.buildin.browser.BambooConfig", lambda: _StubConfig({"browser": {"headless": True}}))
+    tool = BrowserTool(session=fake)
+
+    async def run_test() -> None:
+        result = await tool.execute(action="open", url="https://example.com", headless=False)
+
+        assert result.success
+        assert fake.actions[0].headless is False
+
+    anyio.run(run_test)
+
+
 def test_browser_launch_error_includes_underlying_detail() -> None:
     message = _format_browser_launch_error(RuntimeError("Executable doesn't exist at /tmp/headless_shell"))
 
@@ -52,3 +80,13 @@ class _FakeBrowserSession:
         if action.action == "extract_text":
             return ToolResult(content="page text", metadata={"action": action.action})
         return ToolResult(content=f"ok:{action.action}", metadata={"action": action.action})
+
+
+class _StubConfig:
+    def __init__(self, tools_buildin: dict[str, object]) -> None:
+        self.tools_buildin = tools_buildin
+
+    def get(self, name: str, default: object = None) -> object:
+        if name == "tools_buildin":
+            return self.tools_buildin
+        return default

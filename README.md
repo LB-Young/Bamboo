@@ -80,8 +80,10 @@ Run Bamboo:
 
 ```bash
 export MOONSHOT_API_KEY="your-kimi-api-key"
-bamboo main
+bamboo app-fancy
 ```
+
+`app-fancy` is the recommended default interface. It starts a native desktop workspace with chat, model switching, Diff, logs, context usage, and theme controls.
 
 Run a one-shot task:
 
@@ -92,7 +94,7 @@ bamboo run "检查这个项目最近有哪些改动"
 Start a project-scoped session:
 
 ```bash
-bamboo main --session-mode project --project /path/to/project
+bamboo app-fancy --session-mode project --project /path/to/project
 ```
 
 Ask about an image from the CLI:
@@ -113,12 +115,12 @@ The Web UI opens at:
 http://127.0.0.1:8899
 ```
 
-Start the polished Web or desktop frontends:
+Other interactive frontends:
 
 ```bash
+bamboo main
 bamboo web-fancy
 bamboo app
-bamboo app-fancy
 ```
 
 The `app-fancy` interface includes:
