@@ -312,6 +312,7 @@ function handleEvent(event) {
 function appendMessage(role, text) {
   const article = document.createElement("article");
   article.className = `message ${role}`;
+  const icon = messageIcon(role);
   const body = document.createElement("div");
   body.className = "message-body";
   const copy = document.createElement("button");
@@ -319,7 +320,7 @@ function appendMessage(role, text) {
   copy.type = "button";
   copy.textContent = "Copy";
   copy.addEventListener("click", () => copyMessage(article, copy));
-  article.append(body, copy);
+  article.append(icon, body, copy);
   renderMessageContent(article, role, text);
   els.chatHistory.appendChild(article);
   scrollToBottom();
@@ -337,6 +338,25 @@ function appendRestoredMessage(message) {
 
 function showSystem(text, kind = "system") {
   return appendMessage(kind, text);
+}
+
+function messageIcon(role) {
+  const meta = messageIconMeta(role);
+  const icon = document.createElement("span");
+  icon.className = `message-icon ${meta.className}`;
+  icon.textContent = meta.text;
+  icon.title = meta.title;
+  icon.setAttribute("aria-label", meta.title);
+  return icon;
+}
+
+function messageIconMeta(role) {
+  const normalized = String(role || "system").toLowerCase();
+  if (normalized === "user") return { text: "U", title: "User message", className: "user-icon" };
+  if (normalized === "assistant") return { text: "B", title: "Bamboo response", className: "assistant-icon" };
+  if (normalized === "tool") return { text: "T", title: "Tool message", className: "tool-icon" };
+  if (normalized === "error") return { text: "!", title: "Error message", className: "error-icon" };
+  return { text: "i", title: "System message", className: "system-icon" };
 }
 
 function ensureAssistant() {
@@ -553,7 +573,7 @@ function resetTurnState() {
 function startReasoning() {
   state.reasoningCount += 1;
   els.reasoningCount.textContent = `${state.reasoningCount}`;
-  const row = createDetails("Reasoning", "thinking");
+  const row = createDetails("Reasoning", "thinking", "reasoning");
   row.details.classList.add("reasoning-row");
   state.activeReasoning = row;
 }
@@ -576,13 +596,13 @@ function finishReasoning(text) {
 function showToolCall(event) {
   state.toolCount += 1;
   els.toolCount.textContent = `${state.toolCount}`;
-  const row = createDetails(`Tool · ${event.name}`, "running");
+  const row = createDetails(`Tool · ${event.name}`, "running", "tool");
   row.output.textContent = JSON.stringify(event.input || {}, null, 2);
   state.toolRows.set(event.id || event.name, row);
 }
 
 function showToolResult(event) {
-  const row = state.toolRows.get(event.id || event.name) || createDetails(`Tool · ${event.name}`, "done");
+  const row = state.toolRows.get(event.id || event.name) || createDetails(`Tool · ${event.name}`, "done", "tool");
   row.status.textContent = "done";
   row.output.textContent = event.output || "";
   row.preview.textContent = summarize(event.output || "");
@@ -590,16 +610,17 @@ function showToolResult(event) {
 }
 
 function showToolError(event) {
-  const row = state.toolRows.get(event.id || event.name) || createDetails(`Tool · ${event.name}`, "error");
+  const row = state.toolRows.get(event.id || event.name) || createDetails(`Tool · ${event.name}`, "error", "tool");
   row.status.textContent = "error";
   row.details.classList.add("failed");
   row.output.textContent = event.error || "";
 }
 
-function createDetails(titleText, statusText) {
+function createDetails(titleText, statusText, kind = "event") {
   const details = document.createElement("details");
-  details.className = "event-row";
+  details.className = `event-row ${kind}-event`;
   const summary = document.createElement("summary");
+  const icon = eventIcon(kind);
   const title = document.createElement("span");
   title.className = "event-title";
   title.textContent = titleText;
@@ -610,11 +631,25 @@ function createDetails(titleText, statusText) {
   preview.className = "event-preview";
   const output = document.createElement("pre");
   output.className = "event-output";
-  summary.append(title, status, preview);
+  summary.append(icon, title, status, preview);
   details.append(summary, output);
   els.chatHistory.appendChild(details);
   scrollToBottom();
   return { details, status, preview, output };
+}
+
+function eventIcon(kind) {
+  const meta = kind === "tool"
+    ? { text: "T", title: "Tool event", className: "tool-icon" }
+    : kind === "reasoning"
+      ? { text: "R", title: "Reasoning event", className: "reasoning-icon" }
+      : { text: "i", title: "Runtime event", className: "system-icon" };
+  const icon = document.createElement("span");
+  icon.className = `message-icon event-icon ${meta.className}`;
+  icon.textContent = meta.text;
+  icon.title = meta.title;
+  icon.setAttribute("aria-label", meta.title);
+  return icon;
 }
 
 function showPermission(event) {

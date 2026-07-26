@@ -886,16 +886,73 @@ textarea {
 
 .message {
   position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
   margin-bottom: 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 10px 64px 10px 10px;
-  white-space: pre-wrap;
   line-height: 1.5;
 }
 
 .message-body {
   min-width: 0;
+}
+
+.message:not(.assistant) .message-body {
+  white-space: pre-wrap;
+}
+
+.message-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  user-select: none;
+}
+
+.message-icon.user-icon {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.message-icon.assistant-icon {
+  border-color: color-mix(in srgb, var(--accent-2) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+}
+
+.message-icon.system-icon {
+  color: var(--muted);
+}
+
+.message-icon.reasoning-icon {
+  border-color: color-mix(in srgb, var(--amber) 55%, var(--line));
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--amber);
+}
+
+.message-icon.tool-icon {
+  border-color: color-mix(in srgb, var(--accent-2) 48%, var(--line));
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+  color: var(--accent-2);
+}
+
+.message-icon.error-icon {
+  border-color: color-mix(in srgb, var(--red) 58%, var(--line));
+  background: color-mix(in srgb, var(--red) 15%, transparent);
+  color: var(--red);
 }
 
 .copy-message {
@@ -1101,10 +1158,14 @@ textarea {
 
 .event-row summary {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: 28px auto auto minmax(0, 1fr);
   gap: 9px;
   align-items: center;
   padding: 9px 10px;
+}
+
+.event-icon {
+  margin-top: 0;
 }
 
 .event-title {
@@ -1131,7 +1192,7 @@ textarea {
   margin: 0;
   overflow: auto;
   border-top: 1px solid var(--line);
-  padding: 11px;
+  padding: 11px 11px 11px 48px;
   white-space: pre-wrap;
 }
 
