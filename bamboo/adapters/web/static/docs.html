@@ -24,7 +24,10 @@
           <div class="toc-group">Commands</div>
           <a href="#main">main</a>
           <a href="#run">run</a>
+          <a href="#app">app / app-fancy</a>
           <a href="#web">web</a>
+          <a href="#web-fancy">web-fancy</a>
+          <a href="#wechat">wechat</a>
           <a href="#docs">docs</a>
           <a href="#replay">replay</a>
           <a href="#models">models</a>
@@ -41,13 +44,15 @@
           <p class="eyebrow">Bamboo CLI Documentation</p>
           <h1>Bamboo 命令使用说明</h1>
           <p>
-            这份说明只覆盖使用者直接接触的 <code>bamboo</code> 命令、模型配置和常见启动方式。
+            这份说明覆盖使用者直接接触的 <code>bamboo</code> 命令、模型配置和常见启动方式。
             不包含内部执行流程、Web API 或运行时实现细节。
           </p>
           <div class="meta-row" aria-label="文档摘要">
             <span class="pill">Python 3.11+</span>
             <span class="pill">CLI</span>
             <span class="pill">Web</span>
+            <span class="pill">Desktop</span>
+            <span class="pill">WeChat</span>
             <span class="pill">Model config</span>
           </div>
         </header>
@@ -64,8 +69,12 @@
               <p>用 <code>bamboo main</code> 进入多轮命令行会话，支持普通 Chat 和 Project 上下文模式。</p>
             </article>
             <article class="feature">
-              <h3>Web 入口</h3>
-              <p>用 <code>bamboo web</code> 启动浏览器对话界面并自动打开页面，默认访问 <code>http://127.0.0.1:8899</code>；用 <code>bamboo docs</code> 启动并打开使用说明页。</p>
+              <h3>Web / 桌面入口</h3>
+              <p>用 <code>bamboo web</code>、<code>bamboo web-fancy</code>、<code>bamboo app</code> 或 <code>bamboo app-fancy</code> 启动不同 UI。</p>
+            </article>
+            <article class="feature">
+              <h3>微信入口</h3>
+              <p>用 <code>bamboo wechat</code> 启动微信个人号 Bot，扫码登录后通过微信文本消息调用 Bamboo。</p>
             </article>
             <article class="feature">
               <h3>扩展和自动化</h3>
@@ -316,6 +325,34 @@ bamboo run "继续刚才的分析" --resume SESSION_ID</code></pre>
           </table>
         </section>
 
+        <section id="app">
+          <h2><code>bamboo app</code> / <code>bamboo app-fancy</code></h2>
+          <p>启动本地 PyWebView 桌面窗口。<code>app</code> 是基础桌面壳；<code>app-fancy</code> 是更完整的工作台界面。</p>
+          <pre><code>bamboo app
+bamboo app --msg "总结这个项目"
+bamboo app-fancy
+bamboo app-fancy --session-mode project --project /path/to/project</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--msg</code>, <code>-m</code></td><td><code>null</code></td><td>窗口打开后自动发送的初始消息。</td></tr>
+              <tr><td><code>--image</code></td><td><code>[]</code></td><td>附加图片路径，可传多次。</td></tr>
+              <tr><td><code>--project</code>, <code>-p</code></td><td><code>null</code></td><td>Project session 的项目路径。</td></tr>
+              <tr><td><code>--model</code></td><td><code>""</code></td><td>覆盖本次入口选择的模型注册名。</td></tr>
+              <tr><td><code>--provider</code></td><td><code>""</code></td><td>覆盖 provider。</td></tr>
+              <tr><td><code>--permission</code></td><td><code>default</code></td><td>权限模式。</td></tr>
+              <tr><td><code>--session-mode</code></td><td><code>auto</code></td><td>会话模式。</td></tr>
+            </tbody>
+          </table>
+          <p>
+            <code>app-fancy</code> 包含模型切换、日志、Context 使用率、亮/暗主题切换，以及 Git-backed Diff。
+            Diff 面板读取 <code>git status --porcelain</code>，显示 Git 能看到的已跟踪、已暂存和未跟踪文件；被
+            <code>.gitignore</code> 忽略或不在当前 Project 仓库里的文件不会显示。
+          </p>
+        </section>
+
         <section id="web">
           <h2><code>bamboo web</code></h2>
           <p>启动 Bamboo Web 对话入口，并在系统浏览器中打开页面。命令会保持运行，按 <code>Ctrl+C</code> 停止服务。</p>
@@ -333,6 +370,49 @@ bamboo web --no-browser</code></pre>
               <tr><td><code>--no-browser</code></td><td><code>false</code></td><td>只启动服务，不自动打开浏览器。</td></tr>
             </tbody>
           </table>
+        </section>
+
+        <section id="web-fancy">
+          <h2><code>bamboo web-fancy</code></h2>
+          <p>启动 Fancy Web 对话入口，使用更强调视觉和工作区布局的静态前端。</p>
+          <pre><code>bamboo web-fancy
+bamboo web-fancy --host 0.0.0.0 --port 9000 --reload
+bamboo web-fancy --no-browser</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--host</code></td><td><code>127.0.0.1</code></td><td>Web 服务监听地址。</td></tr>
+              <tr><td><code>--port</code>, <code>-p</code></td><td><code>8899</code></td><td>Web 服务监听端口。</td></tr>
+              <tr><td><code>--reload</code></td><td><code>false</code></td><td>启用 Uvicorn 自动重载。</td></tr>
+              <tr><td><code>--no-browser</code></td><td><code>false</code></td><td>只启动服务，不自动打开浏览器。</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="wechat">
+          <h2><code>bamboo wechat</code></h2>
+          <p>启动微信个人号 Bot 入口。首次使用会打印 iLink 扫码二维码；登录 token 保存在 <code>~/.wxbot/token.json</code>。</p>
+          <pre><code>bamboo wechat
+bamboo wechat --relogin
+bamboo wechat --session-mode project --project /path/to/project
+bamboo wechat --model kimi-k3 --permission default</code></pre>
+          <table>
+            <thead>
+              <tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--project</code>, <code>-p</code></td><td><code>null</code></td><td>Project session 的项目路径。</td></tr>
+              <tr><td><code>--model</code></td><td><code>""</code></td><td>覆盖模型注册名。</td></tr>
+              <tr><td><code>--provider</code></td><td><code>""</code></td><td>覆盖 provider。</td></tr>
+              <tr><td><code>--permission</code></td><td><code>default</code></td><td>权限模式。非交互入口默认不会批准需要确认的工具。</td></tr>
+              <tr><td><code>--session-mode</code></td><td><code>auto</code></td><td>会话模式。</td></tr>
+              <tr><td><code>--yes</code>, <code>-y</code></td><td><code>false</code></td><td>自动批准 default 模式下需要确认的工具。</td></tr>
+              <tr><td><code>--relogin</code></td><td><code>false</code></td><td>忽略已有 token，重新扫码登录。</td></tr>
+            </tbody>
+          </table>
+          <p>当前微信入口支持文本消息。同一个微信用户在进程内复用一个 Bamboo session；发送 <code>/new</code> 或 <code>/reset</code> 可开启新会话。</p>
         </section>
 
         <section id="docs">

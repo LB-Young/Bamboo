@@ -1,17 +1,18 @@
 # Bamboo
 
-Bamboo is a Python agent runtime for local CLI and Web workflows. It turns a user request into a managed task, routes it through a configurable LLM, executes approved tools, and persists the full session trace for resume, replay, automation, and evaluation.
+Bamboo is a Python agent runtime for local CLI, Web, desktop, and IM workflows. It turns a user request into a managed task, routes it through a configurable LLM, executes approved tools, and persists the full session trace for resume, replay, automation, and evaluation.
 
 > Status: early-stage project. APIs, command names, and configuration files may still change.
 
 ## Features
 
-- CLI and Web agent experience
-- Chat and project-scoped sessions
-- Configurable LLM providers
-- Tool execution with permission approval
-- Persistent session memory and replay
-- Skills, workflows, plugins, MCP, cron, and eval support
+- Multiple adapters: CLI, Web, Fancy Web, desktop App, Fancy desktop App, and WeChat
+- Chat and project-scoped sessions with persisted traces
+- Configurable LLM providers: Kimi, DeepSeek, GPT, Claude, MiniMax, Mimo, Ollama, and vLLM
+- Tool execution with permission policy, audit events, sandboxing, and approval hooks
+- Persistent session memory, replay, eval export, and trace inspection
+- Skills, workflows, plugins, MCP tools, cron jobs, and BKN knowledge retrieval
+- Fancy desktop UI with model switching, Git-backed Diff view, context usage meter, light/dark themes, and stateful context spirit
 
 ## Requirements
 
@@ -82,6 +83,18 @@ export MOONSHOT_API_KEY="your-kimi-api-key"
 bamboo main
 ```
 
+Run a one-shot task:
+
+```bash
+bamboo run "检查这个项目最近有哪些改动"
+```
+
+Start a project-scoped session:
+
+```bash
+bamboo main --session-mode project --project /path/to/project
+```
+
 Ask about an image from the CLI:
 
 ```bash
@@ -99,6 +112,33 @@ The Web UI opens at:
 ```text
 http://127.0.0.1:8899
 ```
+
+Start the polished Web or desktop frontends:
+
+```bash
+bamboo web-fancy
+bamboo app
+bamboo app-fancy
+```
+
+The `app-fancy` interface includes:
+
+- a `Context` panel with calm / warning / critical context-spirit images
+- a `Light` / `Dark` theme toggle in the top bar
+- a model selector for new turns
+- a Git-backed Diff panel
+
+The Diff panel reads from Git working tree state. It shows tracked changes, staged changes, and untracked files visible to Git. Ignored files or files outside the selected project repository will not appear.
+
+Start the WeChat personal-account adapter:
+
+```bash
+bamboo wechat
+bamboo wechat --relogin
+bamboo wechat --session-mode project --project /path/to/project
+```
+
+The WeChat adapter uses iLink QR login and stores the token in `~/.wxbot/token.json`. It currently supports text messages. Send `/new` or `/reset` in WeChat to start a new Bamboo session for that WeChat user.
 
 ## Other Models
 
@@ -185,6 +225,13 @@ For the full model configuration and command reference, run:
 ```bash
 bamboo docs
 ```
+
+Additional repository docs:
+
+- [Adapter guide](docs/adapters.md)
+- [BKN usage](docs/bkn.md)
+- [BKN design](docs/bkn-design.md)
+- [BKN graph design](docs/bkn-graph-design.md)
 
 
 ## License
