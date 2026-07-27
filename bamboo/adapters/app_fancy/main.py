@@ -99,6 +99,7 @@ class BambooFancyAppBridge(BambooAppBridge):
         super().__init__(**kwargs)
         self.startup_model = self.model
         self.latest_usage: dict[str, int] = {}
+        self.yes_all = False
         self.token_counter = HeuristicTokenCounter()
         self.worker_loop: asyncio.AbstractEventLoop | None = None
         self.worker_task: asyncio.Task[Task] | None = None
@@ -114,18 +115,21 @@ class BambooFancyAppBridge(BambooAppBridge):
         state = super().get_initial_state()
         state["context"] = self.get_context_usage()
         state["models"] = self.get_model_selector_state()
+        state["permission_state"] = self.get_permission_state()
         return state
 
     def new_session(self, project_path: str = "") -> dict[str, Any]:
         result = super().new_session(project_path)
         result["context"] = self.get_context_usage()
         result["models"] = self.get_model_selector_state()
+        result["permission_state"] = self.get_permission_state()
         return result
 
     def load_session(self, record_dir: str) -> dict[str, Any]:
         result = super().load_session(record_dir)
         result["context"] = self.get_context_usage()
         result["models"] = self.get_model_selector_state()
+        result["permission_state"] = self.get_permission_state()
         return result
 
     def get_model_selector_state(self) -> dict[str, Any]:
@@ -152,12 +156,20 @@ class BambooFancyAppBridge(BambooAppBridge):
             "options": options,
         }
 
+    def get_permission_state(self) -> dict[str, Any]:
+        """Return current permission mode for app-fancy controls."""
+        return {
+            "permission": self.permission or "default",
+            "yes_all": bool(getattr(self, "yes_all", False)),
+        }
+
     def send_message(
         self,
         message: str,
         project_path: str = "",
         image_paths: list[str] | None = None,
         model_name: str = "",
+        permission_mode: str = "",
     ) -> dict[str, Any]:
         """Run a user message with an optional per-turn model override."""
         message = (message or "").strip()
@@ -168,6 +180,7 @@ class BambooFancyAppBridge(BambooAppBridge):
         selected_model = self._resolve_requested_model(model_name)
         if selected_model is None:
             return {"ok": False, "error": f"Model is not configured: {model_name}"}
+        self._apply_permission_mode(permission_mode)
         project, mode = self._resolve_scope(project_path)
         if mode == SessionMode.project and not project.is_dir():
             return {"ok": False, "error": f"Project path does not exist: {project}"}
@@ -199,7 +212,12 @@ class BambooFancyAppBridge(BambooAppBridge):
             }
         )
         threading.Thread(target=self._run_message, args=(message, images, project, mode), daemon=True).start()
-        return {"ok": True, "session_id": self.session_id, "model": selected_model}
+        return {
+            "ok": True,
+            "session_id": self.session_id,
+            "model": selected_model,
+            "permission_state": self.get_permission_state(),
+        }
 
     def get_changes(self, project_path: str = "") -> dict[str, Any]:
         """Return changed files, expanding untracked directories into concrete files."""
@@ -277,12 +295,15 @@ class BambooFancyAppBridge(BambooAppBridge):
                     model=self.model,
                     provider=self.provider,
                     permission=self.permission,
+                    yes_all=self.yes_all,
                     session_mode=mode,
                     task_id=str(uuid.uuid4()),
                     session_id=self.session_id,
                 )
                 task = self.runtime.create_task(params)
             else:
+                self.current_task.run_params.permission = self.permission
+                self.current_task.run_params.yes_all = self.yes_all
                 task = self.runtime.create_followup_task(self.current_task, message, images=images)
             return await self.runtime.run_existing_task(task)
 
@@ -365,6 +386,20 @@ class BambooFancyAppBridge(BambooAppBridge):
         if self.current_task is not None and self.current_task.session.model:
             return self.current_task.session.model
         return self._configured_default_model_name()
+
+    def _apply_permission_mode(self, mode: str) -> None:
+        normalized = (mode or "").strip().lower()
+        if normalized == "auto-approve":
+            self.permission = "default"
+            self.yes_all = True
+            return
+        self.yes_all = False
+        if normalized in {"read-only", "readonly", "deny"}:
+            self.permission = "read-only"
+        elif normalized in {"bypass", "yolo", "full-auto", "dangerously-skip-permissions"}:
+            self.permission = "bypass"
+        else:
+            self.permission = "default"
 
     def _resolve_requested_model(self, model_name: str = "") -> str | None:
         selected = (model_name or "").strip() or self._selected_model_name()

@@ -1346,11 +1346,17 @@ textarea {
 .permission-mode {
   grid-column: 2 / 5;
   justify-self: end;
+  display: grid;
+  grid-template-columns: auto 150px;
+  align-items: center;
+  gap: 8px;
   color: var(--muted);
   font-size: 12px;
 }
 
-.permission-mode b {
+.permission-mode select {
+  height: 28px;
+  padding: 0 8px;
   color: var(--text);
 }
 

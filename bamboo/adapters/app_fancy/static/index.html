@@ -130,7 +130,15 @@
           <textarea id="messageInput" rows="2" placeholder="Ask Bamboo Core or type / for commands..."></textarea>
           <button id="stopButton" class="stop-button" type="button" hidden>Stop</button>
           <button id="sendButton" type="button">Send</button>
-          <div class="permission-mode">Permission Mode: <b>Review</b></div>
+          <label class="permission-mode">
+            <span>Permission Mode</span>
+            <select id="permissionMode">
+              <option value="default">Review</option>
+              <option value="auto-approve">Auto approve</option>
+              <option value="read-only">Read only</option>
+              <option value="bypass">Bypass</option>
+            </select>
+          </label>
         </footer>
       </main>
 

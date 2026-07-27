@@ -16,6 +16,7 @@ const state = {
   logs: [],
   stopRequested: false,
   theme: localStorage.getItem("bamboo.app.theme") || "dark",
+  permissionMode: localStorage.getItem("bamboo.app.permissionMode") || "default",
   recentProjects: [],
   projectMenuOpen: false,
 };
@@ -27,6 +28,7 @@ const els = {
   projectMenuToggle: document.getElementById("projectMenuToggle"),
   projectMenu: document.getElementById("projectMenu"),
   modelSelect: document.getElementById("modelSelect"),
+  permissionMode: document.getElementById("permissionMode"),
   applyProject: document.getElementById("applyProject"),
   newSession: document.getElementById("newSession"),
   sessionScope: document.getElementById("sessionScope"),
@@ -96,6 +98,7 @@ async function init() {
   renderChanges(data.changes || {});
   renderContext(data.context || {});
   renderModels(data.models || {});
+  renderPermissionState(data.permission_state || {}, { preferStored: true });
   newSessionView();
   setStatus("idle");
   if (data.initial_message || (data.initial_image_paths || []).length) {
@@ -245,6 +248,7 @@ async function loadSession(session) {
   renderChanges(data.changes || {});
   renderContext(data.context || {});
   renderModels(data.models || {});
+  renderPermissionState(data.permission_state || {});
 }
 
 async function newSession() {
@@ -257,6 +261,7 @@ async function newSession() {
   renderChanges(data.changes || {});
   renderContext(data.context || {});
   renderModels(data.models || {});
+  renderPermissionState(data.permission_state || {});
   newSessionView();
 }
 
@@ -284,12 +289,20 @@ async function sendMessage() {
   setStatus("running", "Executing");
   els.runTitle.textContent = message || "Image task";
   updateRunStage("planning", "active", "Preparing request");
-  const result = await apiCall("send_message", message, state.projectPath, [], els.modelSelect.value || "");
+  const result = await apiCall(
+    "send_message",
+    message,
+    state.projectPath,
+    [],
+    els.modelSelect.value || "",
+    state.permissionMode || "default",
+  );
   if (!result.ok) {
     showSystem(result.error || "Send failed", "error");
     setStatus("idle");
   } else if (result.model) {
     setSelectedModel(result.model);
+    if (result.permission_state) renderPermissionState(result.permission_state);
   }
 }
 
@@ -1006,6 +1019,23 @@ function setSelectedModel(modelName) {
   }
 }
 
+function renderPermissionState(permissionState, options = {}) {
+  const stored = localStorage.getItem("bamboo.app.permissionMode");
+  const mode = options.preferStored && stored ? stored : permissionStateToMode(permissionState);
+  state.permissionMode = mode;
+  if (els.permissionMode) els.permissionMode.value = mode;
+  localStorage.setItem("bamboo.app.permissionMode", mode);
+}
+
+function permissionStateToMode(permissionState) {
+  if (!permissionState || typeof permissionState !== "object") return state.permissionMode || "default";
+  const permission = String(permissionState.permission || "default").toLowerCase();
+  if (permissionState.yes_all && ["", "default", "auto", "strict"].includes(permission)) return "auto-approve";
+  if (["read-only", "readonly", "deny"].includes(permission)) return "read-only";
+  if (["bypass", "yolo", "full-auto", "dangerously-skip-permissions"].includes(permission)) return "bypass";
+  return "default";
+}
+
 function updateContextWindowForSelectedModel() {
   const selected = state.models.options.find((option) => option.name === els.modelSelect.value);
   if (!selected?.context_window) return;
@@ -1221,6 +1251,13 @@ els.modelSelect.addEventListener("change", () => {
   state.models.selected = els.modelSelect.value;
   updateContextWindowForSelectedModel();
 });
+if (els.permissionMode) {
+  els.permissionMode.value = state.permissionMode;
+  els.permissionMode.addEventListener("change", () => {
+    state.permissionMode = els.permissionMode.value || "default";
+    localStorage.setItem("bamboo.app.permissionMode", state.permissionMode);
+  });
+}
 els.messageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
