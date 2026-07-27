@@ -5,7 +5,7 @@ from __future__ import annotations
 import anyio
 
 from bamboo.tools.buildin.base import ToolResult
-from bamboo.tools.buildin.browser import BrowserAction, BrowserTool, _format_browser_launch_error
+from bamboo.tools.buildin.browser import BrowserAction, BrowserSession, BrowserTool, _format_browser_launch_error
 
 
 def test_browser_tool_dispatches_single_action_parameter() -> None:
@@ -25,6 +25,13 @@ def test_browser_tool_dispatches_single_action_parameter() -> None:
     anyio.run(run_test)
 
 
+def test_browser_tool_exposes_wait_for_login_action() -> None:
+    schema = BrowserTool(session=_FakeBrowserSession()).input_schema()
+
+    assert "wait_for_login" in schema["properties"]["action"]["enum"]
+    assert "url_pattern" in schema["properties"]
+
+
 def test_browser_tool_rejects_unknown_action() -> None:
     async def run_test() -> None:
         result = await BrowserTool(session=_FakeBrowserSession()).execute(action="download_everything")
@@ -32,6 +39,71 @@ def test_browser_tool_rejects_unknown_action() -> None:
         assert not result.success
         assert result.error == "unsupported_browser_action"
         assert "click" in result.metadata["supported_actions"]  # type: ignore[index]
+
+    anyio.run(run_test)
+
+
+def test_browser_tool_wait_for_login_uses_long_default_timeout() -> None:
+    fake = _FakeBrowserSession()
+    tool = BrowserTool(session=fake)
+
+    async def run_test() -> None:
+        result = await tool.execute(
+            action="wait_for_login",
+            url="https://example.com/login",
+            selector="[data-testid='avatar']",
+            url_pattern="/dashboard",
+            script="() => Boolean(window.__loggedIn)",
+        )
+
+        assert result.success
+        action = fake.actions[0]
+        assert action.action == "wait_for_login"
+        assert action.url == "https://example.com/login"
+        assert action.selector == "[data-testid='avatar']"
+        assert action.url_pattern == "/dashboard"
+        assert action.script == "() => Boolean(window.__loggedIn)"
+        assert action.timeout_ms == 300000
+
+    anyio.run(run_test)
+
+
+def test_browser_tool_wait_for_login_respects_explicit_timeout() -> None:
+    fake = _FakeBrowserSession()
+    tool = BrowserTool(session=fake)
+
+    async def run_test() -> None:
+        result = await tool.execute(action="wait_for_login", timeout_ms=45000)
+
+        assert result.success
+        assert fake.actions[0].timeout_ms == 45000
+
+    anyio.run(run_test)
+
+
+def test_browser_session_wait_for_login_can_open_login_url() -> None:
+    session = _FakeLoginSession()
+
+    async def run_test() -> None:
+        result = await session.execute(
+            BrowserAction(
+                action="wait_for_login",
+                url="https://example.com/login",
+                selector=".account-menu",
+                headless=False,
+                timeout_ms=5000,
+            )
+        )
+
+        assert result.success
+        assert result.metadata == {
+            "action": "wait_for_login",
+            "url": "https://example.com/dashboard",
+            "title": "Dashboard",
+            "timeout_ms": 5000,
+        }
+        assert session.launched_headless is False
+        assert session.page.goto_calls == [("https://example.com/login", "load", 5000)]
 
     anyio.run(run_test)
 
@@ -80,6 +152,49 @@ class _FakeBrowserSession:
         if action.action == "extract_text":
             return ToolResult(content="page text", metadata={"action": action.action})
         return ToolResult(content=f"ok:{action.action}", metadata={"action": action.action})
+
+
+class _FakeLoginSession(BrowserSession):
+    def __init__(self) -> None:
+        super().__init__()
+        self.page = _FakeLoginPage()
+        self.launched_headless: bool | None = None
+
+    async def _ensure_page(self, *, headless: bool):
+        self.launched_headless = headless
+        self._headless = headless
+        self._page = self.page
+        return self.page
+
+
+class _FakeLoginPage:
+    def __init__(self) -> None:
+        self.url = "about:blank"
+        self.goto_calls: list[tuple[str, str, int]] = []
+        self._checks = 0
+
+    async def goto(self, url: str, *, wait_until: str, timeout: int):
+        self.url = url
+        self.goto_calls.append((url, wait_until, timeout))
+
+    async def title(self) -> str:
+        return "Dashboard"
+
+    def locator(self, selector: str):
+        return _FakeLoginLocator(self, selector)
+
+    async def wait_for_timeout(self, _timeout_ms: int) -> None:
+        self._checks += 1
+        self.url = "https://example.com/dashboard"
+
+
+class _FakeLoginLocator:
+    def __init__(self, page: _FakeLoginPage, selector: str) -> None:
+        self.page = page
+        self.selector = selector
+
+    async def count(self) -> int:
+        return 1 if self.selector == ".account-menu" and self.page.url.endswith("/dashboard") else 0
 
 
 class _StubConfig:

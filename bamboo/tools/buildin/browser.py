@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,6 +23,7 @@ BROWSER_ACTIONS = {
     "extract_text",
     "eval",
     "wait_for",
+    "wait_for_login",
     "close",
 }
 
@@ -31,7 +34,7 @@ class BrowserTool(Tool):
     name = "browser"
     description = (
         "Operate a browser page using Playwright. Use action=open/click/type/press/screenshot/"
-        "extract_text/eval/wait_for/close with the matching parameters."
+        "extract_text/eval/wait_for/wait_for_login/close with the matching parameters."
     )
     risk_level = "unknown"
     tags = ("browser", "web", "automation")
@@ -48,11 +51,12 @@ class BrowserTool(Tool):
                     "enum": sorted(BROWSER_ACTIONS),
                     "description": "Browser action to perform.",
                 },
-                "url": {"type": "string", "description": "URL for action=open."},
-                "selector": {"type": "string", "description": "CSS/text selector for click/type/wait_for/extract_text."},
+                "url": {"type": "string", "description": "URL for action=open, or optional login URL for action=wait_for_login."},
+                "selector": {"type": "string", "description": "CSS/text selector for click/type/wait_for/extract_text. For wait_for_login, a selector that appears after login succeeds."},
                 "text": {"type": "string", "description": "Text for action=type."},
                 "key": {"type": "string", "description": "Keyboard key for action=press, e.g. Enter."},
-                "script": {"type": "string", "description": "JavaScript expression/function for action=eval."},
+                "script": {"type": "string", "description": "JavaScript expression/function for action=eval. For wait_for_login, a predicate returning true when login is complete."},
+                "url_pattern": {"type": "string", "description": "Regex that current URL must match for action=wait_for_login."},
                 "timeout_ms": {"type": "integer", "description": "Action timeout in milliseconds."},
                 "wait_until": {
                     "type": "string",
@@ -74,6 +78,7 @@ class BrowserTool(Tool):
         text: str = "",
         key: str = "",
         script: str = "",
+        url_pattern: str = "",
         timeout_ms: int = 10000,
         wait_until: str = "load",
         screenshot_path: str = "",
@@ -89,6 +94,7 @@ class BrowserTool(Tool):
                 metadata={"supported_actions": sorted(BROWSER_ACTIONS)},
             )
         try:
+            effective_timeout = _login_timeout(timeout_ms) if normalized_action == "wait_for_login" else _timeout(timeout_ms)
             result = await self.session.execute(
                 BrowserAction(
                     action=normalized_action,
@@ -97,7 +103,8 @@ class BrowserTool(Tool):
                     text=text,
                     key=key,
                     script=script,
-                    timeout_ms=_timeout(timeout_ms),
+                    url_pattern=url_pattern,
+                    timeout_ms=effective_timeout,
                     wait_until=wait_until or "load",
                     screenshot_path=screenshot_path,
                     full_page=full_page,
@@ -119,6 +126,7 @@ class BrowserAction:
     text: str = ""
     key: str = ""
     script: str = ""
+    url_pattern: str = ""
     timeout_ms: int = 10000
     wait_until: str = "load"
     screenshot_path: str = ""
@@ -161,6 +169,8 @@ class BrowserSession:
             return await self._eval(action)
         if action.action == "wait_for":
             return await self._wait_for(action)
+        if action.action == "wait_for_login":
+            return await self._wait_for_login(action)
         if action.action == "close":
             return await self.close()
         raise BrowserToolError(f"Unsupported browser action: {action.action}", error="unsupported_browser_action")
@@ -264,6 +274,67 @@ class BrowserSession:
         await page.wait_for_timeout(action.timeout_ms)
         return ToolResult(content=f"Waited {action.timeout_ms} ms.", metadata={"action": "wait_for"})
 
+    async def _wait_for_login(self, action: BrowserAction) -> ToolResult:
+        if self._page is None:
+            if not action.url.strip():
+                raise BrowserToolError("No browser page is open. Provide url or call browser with action=open first.", error="page_not_open")
+            page = await self._ensure_page(headless=action.headless)
+        else:
+            page = await self._require_page(action)
+        if self._headless:
+            raise BrowserToolError(
+                "browser action=wait_for_login requires a visible browser. Set browser.headless: false in tools_buildin.yaml or open the page with headless=false.",
+                error="login_requires_headful_browser",
+            )
+        if action.url.strip():
+            await page.goto(action.url, wait_until=action.wait_until, timeout=action.timeout_ms)
+        deadline = asyncio.get_running_loop().time() + (action.timeout_ms / 1000)
+        start_url = page.url
+        while asyncio.get_running_loop().time() < deadline:
+            if await self._login_completed(page, action, start_url):
+                title = await page.title()
+                return ToolResult(
+                    content=f"Login appears complete.\nurl: {page.url}\ntitle: {title}",
+                    metadata={
+                        "action": "wait_for_login",
+                        "url": page.url,
+                        "title": title,
+                        "timeout_ms": action.timeout_ms,
+                    },
+                )
+            await page.wait_for_timeout(1000)
+        raise BrowserToolError(
+            f"Timed out after {action.timeout_ms} ms waiting for user login.",
+            error="login_wait_timeout",
+        )
+
+    async def _login_completed(self, page: Any, action: BrowserAction, start_url: str) -> bool:
+        if action.selector.strip():
+            try:
+                if await page.locator(action.selector).count() > 0:
+                    return True
+            except Exception:
+                pass
+        if action.script.strip():
+            try:
+                if bool(await page.evaluate(action.script)):
+                    return True
+            except Exception:
+                pass
+        if action.url_pattern.strip():
+            try:
+                if re.search(action.url_pattern, page.url):
+                    return True
+            except re.error as exc:
+                raise BrowserToolError(f"Invalid wait_for_login url_pattern: {exc}", error="invalid_url_pattern") from exc
+        if action.selector.strip() or action.script.strip() or action.url_pattern.strip():
+            return False
+        try:
+            password_count = await page.locator("input[type='password']").count()
+        except Exception:
+            password_count = 0
+        return page.url != start_url and not _looks_like_login_url(page.url) and password_count == 0
+
     async def _require_page(self, action: BrowserAction) -> Any:
         if self._page is None:
             raise BrowserToolError("No browser page is open. Call browser with action=open first.", error="page_not_open")
@@ -301,6 +372,17 @@ def reset_browser_session() -> None:
 
 def _timeout(value: int) -> int:
     return max(100, min(int(value or 10000), 120000))
+
+
+def _login_timeout(value: int) -> int:
+    if value == 10000:
+        value = 300000
+    return max(1000, min(int(value or 300000), 900000))
+
+
+def _looks_like_login_url(url: str) -> bool:
+    normalized = url.lower()
+    return any(marker in normalized for marker in ("login", "signin", "sign-in", "auth", "oauth", "sso"))
 
 
 def _browser_headless_default() -> bool:
