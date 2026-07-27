@@ -33,6 +33,7 @@ from bamboo.llms import (
     ModelConfigError,
 )
 from bamboo.llms.providers import (
+    AliyunClient,
     ClaudeClient,
     DeepSeekClient,
     GPTClient,
@@ -40,6 +41,7 @@ from bamboo.llms.providers import (
     MimoClient,
     MiniMaxClient,
     OllamaClient,
+    OpenRouterClient,
     VLLMClient,
 )
 from bamboo.runtime.agent_runtime import AgentRuntime
@@ -98,6 +100,58 @@ def test_openai_compatible_client_builds_and_parses_request() -> None:
         assert response.content == "deepseek answer"
         assert response.provider == "deepseek"
         assert response.usage["total_tokens"] == 6
+
+    anyio.run(run_test)
+
+
+def test_aliyun_client_uses_openai_compatible_endpoint() -> None:
+    """验证 Aliyun 文本模型走百炼 OpenAI-compatible endpoint。"""
+    catalog = ModelCatalog.from_mapping(_model_document("aliyun"))
+    config = catalog.models["test-model"]
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url == "https://llm.test/v1/chat/completions"
+            assert request.headers["authorization"] == "Bearer test-api-key"
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [{"message": {"content": "aliyun answer"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = AliyunClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+
+        assert response.content == "aliyun answer"
+        assert response.provider == "aliyun"
+
+    anyio.run(run_test)
+
+
+def test_openrouter_client_uses_openai_compatible_endpoint() -> None:
+    """验证 OpenRouter 文本模型走 OpenAI-compatible endpoint。"""
+    catalog = ModelCatalog.from_mapping(_model_document("openrouter"))
+    config = catalog.models["test-model"]
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url == "https://llm.test/v1/chat/completions"
+            assert request.headers["authorization"] == "Bearer test-api-key"
+            return httpx.Response(
+                200,
+                json={
+                    "model": "provider-model-id",
+                    "choices": [{"message": {"content": "openrouter answer"}, "finish_reason": "stop"}],
+                },
+            )
+
+        client = OpenRouterClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
+
+        assert response.content == "openrouter answer"
+        assert response.provider == "openrouter"
 
     anyio.run(run_test)
 
@@ -846,6 +900,36 @@ def test_agent_runtime_times_out_slow_tool_and_continues_ota_loop() -> None:
     assert not any(isinstance(event, ToolResultEvent) and event.tool_name == "slow" for event in emitted_events)
 
 
+def test_agent_runtime_uses_tool_timeout_override() -> None:
+    """验证单个工具可以覆盖全局 tool-call 超时。"""
+    config = _StubBambooConfig(
+        _model_document("deepseek", model_name="tool-timeout-override-model"),
+        agent_document={"tool_call_timeout_seconds": 0.01},
+    )
+    factory = LLMFactory.from_mapping(config.models_document)
+    llm_client = _TimeoutOverrideToolLoopLLMClient()
+    factory.register_provider("deepseek", lambda model_config: llm_client, replace=True)
+    tool_registry = ToolRegistry()
+    slow_tool = _SlowButAllowedTool()
+    tool_registry.register(slow_tool, source="test")
+    task = TaskFactory(config=config).create(RunParams(message="try slow allowed", model="tool-timeout-override-model"))
+
+    async def run_test() -> None:
+        runtime_context = RuntimeContextBuilder(
+            event_bus=EventBus(),
+            llm_factory=factory,
+            tool_registry=tool_registry,
+        ).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
+        completed_task = await runtime.run(task)
+        assert completed_task.output == "工具完成"
+
+    anyio.run(run_test)
+
+    assert slow_tool.started is True
+    assert len(llm_client.requests) == 2
+
+
 def test_agent_runtime_emits_reasoning_separately_from_final_text() -> None:
     """验证推理过程通过 reasoning 事件输出，assistant 正文只保留最终答案。"""
     factory = LLMFactory.from_mapping(_model_document("deepseek", model_name="reasoning-model"))
@@ -977,6 +1061,22 @@ class _SlowTool(Tool):
         return ToolResult(content="too late")
 
 
+class _SlowButAllowedTool(Tool):
+    name = "slow_allowed"
+    description = "Sleep longer than global timeout but shorter than tool override."
+
+    def __init__(self) -> None:
+        self.started = False
+
+    def timeout_override_seconds(self) -> float | None:
+        return 0.1
+
+    async def execute(self) -> ToolResult:
+        self.started = True
+        await asyncio.sleep(0.03)
+        return ToolResult(content="slow but allowed")
+
+
 class _ToolLoopLLMClient(LLMClient):
     """第一轮请求工具，第二轮根据工具结果返回最终结论。"""
 
@@ -1030,6 +1130,32 @@ class _TimeoutToolLoopLLMClient(LLMClient):
         assert "Tool call timed out after" in request.messages[-1].content
         return LLMResponse(
             content="工具超时，改用替代方案",
+            model="provider-model-id",
+            provider="deepseek",
+            finish_reason="stop",
+        )
+
+
+class _TimeoutOverrideToolLoopLLMClient(LLMClient):
+    """第一轮请求慢工具，第二轮根据成功 tool message 返回最终答案。"""
+
+    def __init__(self) -> None:
+        self.requests: list[LLMRequest] = []
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        self.requests.append(request)
+        if len(self.requests) == 1:
+            assert request.tools[0]["name"] == "slow_allowed"
+            return LLMResponse(
+                content="",
+                model="provider-model-id",
+                provider="deepseek",
+                finish_reason="tool_calls",
+                tool_calls=[LLMToolCall(id="call-slow-allowed-1", name="slow_allowed", arguments={})],
+            )
+        assert request.messages[-1].content == "slow but allowed"
+        return LLMResponse(
+            content="工具完成",
             model="provider-model-id",
             provider="deepseek",
             finish_reason="stop",

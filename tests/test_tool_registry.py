@@ -31,6 +31,7 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "edit",
         "glob",
         "grep",
+        "image_edit",
         "lsp",
         "memory_backfill",
         "memory_read",
@@ -45,6 +46,8 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "task_get",
         "task_list",
         "task_stop",
+        "text_to_image",
+        "text_to_video",
         "todo_write",
         "web_fetch",
         "workflow_installer",
@@ -53,8 +56,8 @@ def test_tool_registry_loads_builtin_tools() -> None:
         "write",
     ]
     assert set(registry.summary()["sources"].values()) == {"buildin"}
-    assert registry.summary()["by_source"] == {"buildin": 41}
-    assert registry.summary()["by_risk"] == {"execute": 3, "network": 1, "read": 19, "unknown": 1, "write": 17}
+    assert registry.summary()["by_source"] == {"buildin": 44}
+    assert registry.summary()["by_risk"] == {"execute": 3, "network": 4, "read": 19, "unknown": 1, "write": 17}
 
 
 def test_tool_registry_hides_disabled_tool() -> None:

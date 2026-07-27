@@ -13,3 +13,12 @@ sandbox:
     - LANG
     - LC_ALL
     - TMPDIR
+
+media_generation:
+  text_to_image_model: aliyun-wanx-t2i
+  image_edit_model: aliyun-wanx-image-edit
+  text_to_video_model: aliyun-wanx-t2v
+  output_dir: ~/.bamboo/workspace/media-generation
+  poll_interval_seconds: 2
+  timeout_seconds: 600
+  tool_call_timeout_seconds: 600

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 LLMRole = Literal["user", "assistant", "system", "tool"]
-LLMModelType = Literal["text", "vision"]
+LLMModelType = Literal["text", "vision", "image_generation", "image_edit", "video_generation"]
 LLMErrorType = Literal[
     "rate_limit",
     "auth",

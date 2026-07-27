@@ -10,8 +10,23 @@ from typing import Any, cast
 
 from bamboo.llms.base import LLMModelType
 
-SUPPORTED_PROVIDERS = frozenset({"deepseek", "kimi", "minimax", "gpt", "claude", "mimo", "ollama", "vllm"})
-SUPPORTED_MODEL_TYPES = frozenset({"text", "vision"})
+SUPPORTED_PROVIDERS = frozenset(
+    {
+        "deepseek",
+        "kimi",
+        "minimax",
+        "gpt",
+        "claude",
+        "mimo",
+        "ollama",
+        "vllm",
+        "aliyun",
+        "openrouter",
+        "flux",
+        "generic_http",
+    }
+)
+SUPPORTED_MODEL_TYPES = frozenset({"text", "vision", "image_generation", "image_edit", "video_generation"})
 API_KEY_OPTIONAL_PROVIDERS = frozenset({"ollama", "vllm"})
 _ENV_REFERENCE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 

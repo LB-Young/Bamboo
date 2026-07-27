@@ -102,7 +102,7 @@ bamboo main --msg "帮我分析这个项目"</code></pre>
             <code>python -m playwright install chromium</code> 安装 Playwright 的 Chromium 运行时。
           </p>
           <p>
-            如果你要使用 DeepSeek、GPT、Claude、MiniMax、Mimo、Ollama 或 vLLM，需要先在
+            如果你要使用 DeepSeek、GPT、Claude、MiniMax、Mimo、Aliyun、Ollama 或 vLLM，需要先在
             <code>~/.bamboo/configs/models.yaml</code> 注册模型，再在
             <code>~/.bamboo/configs/bamboo_main_agent.yaml</code> 中把 <code>model</code>
             改为对应的模型注册名。
@@ -147,9 +147,9 @@ models:
             </thead>
             <tbody>
               <tr><td><code>default_model</code></td><td>默认模型注册名，必须存在于 <code>models</code> 下。</td></tr>
-              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
+              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>aliyun</code>、<code>openrouter</code>、<code>flux</code>、<code>generic_http</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
               <tr><td><code>model</code></td><td>供应商侧的真实模型 ID。</td></tr>
-              <tr><td><code>model_type</code></td><td>模型类型。文本模型填 <code>text</code>；能看图的模型填 <code>vision</code>。</td></tr>
+              <tr><td><code>model_type</code></td><td>模型类型。聊天模型填 <code>text</code> 或 <code>vision</code>；媒体工具模型可填 <code>image_generation</code>、<code>image_edit</code> 或 <code>video_generation</code>。</td></tr>
               <tr><td><code>prompt_profile</code></td><td>提示词适配配置，通常和 provider 同名。</td></tr>
               <tr><td><code>api_key</code></td><td>API Key。云模型通常必填；支持 <code>${ENV_NAME}</code> 环境变量引用。<code>ollama</code> 和 <code>vllm</code> 可以为空。</td></tr>
               <tr><td><code>base_url</code></td><td>接口地址。云模型填官方或兼容接口地址，本地模型填本地服务地址。</td></tr>
@@ -233,7 +233,73 @@ models:
           <pre><code># ~/.bamboo/configs/bamboo_main_agent.yaml
 model: gpt-default</code></pre>
 
-          <h3>4. 使用本地模型</h3>
+          <h3>4. Aliyun 百炼模型和媒体工具</h3>
+          <p>
+            Aliyun 文本模型作为主 Agent 模型注册在 <code>models.yaml</code>，使用百炼
+            OpenAI-compatible 接口。文生图、图片编辑、文生视频这类媒体模型也注册在 <code>models.yaml</code>，
+            但由通用工具调用，app 模型下拉框只展示 <code>text</code> 和 <code>vision</code> 聊天模型。
+            其他平台的媒体模型可以用同样的 <code>model_type</code> 注册，并通过 <code>extra_body.protocol</code> 选择调用协议。
+          </p>
+          <pre><code>models:
+  aliyun-qwen-plus:
+    provider: aliyun
+    model: qwen-plus
+    model_type: text
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    timeout: 60
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+
+  aliyun-wanx-t2i:
+    provider: aliyun
+    model: wanx2.1-t2i-turbo
+    model_type: image_generation
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/api/v1
+    timeout: 120
+    context_window: 4096
+    max_tokens: 1024
+    extra_body:
+      protocol: dashscope_async
+      endpoint: /services/aigc/text2image/image-synthesis
+      parameters:
+        size: 1024*1024
+        n: 1</code></pre>
+          <p>媒体工具默认使用哪个模型由 <code>tools.yaml</code> 控制：</p>
+          <pre><code>media_generation:
+  text_to_image_model: openrouter-gpt-5-image-mini
+  image_edit_model: aliyun-wanx-image-edit
+  text_to_video_model: aliyun-wanx-t2v
+  output_dir: ~/.bamboo/workspace/media-generation
+  poll_interval_seconds: 2
+  timeout_seconds: 600</code></pre>
+          <p>OpenRouter 图片模型示例：</p>
+          <pre><code>models:
+  openrouter-gpt-5-image-mini:
+    provider: openrouter
+    model: openai/gpt-5-image-mini
+    model_type: image_generation
+    prompt_profile: openrouter
+    api_key: "${OPENROUTER_API_KEY}"
+    base_url: https://openrouter.ai/api/v1
+    timeout: 180
+    context_window: 4096
+    max_tokens: 1024
+    extra_body:
+      protocol: openrouter_images
+      endpoint: /images
+      parameters:
+        n: 1</code></pre>
+
+          <h3>5. 使用本地模型</h3>
           <p>Ollama 和 vLLM 可以通过发现命令生成模型注册片段：</p>
           <pre><code>bamboo models discover ollama
 bamboo models discover ollama --write --set-default

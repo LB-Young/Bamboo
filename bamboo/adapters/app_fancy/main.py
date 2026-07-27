@@ -135,6 +135,8 @@ class BambooFancyAppBridge(BambooAppBridge):
         options: list[dict[str, Any]] = []
         for name in llm_factory.list_model_names():
             config = llm_factory.get_model_config(name)
+            if config.model_type not in {"text", "vision"}:
+                continue
             options.append(
                 {
                     "name": name,

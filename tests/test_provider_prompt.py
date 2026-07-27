@@ -50,6 +50,24 @@ def test_model_config_parses_model_type() -> None:
     assert config.model_type == "vision"
 
 
+def test_model_config_parses_media_model_type() -> None:
+    """验证 models.yaml 能注册平台无关的媒体模型类型。"""
+    catalog = ModelCatalog.from_mapping(
+        _model_document(provider="generic_http", prompt_profile="aliyun", model_type="image_generation")
+    )
+    config = catalog.models["agent-model"]
+
+    assert config.provider == "generic_http"
+    assert config.model_type == "image_generation"
+
+
+def test_aliyun_provider_prompt_is_available() -> None:
+    """验证 Aliyun provider prompt 能按 prompt_profile 加载。"""
+    sections = read_provider_prompt_sections("aliyun")
+
+    assert any("Aliyun Provider Notes" in section for section in sections)
+
+
 def test_provider_prompt_sections_can_be_overridden_in_userspace() -> None:
     """验证 provider prompt 从用户空间读取，修改后下一轮读取立即生效。"""
     layout = ensure_userspace()

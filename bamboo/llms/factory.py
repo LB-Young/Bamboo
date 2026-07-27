@@ -10,6 +10,7 @@ from bamboo.llms.base import LLMClient
 from bamboo.llms.config import ModelCatalog, ModelConfig, ModelConfigError
 from bamboo.llms.local_discovery import LocalDiscoveryResult, create_local_discovery
 from bamboo.llms.providers import (
+    AliyunClient,
     ClaudeClient,
     DeepSeekClient,
     GPTClient,
@@ -17,6 +18,7 @@ from bamboo.llms.providers import (
     MiniMaxClient,
     MimoClient,
     OllamaClient,
+    OpenRouterClient,
     VLLMClient,
 )
 
@@ -33,12 +35,14 @@ class LLMFactory:
         self._providers: dict[str, ProviderBuilder] = {}
         self._clients: dict[str, LLMClient] = {}
         self.register_provider("gpt", GPTClient)
+        self.register_provider("aliyun", AliyunClient)
         self.register_provider("deepseek", DeepSeekClient)
         self.register_provider("kimi", KimiClient)
         self.register_provider("minimax", MiniMaxClient)
         self.register_provider("mimo", MimoClient)
         self.register_provider("claude", ClaudeClient)
         self.register_provider("ollama", OllamaClient)
+        self.register_provider("openrouter", OpenRouterClient)
         self.register_provider("vllm", VLLMClient)
 
     @classmethod

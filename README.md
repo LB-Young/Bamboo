@@ -144,7 +144,61 @@ The WeChat adapter uses iLink QR login and stores the token in `~/.wxbot/token.j
 
 ## Other Models
 
-Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set `model_type` to `text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
+Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `aliyun`, `openrouter`, `flux`, `generic_http`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set chat models to `model_type: text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
+
+Aliyun Bailian / DashScope text models can be used as the main Bamboo model through the OpenAI-compatible endpoint:
+
+```yaml
+models:
+  aliyun-qwen-plus:
+    provider: aliyun
+    model: qwen-plus
+    model_type: text
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    timeout: 60
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+```
+
+Media generation models are registered in the same `models.yaml` with `model_type: image_generation`, `image_edit`, or `video_generation`. They are not shown in the app model selector; Bamboo exposes them through generic tools named `text_to_image`, `image_edit`, and `text_to_video`. The model entry declares its calling protocol in `extra_body.protocol`, while `~/.bamboo/configs/tools.yaml` controls which registered model each tool uses:
+
+```yaml
+media_generation:
+  text_to_image_model: openrouter-gpt-5-image-mini
+  image_edit_model: aliyun-wanx-image-edit
+  text_to_video_model: aliyun-wanx-t2v
+  output_dir: ~/.bamboo/workspace/media-generation
+  poll_interval_seconds: 2
+  timeout_seconds: 600
+```
+
+Example OpenRouter image model registration:
+
+```yaml
+models:
+  openrouter-gpt-5-image-mini:
+    provider: openrouter
+    model: openai/gpt-5-image-mini
+    model_type: image_generation
+    prompt_profile: openrouter
+    api_key: "${OPENROUTER_API_KEY}"
+    base_url: https://openrouter.ai/api/v1
+    timeout: 180
+    context_window: 4096
+    max_tokens: 1024
+    extra_body:
+      protocol: openrouter_images
+      endpoint: /images
+      parameters:
+        n: 1
+```
 
 Example vLLM OpenAI-compatible server with tool calling enabled:
 

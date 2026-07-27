@@ -29,6 +29,7 @@ def create_builtin_tools() -> list[Tool]:
     from bamboo.tools.buildin.glob import GlobTool
     from bamboo.tools.buildin.grep import GrepTool
     from bamboo.tools.buildin.lsp import LSPTool
+    from bamboo.tools.buildin.media_generation import ImageEditTool, TextToImageTool, TextToVideoTool
     from bamboo.tools.buildin.memory import MemoryBackfillTool, MemoryReadTool, MemorySearchTool, MemoryUpdateTool
     from bamboo.tools.buildin.memory_retrieve import MemoryRetrieveTool
     from bamboo.tools.buildin.package_install import SkillInstallTool, WorkflowInstallTool
@@ -64,6 +65,7 @@ def create_builtin_tools() -> list[Tool]:
         GlobTool(),
         GrepTool(),
         LSPTool(),
+        ImageEditTool(),
         MemoryBackfillTool(),
         MemoryReadTool(),
         MemoryRetrieveTool(),
@@ -77,6 +79,8 @@ def create_builtin_tools() -> list[Tool]:
         TaskGetTool(),
         TaskListTool(),
         TaskStopTool(),
+        TextToImageTool(),
+        TextToVideoTool(),
         TodoWriteTool(),
         WebFetchTool(),
         WorkflowInstallTool(),

@@ -41,3 +41,7 @@ class Tool(ABC):
     def input_schema(self) -> dict[str, Any]:
         """返回工具参数的类 JSON Schema 描述。"""
         return {"type": "object", "properties": {}, "required": []}
+
+    def timeout_override_seconds(self) -> float | None:
+        """Return a per-tool call timeout override, or None to use runtime default."""
+        return None

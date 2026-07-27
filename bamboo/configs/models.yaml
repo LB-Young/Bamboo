@@ -144,3 +144,103 @@ models:
       json_schema: false
       vision: false
       max_parallel_tools: 1
+
+  aliyun-qwen-plus:
+    provider: aliyun
+    model: qwen-plus
+    model_type: text
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    timeout: 60
+    temperature: 0.2
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+
+  aliyun-wanx-t2i:
+    provider: aliyun
+    model: wanx2.1-t2i-turbo
+    model_type: image_generation
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/api/v1
+    timeout: 120
+    context_window: 4096
+    max_tokens: 1024
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+    extra_body:
+      protocol: dashscope_async
+      endpoint: /services/aigc/text2image/image-synthesis
+      parameters:
+        size: 1024*1024
+        n: 1
+
+  aliyun-wanx-image-edit:
+    provider: aliyun
+    model: wanx2.1-imageedit
+    model_type: image_edit
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/api/v1
+    timeout: 120
+    context_window: 4096
+    max_tokens: 1024
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+    extra_body:
+      protocol: dashscope_async
+      endpoint: /services/aigc/image2image/image-synthesis
+      input_fields:
+        image_url: base_image_url
+
+  aliyun-wanx-t2v:
+    provider: aliyun
+    model: wan2.7-t2v-2026-06-12
+    model_type: video_generation
+    prompt_profile: aliyun
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: https://dashscope.aliyuncs.com/api/v1
+    timeout: 120
+    context_window: 4096
+    max_tokens: 1024
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+    extra_body:
+      protocol: dashscope_async
+      endpoint: /services/aigc/video-generation/video-synthesis
+
+  openrouter-gpt-5-image-mini:
+    provider: openrouter
+    model: openai/gpt-5-image-mini
+    model_type: image_generation
+    prompt_profile: openrouter
+    api_key: "${OPENROUTER_API_KEY}"
+    base_url: https://openrouter.ai/api/v1
+    timeout: 180
+    context_window: 4096
+    max_tokens: 1024
+    capabilities:
+      tool_calling: false
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+    extra_body:
+      protocol: openrouter_images
+      endpoint: /images
+      parameters:
+        n: 1

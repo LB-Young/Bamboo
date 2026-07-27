@@ -500,14 +500,15 @@ class AgentRuntime:
             return self._tool_error_outcome(task, tool_call, f"Tool call denied: {permission.reason}")
 
         started_at = time.perf_counter()
+        timeout_seconds = self._tool_call_timeout_seconds(tool)
         try:
             result = await asyncio.wait_for(
                 tool.execute(**tool_call.arguments),
-                timeout=self.tool_call_timeout_seconds,
+                timeout=timeout_seconds,
             )
         except TimeoutError:
             duration_ms = int((time.perf_counter() - started_at) * 1000)
-            error = f"Tool call timed out after {self.tool_call_timeout_seconds:g}s"
+            error = f"Tool call timed out after {timeout_seconds:g}s"
             await self._audit_tool_call(
                 task,
                 tool_call,
@@ -584,6 +585,12 @@ class AgentRuntime:
             ],
             compact_tool_results=True,
         )
+
+    def _tool_call_timeout_seconds(self, tool: Tool) -> float:
+        override = tool.timeout_override_seconds()
+        if override is not None and override > 0:
+            return float(override)
+        return self.tool_call_timeout_seconds
 
     async def _flush_tool_call_outcome(self, task: Task, outcome: _ToolCallOutcome) -> None:
         """Write deferred tool messages and events in a stable order."""
