@@ -19,7 +19,7 @@ from bamboo.helpers.constant import TaskCreateEvent
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms import LLMFactory
 from bamboo.memory.get_memory_path import get_memory_dir_name
-from bamboo.memory.session_store import SessionMemoryStore
+from bamboo.memory.session_store import SessionMemoryStore, list_session_records
 from bamboo.runtime.task_runtime import TaskRuntime
 
 
@@ -51,6 +51,44 @@ def test_save_full_system_prompt_overwrites_base_content(tmp_path: Path) -> None
     assert (store.session_dir / "system_prompt.md").read_text(encoding="utf-8") == (
         "FULL PROMPT WITH TOOLS AND SKILLS"
     )
+
+
+def test_list_session_records_infers_legacy_subagent_metadata(tmp_path: Path) -> None:
+    """Old subagent records should be hideable even before metadata was persisted."""
+    memory_root = tmp_path / "memory"
+    memory_dir = memory_root / "projects" / get_memory_dir_name(tmp_path)
+    store = SessionMemoryStore(memory_dir=memory_dir, session_id="legacy-subagent")
+    store.save_session(
+        mode="project",
+        project_root=tmp_path,
+        model="m",
+        provider="p",
+        system_prompt="BASE PROMPT",
+        metadata={"prompt_mode": "project"},
+    )
+    session = Session(
+        session_id="legacy-subagent",
+        model="m",
+        provider="p",
+        context=Context(
+            session_id="legacy-subagent",
+            project_root=tmp_path,
+            memory_dir=memory_dir,
+            system_prompt="BASE PROMPT",
+            metadata={"prompt_mode": "project"},
+        ),
+        memory_store=store,
+    )
+    session.add_message(
+        "user",
+        "You are Bamboo subagent `knowledge-curator`. Subagent description: Extract durable knowledge.",
+    )
+
+    records = list_session_records(mode="project", project_path=tmp_path, memory_root=memory_root)
+
+    assert len(records) == 1
+    assert records[0].metadata["subagent_name"] == "knowledge-curator"
+    assert records[0].metadata["inferred_subagent_name"] == "true"
 
 
 def test_agent_runtime_persists_full_system_prompt_on_first_observe(tmp_path: Path) -> None:

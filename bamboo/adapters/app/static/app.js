@@ -427,11 +427,15 @@ els.newSession.addEventListener("click", newSession);
 els.sendButton.addEventListener("click", sendMessage);
 els.refreshChanges.addEventListener("click", async () => renderChanges(await apiCall("get_changes", state.projectPath)));
 els.messageInput.addEventListener("keydown", (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !isComposingInput(event)) {
     event.preventDefault();
     sendMessage();
   }
 });
+
+function isComposingInput(event) {
+  return Boolean(event.isComposing || event.keyCode === 229);
+}
 
 window.addEventListener("pywebviewready", () => {
   init().catch((error) => {

@@ -534,11 +534,15 @@ function bindEvents() {
     await sendMessage(text, imagePaths);
   });
   els.messageInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    if (event.key === "Enter" && !event.shiftKey && !isComposingInput(event)) {
       event.preventDefault();
       els.composer.requestSubmit();
     }
   });
+}
+
+function isComposingInput(event) {
+  return Boolean(event.isComposing || event.keyCode === 229);
 }
 
 async function stopCurrentTask() {

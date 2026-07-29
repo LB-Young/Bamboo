@@ -412,6 +412,36 @@ textarea {
   color: var(--muted);
 }
 
+.session-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-filter {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  width: 86px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.session-filter button {
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.session-filter button.selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
 .new-chat,
 .agent-card,
 .session-item,

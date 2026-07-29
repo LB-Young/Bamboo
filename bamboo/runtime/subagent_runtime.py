@@ -164,6 +164,15 @@ class SubagentRuntime:
         session.context.metadata["parent_session_id"] = self.parent_task.session_id
         session.context.metadata["parent_task_id"] = self.parent_task.task_id
         session.context.metadata["subagent_name"] = definition.name
+        if session.memory_store is not None:
+            session.memory_store.save_session(
+                mode=str(session.context.metadata.get("prompt_mode") or self.parent_task.run_params.session_mode),
+                project_root=session.context.project_root,
+                model=session.model,
+                provider=session.provider,
+                system_prompt=session.context.system_prompt,
+                metadata=session.context.metadata,
+            )
         task = Task(
             platform=self.parent_task.platform,
             session_id=child_session_id,

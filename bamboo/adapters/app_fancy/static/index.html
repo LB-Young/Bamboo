@@ -68,7 +68,13 @@
         <section class="panel history">
           <div class="panel-head">
             <span id="sessionScope">Recent Sessions</span>
-            <button id="applyProject" type="button">Refresh</button>
+            <div class="session-head-actions">
+              <div class="session-filter" role="group" aria-label="Session record filter">
+                <button id="sessionFilterUser" class="selected" type="button" data-session-filter="user">User</button>
+                <button id="sessionFilterAll" type="button" data-session-filter="all">All</button>
+              </div>
+              <button id="applyProject" type="button">Refresh</button>
+            </div>
           </div>
           <nav id="sessionList" class="session-list"></nav>
         </section>

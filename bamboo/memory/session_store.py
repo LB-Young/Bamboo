@@ -29,6 +29,7 @@ class SessionRecord:
     record_dir: Path
     memory_dir: Path
     project_root: Path
+    metadata: dict[str, Any]
 
 
 class SessionMemoryStore:
@@ -529,7 +530,26 @@ def _load_record_metadata(record_dir: Path) -> SessionRecord | None:
         record_dir=record_dir,
         memory_dir=memory_dir,
         project_root=project_root,
+        metadata=_session_metadata(record_dir, meta),
     )
+
+
+def _session_metadata(record_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
+    metadata = dict(meta.get("metadata") or {})
+    if metadata.get("subagent_name"):
+        return metadata
+    for payload in _read_jsonl(record_dir / "messages.jsonl"):
+        if payload.get("role") != "user":
+            continue
+        text = str(payload.get("content") or "").strip()
+        prefix = "You are Bamboo subagent `"
+        if text.startswith(prefix):
+            subagent_name = text[len(prefix) :].split("`", 1)[0].strip()
+            if subagent_name:
+                metadata["subagent_name"] = subagent_name
+                metadata["inferred_subagent_name"] = "true"
+        break
+    return metadata
 
 
 def _session_label(record_dir: Path, *, fallback: str) -> str:

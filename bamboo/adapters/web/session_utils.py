@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from bamboo.factory.session import Session
 from bamboo.memory.session_store import find_session_record, list_session_records, load_session_record
 
 
-def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 40) -> list[dict[str, str]]:
+def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 40) -> list[dict[str, Any]]:
     """List persisted sessions for the selected web mode."""
     records = list_session_records(
         mode=mode,
@@ -24,6 +25,7 @@ def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 4
             "updated_at": record.updated_at,
             "record_dir": str(record.record_dir),
             "project_root": str(record.project_root),
+            "metadata": dict(record.metadata),
         }
         for record in records
     ]

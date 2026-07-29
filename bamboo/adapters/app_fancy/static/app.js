@@ -1,5 +1,6 @@
 const state = {
   sessions: [],
+  sessionFilter: localStorage.getItem("bamboo.app.sessionFilter") || "user",
   currentSessionId: null,
   mode: "chat",
   projectPath: "",
@@ -30,6 +31,7 @@ const els = {
   modelSelect: document.getElementById("modelSelect"),
   permissionMode: document.getElementById("permissionMode"),
   applyProject: document.getElementById("applyProject"),
+  sessionFilterButtons: Array.from(document.querySelectorAll("[data-session-filter]")),
   newSession: document.getElementById("newSession"),
   sessionScope: document.getElementById("sessionScope"),
   sessionCount: document.getElementById("sessionCount"),
@@ -210,16 +212,18 @@ async function refreshSidebar() {
 
 function renderSessions(sessions) {
   state.sessions = sessions;
-  els.sessionCount.textContent = `${sessions.length}`;
+  const visibleSessions = filterSessions(sessions);
+  els.sessionCount.textContent = `${visibleSessions.length}`;
   els.sessionList.innerHTML = "";
-  if (!sessions.length) {
+  renderSessionFilter();
+  if (!visibleSessions.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = "No sessions";
+    empty.textContent = state.sessionFilter === "all" ? "No sessions" : "No user sessions";
     els.sessionList.appendChild(empty);
     return;
   }
-  for (const session of sessions) {
+  for (const session of visibleSessions) {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "session-item";
@@ -227,6 +231,24 @@ function renderSessions(sessions) {
     item.addEventListener("click", () => loadSession(session));
     item.innerHTML = `<span>${escapeHtml(session.label || session.session_id)}</span><small>${escapeHtml(formatTime(session.updated_at || session.created_at))}</small>`;
     els.sessionList.appendChild(item);
+  }
+}
+
+function filterSessions(sessions) {
+  if (state.sessionFilter === "all") return sessions || [];
+  return (sessions || []).filter((session) => !isSubagentSession(session));
+}
+
+function isSubagentSession(session) {
+  const metadata = session?.metadata || {};
+  return Boolean(metadata.subagent_name || metadata.parent_session_id || metadata.parent_task_id);
+}
+
+function renderSessionFilter() {
+  for (const button of els.sessionFilterButtons) {
+    const selected = button.dataset.sessionFilter === state.sessionFilter;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
   }
 }
 
@@ -1210,9 +1232,20 @@ function logSummary(event) {
   return event.message || event.title || event.error || "";
 }
 
+function isComposingInput(event) {
+  return Boolean(event.isComposing || event.keyCode === 229);
+}
+
 els.applyProject.addEventListener("click", async () => {
   await applyProjectPath();
 });
+for (const button of els.sessionFilterButtons) {
+  button.addEventListener("click", () => {
+    state.sessionFilter = button.dataset.sessionFilter || "user";
+    localStorage.setItem("bamboo.app.sessionFilter", state.sessionFilter);
+    renderSessions(state.sessions);
+  });
+}
 els.newSession.addEventListener("click", newSession);
 els.sendButton.addEventListener("click", sendMessage);
 els.stopButton.addEventListener("click", stopCurrentTask);
@@ -1259,7 +1292,7 @@ if (els.permissionMode) {
   });
 }
 els.messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
+  if (event.key === "Enter" && !event.shiftKey && !isComposingInput(event)) {
     event.preventDefault();
     sendMessage();
   }
