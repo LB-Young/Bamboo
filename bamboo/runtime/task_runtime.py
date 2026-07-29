@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import threading
 
 # Callable 用于描述可注入的 AgentRuntime 工厂函数类型。
 from collections.abc import Callable
@@ -185,9 +186,9 @@ class TaskRuntime:
                     # Agent 成功完成后，将任务状态标记为 completed。
                     await self._transition_task(task, "running", "completed")
                     self._append_turn_trace(task)
-                    await self._run_knowledge_subagent_if_enabled(task)
                     # 发布步骤完成事件，summary 会被 CLI 或 UI 展示。
                     await self._emit_step_finished(task, "Bamboo task completed.")
+                    self._schedule_knowledge_subagent_if_enabled(task)
                     # 任务成功结束，返回最终 Task 给调用方。
                     return task
                 except Exception as exc:
@@ -262,6 +263,7 @@ class TaskRuntime:
         if not isinstance(knowledge_config, dict) or not bool(knowledge_config.get("enabled", False)):
             return
         subagent_name = str(knowledge_config.get("subagent") or "knowledge-curator")
+        runtime_context = None
         try:
             runtime_context = self.runtime_context_builder.build(task)
             await KnowledgeSubagent(
@@ -275,6 +277,44 @@ class TaskRuntime:
                 session_id=task.session_id,
                 error=exc,
             )
+        finally:
+            if runtime_context is not None:
+                try:
+                    await runtime_context.close()
+                except Exception as exc:
+                    self._log.warning(
+                        "knowledge runtime context cleanup failed task_id={task_id} session_id={session_id}: {error}",
+                        task_id=task.task_id,
+                        session_id=task.session_id,
+                        error=exc,
+                    )
+
+    def _schedule_knowledge_subagent_if_enabled(self, task: Task) -> None:
+        """Run post-task knowledge curation in the background."""
+        memory_config = task.config.get("memory", {}) if hasattr(task.config, "get") else {}
+        if not isinstance(memory_config, dict):
+            return
+        knowledge_config = memory_config.get("knowledge_subagent", {})
+        if not isinstance(knowledge_config, dict) or not bool(knowledge_config.get("enabled", False)):
+            return
+
+        def run_background() -> None:
+            try:
+                asyncio.run(self._run_knowledge_subagent_if_enabled(task))
+            except Exception as exc:
+                self._log.warning(
+                    "knowledge background task failed task_id={task_id} session_id={session_id}: {error}",
+                    task_id=task.task_id,
+                    session_id=task.session_id,
+                    error=exc,
+                )
+
+        thread = threading.Thread(
+            target=run_background,
+            name=f"bamboo-knowledge-curator-{task.task_id}",
+            daemon=True,
+        )
+        thread.start()
 
     async def _recover_agent_failure(self, task: Task, state: TaskRunState, exc: Exception) -> bool:
         """记录 Agent 整体失败，并判断任务是否还能继续。"""

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 
 import anyio
@@ -83,6 +84,7 @@ def test_knowledge_subagent_rejects_unsafe_updates(tmp_path: Path) -> None:
 
 def test_task_runtime_triggers_knowledge_subagent_when_enabled(monkeypatch, tmp_path: Path) -> None:
     calls: list[str] = []
+    called = Event()
 
     class FakeKnowledgeSubagent:
         def __init__(self, **kwargs) -> None:
@@ -90,6 +92,7 @@ def test_task_runtime_triggers_knowledge_subagent_when_enabled(monkeypatch, tmp_
 
         async def maybe_update(self, task: Task):
             calls.append(task.task_id)
+            called.set()
 
     monkeypatch.setattr("bamboo.runtime.task_runtime.KnowledgeSubagent", FakeKnowledgeSubagent)
     runtime = TaskRuntime(
@@ -113,7 +116,48 @@ def test_task_runtime_triggers_knowledge_subagent_when_enabled(monkeypatch, tmp_
 
     anyio.run(run_test)
 
+    assert called.wait(timeout=1)
     assert calls == ["task-knowledge"]
+
+
+def test_task_runtime_does_not_block_on_knowledge_subagent(monkeypatch, tmp_path: Path) -> None:
+    started = Event()
+    release = Event()
+
+    class SlowKnowledgeSubagent:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+        async def maybe_update(self, task: Task):
+            started.set()
+            await anyio.to_thread.run_sync(release.wait)
+
+    monkeypatch.setattr("bamboo.runtime.task_runtime.KnowledgeSubagent", SlowKnowledgeSubagent)
+    runtime = TaskRuntime(
+        event_bus=EventBus(),
+        agent_factory=lambda _event_bus: _SuccessfulAgent(),
+        llm_factory=LLMFactory.from_mapping(_model_document()),
+        task_factory=_TaskFactoryWithMemoryConfig(),
+    )
+
+    async def run_test() -> None:
+        with anyio.fail_after(0.5):
+            task = await runtime.run(
+                RunParams(
+                    message="remember this",
+                    project=str(tmp_path),
+                    session_mode=SessionMode.chat,
+                    task_id="task-knowledge-nonblocking",
+                    session_id="session-knowledge-nonblocking",
+                )
+            )
+        assert task.status == "completed"
+
+    try:
+        anyio.run(run_test)
+        assert started.wait(timeout=1)
+    finally:
+        release.set()
 
 
 def _task(*, tmp_path: Path, mode: str) -> Task:
