@@ -17,7 +17,7 @@ from typing import Any
 from bamboo.adapters.app.main import AppDependencyError, BambooAppBridge, _parse_numstat
 from bamboo.adapters.cli.commands import expand_command_message
 from bamboo.factory.task_factory import Task
-from bamboo.helpers.constant import LLMResponseEvent, SessionMode
+from bamboo.helpers.constant import LLMResponseEvent, SessionCompactEvent, SessionMode
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms.media import image_from_source, images_from_text, merge_images
@@ -107,7 +107,7 @@ class BambooFancyAppBridge(BambooAppBridge):
         self.stop_requested = False
         self.llm_unsubscribe = self.event_bus.subscribe(
             self._handle_llm_event,
-            event_types={"llm-response"},
+            event_types={"llm-response", "session-compact"},
             filter_fn=lambda event: event.session_id == self.session_id,
         )
 
@@ -267,6 +267,9 @@ class BambooFancyAppBridge(BambooAppBridge):
         if isinstance(event, LLMResponseEvent) and event.usage:
             self.latest_usage = dict(event.usage)
             self._emit_ui({"type": "context_usage", "context": self.get_context_usage()})
+        elif isinstance(event, SessionCompactEvent):
+            self.latest_usage = {}
+            self._emit_ui({"type": "context_usage", "context": self.get_context_usage()})
 
     def stop_current_task(self) -> dict[str, Any]:
         """Request cancellation of the currently running desktop task."""
@@ -366,7 +369,7 @@ class BambooFancyAppBridge(BambooAppBridge):
         if self.current_task is None:
             return 0
         total = self.token_counter.count_text(self.current_task.session.context.system_prompt)
-        for message in self.current_task.session.messages:
+        for message in self.current_task.session.active_messages():
             total += 4 + self.token_counter.count_text(message.role) + self.token_counter.count_text(message.content)
             total += len(message.images) * 1024
             total += self.token_counter.count_text(message.tool_call_id)

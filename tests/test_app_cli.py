@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from bamboo.adapters.app import AppDependencyError
 from bamboo.adapters.app.main import BambooAppBridge, _event_payload, _parse_numstat
 from bamboo.adapters.app_fancy.main import (
+    BambooFancyAppBridge,
     WINDOWS_APP_USER_MODEL_ID,
     _app_icon_path,
     _changed_files_expanded,
@@ -19,7 +20,9 @@ from bamboo.adapters.app_fancy.main import (
     _set_windows_app_user_model_id,
     _untracked_file_diff,
 )
-from bamboo.helpers.constant import ReasoningDeltaEvent, SessionMode, ToolResultEvent
+from bamboo.factory.task_factory import TaskFactory
+from bamboo.helpers.constant import ReasoningDeltaEvent, SessionCompactEvent, SessionMode, ToolResultEvent
+from bamboo.helpers.requests_params import RunParams
 from bamboo.run import app
 
 
@@ -121,6 +124,43 @@ def test_app_fancy_sets_windows_app_user_model_id(monkeypatch) -> None:
     _set_windows_app_user_model_id()
 
     assert calls == [WINDOWS_APP_USER_MODEL_ID]
+
+
+def test_app_fancy_context_usage_tracks_active_prompt_messages(monkeypatch) -> None:
+    monkeypatch.setattr(
+        BambooFancyAppBridge,
+        "_create_runtime",
+        lambda self: SimpleNamespace(task_factory=SimpleNamespace(config={})),
+    )
+    bridge = BambooFancyAppBridge(
+        project=None,
+        model="",
+        provider="",
+        permission="default",
+        session_mode=SessionMode.chat,
+        initial_message="",
+        image_paths=[],
+    )
+    task = TaskFactory().create(RunParams(message="current question", session_id=bridge.session_id))
+    inactive = task.session.add_message("assistant", "old detail " * 60000)
+    inactive.mark_as_compressed()
+    task.session.add_message("system", "[conversation-summary]\nshort summary", message_type="compaction")
+    bridge.current_task = task
+    bridge.latest_usage = {"input_tokens": 130000, "output_tokens": 7000}
+
+    bridge._handle_llm_event(
+        SessionCompactEvent(
+            session_id=bridge.session_id,
+            task_id=task.task_id,
+            before_token_count=130000,
+            after_token_count=1000,
+        )
+    )
+    usage = bridge.get_context_usage()
+
+    assert bridge.latest_usage == {}
+    assert usage["used_tokens"] < bridge.token_counter.count_text(inactive.content)
+    assert usage["percent"] < 100
 
 
 def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
