@@ -46,6 +46,13 @@ dirs: list[str] = [
     "workspace/tmp",            # 临时文件
 ]
 
+OVERWRITABLE_BUILTIN_DIRS: set[str] = {
+    "buildin_tools",
+    "buildin_skills",
+    "buildin_subagents",
+    "buildin_workflows",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class UserspaceLayout:
@@ -96,11 +103,11 @@ def get_bkn_storage_dir() -> Path:
 def ensure_userspace(*, overwrite: bool = False) -> UserspaceLayout:
     """确保 Bamboo 用户空间目录存在，并复制内置资源。"""
     bamboo_root_dir = get_configs_dir()
-    if overwrite and bamboo_root_dir.exists():
-        shutil.rmtree(bamboo_root_dir)
 
     for subdir in dirs:
         target = bamboo_root_dir / subdir
+        if overwrite and subdir in OVERWRITABLE_BUILTIN_DIRS and target.exists():
+            shutil.rmtree(target)
         target.mkdir(parents=True, exist_ok=True)
 
         if subdir in ["configs", "prompts", "buildin_tools", "buildin_skills", "buildin_subagents", "buildin_workflows"]:
