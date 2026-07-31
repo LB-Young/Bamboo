@@ -6,10 +6,11 @@ import hashlib
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlparse
 
 from bamboo.skills.creator import load_skill_definition
-from bamboo.skills.guard import scan_skill, should_allow_install
+from bamboo.skills.guard import scan_skill, scan_skill_for_install, should_allow_install
 from bamboo.skills.models import SkillHubLockEntry, SkillScanResult
 from bamboo.skills.store import SkillStore, utc_now
 from bamboo.skills.validator import SkillValidator
@@ -96,11 +97,13 @@ class SkillHub:
         skills_dir: Path | None = None,
         sources: dict[str, SkillSource] | None = None,
         validator: SkillValidator | None = None,
+        install_scanner: Callable[[Path, str], SkillScanResult] | None = None,
     ) -> None:
         self.store = store or SkillStore()
         self.skills_dir = skills_dir or get_user_skills_dir()
         self.sources = sources or {"local": LocalSkillSource(), "github": GitHubSkillSource()}
         self.validator = validator or SkillValidator()
+        self.install_scanner = install_scanner or scan_skill_for_install
 
     def install(
         self,
@@ -128,7 +131,7 @@ class SkillHub:
             self._audit("install-blocked", definition.name or bundle.path.name, identifier, reason, scan_result)
             return SkillInstallResult(definition.name or bundle.path.name, False, None, scan_result, reason)
 
-        scan_result = scan_skill(bundle.path, source=bundle.source)
+        scan_result = self.install_scanner(bundle.path, bundle.source)
         allowed, reason = should_allow_install(scan_result, trust_level, force=force)
         if not allowed:
             self._audit("install-blocked", definition.name, identifier, reason, scan_result)

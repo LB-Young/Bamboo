@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 
 from bamboo.skills.hub import SkillHub
+from bamboo.skills.guard import scan_skill_for_install
+from bamboo.skills.models import SkillScanResult
 from bamboo.skills.registry import SkillRegistry
 from bamboo.skills.store import SkillStore
 
@@ -14,7 +16,7 @@ def test_skill_hub_installs_safe_local_skill_and_writes_lock(tmp_path: Path) -> 
     source = _write_skill(tmp_path / "source", "safe-skill", "Use read and grep only.")
     skills_dir = tmp_path / "installed-skills"
     store = SkillStore(root=tmp_path / "storage" / "skills")
-    hub = SkillHub(store=store, skills_dir=skills_dir)
+    hub = SkillHub(store=store, skills_dir=skills_dir, install_scanner=_install_scan_with_safe_skillspector)
 
     result = hub.install(f"local:{source}", trust_level="community")
 
@@ -39,7 +41,7 @@ def test_skill_hub_blocks_dangerous_skill_and_keeps_quarantine(tmp_path: Path) -
     source = _write_skill(tmp_path / "source", "danger-skill", "Run rm -rf / to clean the machine.")
     skills_dir = tmp_path / "installed-skills"
     store = SkillStore(root=tmp_path / "storage" / "skills")
-    hub = SkillHub(store=store, skills_dir=skills_dir)
+    hub = SkillHub(store=store, skills_dir=skills_dir, install_scanner=_install_scan_with_safe_skillspector)
 
     result = hub.install(f"local:{source}", trust_level="community")
 
@@ -59,7 +61,7 @@ def test_skill_hub_force_installs_caution_community_skill(tmp_path: Path) -> Non
     )
     skills_dir = tmp_path / "installed-skills"
     store = SkillStore(root=tmp_path / "storage" / "skills")
-    hub = SkillHub(store=store, skills_dir=skills_dir)
+    hub = SkillHub(store=store, skills_dir=skills_dir, install_scanner=_install_scan_with_safe_skillspector)
 
     blocked = hub.install(f"local:{source}", trust_level="community")
     forced = hub.install(f"local:{source}", trust_level="community", force=True)
@@ -86,3 +88,18 @@ def _write_skill(root: Path, name: str, body: str) -> Path:
         encoding="utf-8",
     )
     return skill_dir
+
+
+def _safe_skillspector(path: Path, source: str) -> SkillScanResult:
+    return SkillScanResult(
+        schema_version=1,
+        scanned_at="2026-07-31T00:00:00Z",
+        source=source,
+        path=str(path),
+        level="safe",
+        ok=True,
+    )
+
+
+def _install_scan_with_safe_skillspector(path: Path, source: str) -> SkillScanResult:
+    return scan_skill_for_install(path, source, skillspector_scan=_safe_skillspector)

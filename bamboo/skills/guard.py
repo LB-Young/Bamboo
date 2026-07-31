@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
+from typing import Callable
 
 from bamboo.skills.models import SkillScanFinding, SkillScanResult
 from bamboo.skills.store import utc_now
 
 
 MAX_SCAN_BYTES = 512 * 1024
+SKILLSPECTOR_TIMEOUT_SECONDS = 180
 
 
 PATTERNS: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
@@ -94,6 +100,188 @@ def scan_skill(path: Path, source: str = "") -> SkillScanResult:
     return _result(root, source, findings)
 
 
+def scan_skill_for_install(
+    path: Path,
+    source: str = "",
+    *,
+    skillspector_scan: Callable[[Path, str], SkillScanResult] | None = None,
+) -> SkillScanResult:
+    """Run all required safety scanners before installing a skill."""
+    local_result = scan_skill(path, source=source)
+    external_result = (skillspector_scan or scan_skill_with_skillspector)(path, source)
+    return merge_scan_results(local_result, external_result)
+
+
+def scan_skill_with_skillspector(path: Path, source: str = "") -> SkillScanResult:
+    """Run embedded SkillSpector, falling back to its CLI when needed."""
+    root = path.expanduser().resolve()
+    embedded_result = _scan_with_embedded_skillspector(root, source)
+    if embedded_result is not None:
+        return embedded_result
+    executable = shutil.which("skillspector")
+    if executable is None:
+        return _result(
+            root,
+            source,
+            [
+                SkillScanFinding(
+                    severity="dangerous",
+                    category="skillspector-unavailable",
+                    message=(
+                        "SkillSpector is required before installing skills but is not importable or available on PATH. "
+                        "Reinstall Bamboo so its embedded SkillSpector dependency is installed."
+                    ),
+                    path=str(root),
+                )
+            ],
+        )
+
+    try:
+        process = subprocess.run(
+            [executable, "scan", str(root), "--no-llm", "--format", "json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=SKILLSPECTOR_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return _result(
+            root,
+            source,
+            [
+                SkillScanFinding(
+                    severity="dangerous",
+                    category="skillspector-timeout",
+                    message=f"SkillSpector scan exceeded {SKILLSPECTOR_TIMEOUT_SECONDS} seconds",
+                    path=str(root),
+                )
+            ],
+        )
+    except OSError as exc:
+        return _result(
+            root,
+            source,
+            [
+                SkillScanFinding(
+                    severity="dangerous",
+                    category="skillspector-failed",
+                    message=f"unable to run SkillSpector: {exc}",
+                    path=str(root),
+                )
+            ],
+        )
+    payload = _parse_skillspector_json(process.stdout)
+    if payload is None:
+        message = (process.stderr or process.stdout or "SkillSpector did not return JSON").strip()
+        return _result(
+            root,
+            source,
+            [
+                SkillScanFinding(
+                    severity="dangerous",
+                    category="skillspector-failed",
+                    message=message[:1000],
+                    path=str(root),
+                )
+            ],
+        )
+    return _skillspector_payload_to_result(root, source, payload, returncode=process.returncode)
+
+
+def merge_scan_results(*results: SkillScanResult) -> SkillScanResult:
+    """Merge scanner results, preserving the highest risk level."""
+    findings = [finding for result in results for finding in result.findings]
+    level = _max_level(result.level for result in results)
+    return SkillScanResult(
+        schema_version=1,
+        scanned_at=utc_now(),
+        source=next((result.source for result in results if result.source), ""),
+        path=next((result.path for result in results if result.path), ""),
+        level=level,
+        ok=all(result.ok for result in results) and level != "dangerous",
+        findings=findings,
+    )
+
+
+def _scan_with_embedded_skillspector(root: Path, source: str) -> SkillScanResult | None:
+    try:
+        import typer
+        from skillspector.cli import FormatChoice, scan
+    except ImportError:
+        return None
+
+    with tempfile.TemporaryDirectory(prefix="bamboo-skillspector-") as temp_dir:
+        output_path = Path(temp_dir) / "skillspector.json"
+        returncode = 0
+        try:
+            scan(
+                str(root),
+                format=FormatChoice.json,
+                output=output_path,
+                no_llm=True,
+            )
+        except typer.Exit as exc:
+            try:
+                returncode = int(exc.exit_code or 0)
+            except (TypeError, ValueError):
+                returncode = 1
+            if not output_path.is_file():
+                return _result(
+                    root,
+                    source,
+                    [
+                        SkillScanFinding(
+                            severity="dangerous",
+                            category="skillspector-failed",
+                            message=f"embedded SkillSpector exited with status {exc.exit_code}",
+                            path=str(root),
+                        )
+                    ],
+                )
+        except Exception as exc:
+            return _result(
+                root,
+                source,
+                [
+                    SkillScanFinding(
+                        severity="dangerous",
+                        category="skillspector-failed",
+                        message=f"embedded SkillSpector failed: {exc}",
+                        path=str(root),
+                    )
+                ],
+            )
+        try:
+            payload = _parse_skillspector_json(output_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            return _result(
+                root,
+                source,
+                [
+                    SkillScanFinding(
+                        severity="dangerous",
+                        category="skillspector-failed",
+                        message=f"unable to read embedded SkillSpector output: {exc}",
+                        path=str(root),
+                    )
+                ],
+            )
+    if payload is None:
+        return _result(
+            root,
+            source,
+            [
+                SkillScanFinding(
+                    severity="dangerous",
+                    category="skillspector-failed",
+                    message="embedded SkillSpector did not return JSON",
+                    path=str(root),
+                )
+            ],
+        )
+    return _skillspector_payload_to_result(root, source, payload, returncode=returncode)
+
+
 def should_allow_install(
     result: SkillScanResult,
     trust_level: str,
@@ -140,6 +328,132 @@ def _result(root: Path, source: str, findings: list[SkillScanFinding]) -> SkillS
         ok=level != "dangerous",
         findings=findings,
     )
+
+
+def _parse_skillspector_json(stdout: str) -> dict[str, object] | None:
+    text = stdout.strip()
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end <= start:
+            return None
+        try:
+            data = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+    return data if isinstance(data, dict) else None
+
+
+def _skillspector_payload_to_result(
+    root: Path,
+    source: str,
+    payload: dict[str, object],
+    *,
+    returncode: int,
+) -> SkillScanResult:
+    risk_assessment = payload.get("risk_assessment")
+    risk = risk_assessment if isinstance(risk_assessment, dict) else {}
+    recommendation = str(
+        payload.get("risk_recommendation") or payload.get("recommendation") or risk.get("recommendation") or ""
+    ).upper()
+    severity = str(payload.get("risk_severity") or payload.get("severity") or risk.get("severity") or "").upper()
+    findings = _skillspector_findings(payload)
+    if returncode != 0 and not findings:
+        findings.append(
+            SkillScanFinding(
+                severity="dangerous",
+                category="skillspector-failed",
+                message=f"SkillSpector exited with status {returncode}",
+                path=str(root),
+            )
+        )
+    execution_successful = payload.get("execution_successful")
+    if execution_successful is False:
+        findings.append(
+            SkillScanFinding(
+                severity="dangerous",
+                category="skillspector-incomplete",
+                message="SkillSpector reported execution_successful=false",
+                path=str(root),
+            )
+        )
+    if recommendation == "DO_NOT_INSTALL" or severity == "CRITICAL" or execution_successful is False:
+        level = "dangerous"
+    elif recommendation == "CAUTION" or severity in {"HIGH", "MEDIUM"} or findings:
+        level = "caution"
+    else:
+        level = "safe"
+    return SkillScanResult(
+        schema_version=1,
+        scanned_at=utc_now(),
+        source=source,
+        path=str(root),
+        level=level,
+        ok=level != "dangerous" and returncode == 0,
+        findings=findings,
+    )
+
+
+def _skillspector_findings(payload: dict[str, object]) -> list[SkillScanFinding]:
+    raw_findings = payload.get("issues") or payload.get("filtered_findings") or payload.get("findings") or []
+    if not isinstance(raw_findings, list):
+        return []
+    findings: list[SkillScanFinding] = []
+    for raw in raw_findings:
+        if not isinstance(raw, dict):
+            continue
+        severity = _skillspector_finding_severity(str(raw.get("severity") or "caution"))
+        rule_id = str(raw.get("rule_id") or raw.get("id") or raw.get("category") or "finding")
+        path, line = _skillspector_location(raw)
+        message = str(raw.get("message") or raw.get("description") or rule_id)
+        findings.append(
+            SkillScanFinding(
+                severity=severity,
+                category=f"skillspector:{rule_id}",
+                message=message,
+                path=path,
+                line=line,
+            )
+        )
+    return findings
+
+
+def _skillspector_location(raw: dict[str, object]) -> tuple[str, int]:
+    location = raw.get("location")
+    if isinstance(location, dict):
+        path = str(location.get("path") or location.get("file") or "")
+        line_value = location.get("line") or location.get("start_line") or 0
+    else:
+        path = str(raw.get("path") or raw.get("file") or "")
+        line_value = raw.get("line") or raw.get("start_line") or 0
+    try:
+        line = int(line_value)
+    except (TypeError, ValueError):
+        line = 0
+    return path, line
+
+
+def _skillspector_finding_severity(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"critical", "high", "dangerous"}:
+        return "dangerous"
+    if normalized in {"medium", "warning", "caution"}:
+        return "caution"
+    return "safe"
+
+
+def _max_level(levels: object) -> str:
+    rank = {"safe": 0, "caution": 1, "dangerous": 2}
+    highest = "safe"
+    for level in levels:
+        normalized = str(level)
+        if rank.get(normalized, 0) > rank[highest]:
+            highest = normalized
+    return highest
 
 
 def _iter_scan_files(root: Path) -> list[Path]:

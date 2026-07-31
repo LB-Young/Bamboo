@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from bamboo.plugins import PluginInstaller, load_plugin_manifest
+from bamboo.skills.models import SkillScanFinding, SkillScanResult
 
 
 def test_install_skill_only_plugin_writes_lock(tmp_path: Path) -> None:
@@ -16,7 +17,7 @@ def test_install_skill_only_plugin_writes_lock(tmp_path: Path) -> None:
     _write_manifest(plugin_dir, skills=[{"path": "skills/demo"}])
     _write_skill(plugin_dir / "skills" / "demo")
 
-    result = PluginInstaller(userspace_dir=userspace).install(plugin_dir)
+    result = PluginInstaller(userspace_dir=userspace, skill_install_scanner=_safe_skill_scan).install(plugin_dir)
 
     assert result.installed is True
     assert (userspace / "skills" / "demo" / "SKILL.md").is_file()
@@ -45,7 +46,7 @@ def test_install_combined_plugin_copies_command_workflow_and_mcp(tmp_path: Path)
     (workflow_dir / "scripts" / "check.sh").write_text("echo ok\n", encoding="utf-8")
     (plugin_dir / "mcp.yaml").write_text("mcp:\n  auto_start: false\n  servers: {}\n", encoding="utf-8")
 
-    result = PluginInstaller(userspace_dir=userspace).install(plugin_dir)
+    result = PluginInstaller(userspace_dir=userspace, skill_install_scanner=_safe_skill_scan).install(plugin_dir)
 
     assert result.installed is True
     assert (userspace / "skills" / "demo" / "SKILL.md").is_file()
@@ -74,13 +75,27 @@ def test_dangerous_plugin_is_blocked_without_force(tmp_path: Path) -> None:
     assert not (userspace / "workflows" / "danger").exists()
 
 
+def test_plugin_skill_is_blocked_by_required_skill_scanner(tmp_path: Path) -> None:
+    userspace = tmp_path / "home" / ".bamboo"
+    plugin_dir = _plugin_root(tmp_path, "skill-risk")
+    _write_manifest(plugin_dir, skills=[{"path": "skills/demo"}])
+    _write_skill(plugin_dir / "skills" / "demo")
+
+    result = PluginInstaller(userspace_dir=userspace, skill_install_scanner=_dangerous_skill_scan).install(plugin_dir)
+
+    assert result.installed is False
+    assert result.scan_result.level == "dangerous"
+    assert any(finding.category == "skillspector:test-risk" for finding in result.scan_result.findings)
+    assert not (userspace / "skills" / "demo").exists()
+
+
 def test_remove_keeps_user_modified_files_by_default(tmp_path: Path) -> None:
     userspace = tmp_path / "home" / ".bamboo"
     plugin_dir = _plugin_root(tmp_path, "remove-demo")
     _write_manifest(plugin_dir, commands=[{"path": "commands/demo.md"}])
     (plugin_dir / "commands").mkdir()
     (plugin_dir / "commands" / "demo.md").write_text("demo\n", encoding="utf-8")
-    installer = PluginInstaller(userspace_dir=userspace)
+    installer = PluginInstaller(userspace_dir=userspace, skill_install_scanner=_safe_skill_scan)
     install_result = installer.install(plugin_dir)
     assert install_result.installed is True
     target = userspace / "commands" / "demo.md"
@@ -142,3 +157,34 @@ def _write_manifest(
 def _write_skill(skill_dir: Path) -> None:
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("---\nname: demo\n---\n# Demo\n", encoding="utf-8")
+
+
+def _safe_skill_scan(path: Path, source: str) -> SkillScanResult:
+    return SkillScanResult(
+        schema_version=1,
+        scanned_at="2026-07-31T00:00:00Z",
+        source=source,
+        path=str(path),
+        level="safe",
+        ok=True,
+    )
+
+
+def _dangerous_skill_scan(path: Path, source: str) -> SkillScanResult:
+    return SkillScanResult(
+        schema_version=1,
+        scanned_at="2026-07-31T00:00:00Z",
+        source=source,
+        path=str(path),
+        level="dangerous",
+        ok=False,
+        findings=[
+            SkillScanFinding(
+                severity="dangerous",
+                category="skillspector:test-risk",
+                message="test risk",
+                path="SKILL.md",
+                line=1,
+            )
+        ],
+    )

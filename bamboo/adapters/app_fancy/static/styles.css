@@ -972,6 +972,8 @@ textarea {
   border-radius: 8px;
   background: var(--soft-bg);
   padding: 10px;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .chat-slot {
@@ -994,10 +996,20 @@ textarea {
   border-radius: 7px;
   padding: 10px 64px 10px 10px;
   line-height: 1.5;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .message-body {
   min-width: 0;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.message-body * {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .message:not(.assistant) .message-body {
@@ -1066,6 +1078,8 @@ textarea {
   font-size: 11px;
   opacity: 0;
   transition: opacity 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .message:hover .copy-message,

@@ -2,7 +2,7 @@
 name = "bamboo"
 version = "0.1.0"
 description = "Bamboo - AI-powered personal agent assistant"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "typer>=0.12.0",
     "pydantic>=2.0.0",
@@ -21,6 +21,7 @@ dependencies = [
     "playwright>=1.40.0",
     "pywebview>=5.0",
     "qrcode>=7.4",
+    "skillspector @ git+https://github.com/NVIDIA/skillspector.git@3f11bfa4117ed8beff02d45f660f557489f6bbe5",
 ]
 
 [project.scripts]
@@ -82,6 +83,8 @@ bamboo = [
     "memory/templates/*/*.md",
     "subagents/buildin/*.yaml",
     "skills/buildin/*/SKILL.md",
+    "skills/buildin/*/config.yaml",
+    "skills/buildin/*/scripts/*",
     "skills/buildin/*/experiences/*.md",
     "workflows/buildin/*/WORKFLOW.md",
     "workflows/buildin/*/scripts/*",
@@ -99,14 +102,14 @@ dev = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

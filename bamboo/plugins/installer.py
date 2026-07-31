@@ -7,7 +7,7 @@ import json
 import shutil
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -22,7 +22,8 @@ from bamboo.plugins.models import (
     PluginScanResult,
 )
 from bamboo.security import inspect_command
-from bamboo.skills.guard import PATTERNS, MAX_SCAN_BYTES
+from bamboo.skills.guard import PATTERNS, MAX_SCAN_BYTES, scan_skill_for_install
+from bamboo.skills.models import SkillScanResult
 from bamboo.skills.store import utc_now
 from bamboo.userspace.userspace import get_userspace_dir
 
@@ -30,14 +31,23 @@ from bamboo.userspace.userspace import get_userspace_dir
 class PluginInstaller:
     """Validates, installs and removes local plugin packages."""
 
-    def __init__(self, *, userspace_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        userspace_dir: Path | None = None,
+        skill_install_scanner: Callable[[Path, str], SkillScanResult] | None = None,
+    ) -> None:
         self.userspace_dir = userspace_dir or get_userspace_dir()
+        self.skill_install_scanner = skill_install_scanner or scan_skill_for_install
 
     def validate(self, plugin_dir: Path) -> PluginInstallResult:
         """Validate and scan a plugin directory without installing it."""
         source = plugin_dir.expanduser().resolve()
         manifest = load_plugin_manifest(source)
-        scan = scan_plugin(source, manifest)
+        scan = merge_plugin_scan_results(
+            scan_plugin(source, manifest),
+            scan_plugin_skill_components(source, manifest, self.skill_install_scanner),
+        )
         return PluginInstallResult(name=manifest.name, installed=False, reason="validated", scan_result=scan)
 
     def install(
@@ -57,7 +67,10 @@ class PluginInstaller:
         shutil.copytree(source, quarantine_path)
 
         quarantined_manifest = load_plugin_manifest(quarantine_path)
-        scan = scan_plugin(quarantine_path, quarantined_manifest)
+        scan = merge_plugin_scan_results(
+            scan_plugin(quarantine_path, quarantined_manifest),
+            scan_plugin_skill_components(quarantine_path, quarantined_manifest, self.skill_install_scanner),
+        )
         if scan.level == "dangerous" and not force:
             self._audit("install-blocked", quarantined_manifest, "dangerous scan findings", scan)
             return PluginInstallResult(
@@ -295,9 +308,72 @@ def scan_plugin(plugin_root: Path, manifest: PluginManifest | None = None) -> Pl
     return PluginScanResult(level=level, ok=level != "dangerous", findings=tuple(findings))
 
 
+def scan_plugin_skill_components(
+    plugin_root: Path,
+    manifest: PluginManifest,
+    scanner: Callable[[Path, str], SkillScanResult],
+) -> PluginScanResult:
+    """Run required skill install scanners for every skill component in a plugin."""
+    root = plugin_root.resolve()
+    findings: list[PluginScanFinding] = []
+    for component in manifest.skills:
+        skill_path = (root / component.path).resolve()
+        result = scanner(skill_path, str(skill_path))
+        for finding in result.findings:
+            relative = _plugin_relative_path(root, skill_path, finding.path)
+            findings.append(
+                PluginScanFinding(
+                    severity=finding.severity,
+                    category=finding.category,
+                    message=finding.message,
+                    path=relative,
+                    line=finding.line,
+                )
+            )
+    level = "safe"
+    if any(finding.severity == "dangerous" for finding in findings):
+        level = "dangerous"
+    elif findings:
+        level = "caution"
+    return PluginScanResult(level=level, ok=level != "dangerous", findings=tuple(findings))
+
+
+def merge_plugin_scan_results(*results: PluginScanResult) -> PluginScanResult:
+    """Merge plugin scan results, preserving the highest risk level."""
+    findings = tuple(finding for result in results for finding in result.findings)
+    level = _max_scan_level(result.level for result in results)
+    return PluginScanResult(
+        level=level,
+        ok=all(result.ok for result in results) and level != "dangerous",
+        findings=findings,
+    )
+
+
 def sha256_file(path: Path) -> str:
     """Return sha256 for one file."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _plugin_relative_path(plugin_root: Path, skill_path: Path, finding_path: str) -> str:
+    if not finding_path:
+        return str(skill_path.relative_to(plugin_root))
+    raw = Path(finding_path)
+    if raw.is_absolute():
+        try:
+            return str(raw.resolve().relative_to(plugin_root))
+        except ValueError:
+            return str(skill_path.relative_to(plugin_root))
+    return str((skill_path.relative_to(plugin_root) / raw).as_posix())
+
+
+def _max_scan_level(levels: object) -> str:
+    rank = {"safe": 0, "caution": 1, "dangerous": 2}
+    highest = "safe"
+    for level in levels:
+        normalized = str(level)
+        if rank.get(normalized, 0) > rank[highest]:
+            highest = normalized
+    return highest
 
 
 def _scan_mcp_config(path: Path, relative_path: str) -> list[PluginScanFinding]:

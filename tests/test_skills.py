@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -213,6 +215,7 @@ def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
         "requesting-code-review",
         "github-pr-workflow",
         "native-mcp",
+        "anysearch",
     }
     assert expected.issubset(names)
 
@@ -221,3 +224,21 @@ def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
         if definition.name in expected:
             result = validator.validate(definition)
             assert result.ok, f"{definition.name}: {result.errors}"
+
+
+def test_builtin_anysearch_cli_exposes_expected_commands() -> None:
+    """验证 AnySearch 内置 skill 的最小 CLI 入口存在。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "anysearch" / "scripts" / "anysearch_cli.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "search" in result.stdout
+    assert "batch-search" in result.stdout
+    assert "extract" in result.stdout
+    assert "get-sub-domains" in result.stdout

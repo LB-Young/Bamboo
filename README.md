@@ -16,7 +16,7 @@ Bamboo is a Python agent runtime for local CLI, Web, desktop, and IM workflows. 
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - A configured model provider API key, unless you use a local provider such as Ollama or vLLM
 
 ## Installation
