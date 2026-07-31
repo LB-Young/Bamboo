@@ -8,7 +8,9 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
+from bamboo.helpers.config import load_builtin_skill_variables
 from bamboo.skills.creator import SkillCreator
 from bamboo.skills.frontmatter import parse_skill_markdown
 from bamboo.skills.registry import PACKAGE_BUILTIN_SKILLS_DIR, SkillRegistry
@@ -97,6 +99,31 @@ def test_skill_registry_honors_disabled_config(tmp_path: Path) -> None:
 
     assert registry.list() == []
     state = store.load_state("demo-skill")
+    assert state is not None
+    assert state.status == "disabled"
+
+
+def test_skill_registry_honors_builtin_central_disabled_config(tmp_path: Path) -> None:
+    """验证 skills_buildin.yaml 可以集中禁用内置 Skill。"""
+    config_path = tmp_path / "skills_buildin.yaml"
+    config_path.write_text(
+        "schema_version: 1\n"
+        "skills:\n"
+        "  youtube-reach:\n"
+        "    enabled: false\n",
+        encoding="utf-8",
+    )
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    registry = SkillRegistry(
+        skill_dirs=[("buildin", PACKAGE_BUILTIN_SKILLS_DIR)],
+        store=store,
+        builtin_config_paths=[config_path],
+    )
+    registry.refresh()
+
+    assert registry.get("youtube-reach") is None
+    assert registry.get("youtube-reach", include_inactive=True) is not None
+    state = store.load_state("youtube-reach")
     assert state is not None
     assert state.status == "disabled"
 
@@ -216,6 +243,10 @@ def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
         "github-pr-workflow",
         "native-mcp",
         "anysearch",
+        "youtube-reach",
+        "rss-reach",
+        "bilibili-reach",
+        "xiaohongshu-reach",
     }
     assert expected.issubset(names)
 
@@ -224,6 +255,53 @@ def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
         if definition.name in expected:
             result = validator.validate(definition)
             assert result.ok, f"{definition.name}: {result.errors}"
+
+
+def test_builtin_skills_config_lists_reach_skills() -> None:
+    """验证集中内置 Skill 配置包含平台 reach skill 及其变量。"""
+    config_path = Path("bamboo/configs/skills_buildin.yaml")
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    skills = data.get("skills", {})
+
+    for name in ("youtube-reach", "rss-reach", "bilibili-reach", "xiaohongshu-reach"):
+        assert skills[name]["enabled"] is True
+        assert isinstance(skills[name].get("variables"), dict)
+    assert "yt-dlp" in skills["youtube-reach"]["requirements"]["bins"]
+    assert skills["rss-reach"]["variables"]["RSS_REACH_USER_AGENT"]
+    assert skills["bilibili-reach"]["variables"]["BILIBILI_REACH_REFERER"] == "https://www.bilibili.com/"
+    assert skills["xiaohongshu-reach"]["variables"]["XIAOHONGSHU_REACH_REFERER"] == "https://www.xiaohongshu.com/"
+
+
+def test_builtin_skill_variables_load_from_shared_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证内置 skill 变量由共享 helper 读取和展开。"""
+    package_config = tmp_path / "package.yaml"
+    package_config.write_text(
+        "schema_version: 1\n"
+        "skills:\n"
+        "  rss-reach:\n"
+        "    variables:\n"
+        "      RSS_REACH_USER_AGENT: package-agent\n"
+        "      TOKEN: \"${RSS_TEST_TOKEN}\"\n",
+        encoding="utf-8",
+    )
+    user_config = tmp_path / "user.yaml"
+    user_config.write_text(
+        "schema_version: 1\n"
+        "skills:\n"
+        "  rss-reach:\n"
+        "    variables:\n"
+        "      RSS_REACH_USER_AGENT: user-agent\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RSS_TEST_TOKEN", "resolved-token")
+
+    variables = load_builtin_skill_variables("rss-reach", config_paths=[package_config, user_config])
+
+    assert variables["RSS_REACH_USER_AGENT"] == "user-agent"
+    assert variables["TOKEN"] == "resolved-token"
 
 
 def test_builtin_anysearch_cli_exposes_expected_commands() -> None:
@@ -242,3 +320,47 @@ def test_builtin_anysearch_cli_exposes_expected_commands() -> None:
     assert "batch-search" in result.stdout
     assert "extract" in result.stdout
     assert "get-sub-domains" in result.stdout
+
+
+def test_builtin_reach_clis_expose_expected_commands() -> None:
+    """验证平台 reach skill 的最小 CLI 入口存在。"""
+    scripts = {
+        "youtube-reach/scripts/youtube_cli.py": ["info", "transcript", "playlist"],
+        "rss-reach/scripts/rss_cli.py": ["read", "latest", "check"],
+        "bilibili-reach/scripts/bilibili_cli.py": ["search", "video"],
+        "xiaohongshu-reach/scripts/xiaohongshu_cli.py": ["parse", "note", "search-url"],
+    }
+
+    for script_name, expected_commands in scripts.items():
+        result = subprocess.run(
+            [sys.executable, str(PACKAGE_BUILTIN_SKILLS_DIR / script_name), "--help"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, script_name
+        for command in expected_commands:
+            assert command in result.stdout, script_name
+
+
+def test_builtin_xiaohongshu_parse_extracts_note_id() -> None:
+    """验证 Xiaohongshu reach 可以从公开链接文本提取 note id。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "xiaohongshu-reach" / "scripts" / "xiaohongshu_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "parse",
+            "看看这个 https://www.xiaohongshu.com/explore/65f123456789abcdef123456?xsec_token=abc",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["note_ids"] == ["65f123456789abcdef123456"]
+    assert output["canonical_urls"] == ["https://www.xiaohongshu.com/explore/65f123456789abcdef123456"]

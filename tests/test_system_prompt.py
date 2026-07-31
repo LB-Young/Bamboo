@@ -61,6 +61,8 @@ def test_build_project_prompt_includes_project_instructions(tmp_path: Path) -> N
     assert "面向软件工程项目的自主 Agent" in prompt
     assert "# Language" in prompt
     assert "# Tool Results" in prompt
+    assert "# Skills" in prompt
+    assert "先使用 `skill_load` 加载该 skill 的完整说明" in prompt
     assert "# Runtime Environment" in prompt
     assert f"Project Root (authoritative project directory): `{tmp_path}`" in prompt
     assert "Working Directory: `" in prompt
@@ -114,6 +116,7 @@ def test_build_chat_prompt_excludes_project_instructions(tmp_path: Path) -> None
     )
 
     assert "可靠、清晰、直接的 AI 助手" in prompt
+    assert "# Skills" in prompt
     assert "面向软件工程项目的自主 Agent" not in prompt
     assert "项目专属规则" not in prompt
     assert "Project Root (authoritative project directory): ``" in prompt
@@ -153,6 +156,7 @@ def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     assert (layout.root / "prompts" / "project" / "00-identity.md").is_file()
     assert (layout.root / "prompts" / "chat" / "00-identity.md").is_file()
     assert (layout.root / "prompts" / "shared" / "00-language.md").is_file()
+    assert (layout.root / "prompts" / "shared" / "35-skills.md").is_file()
     assert (layout.root / "storage" / "skills").is_dir()
     assert (layout.root / "bkn").is_dir()
     assert (layout.root / "storage" / "bkn").is_dir()

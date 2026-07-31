@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from bamboo.helpers.config import builtin_skill_config_paths, load_builtin_skill_config
 from bamboo.skills.creator import build_skill_index, load_skill_definition
 from bamboo.skills.frontmatter import SkillFrontmatterError
 from bamboo.skills.models import SkillDefinition, SkillUsageEvent
@@ -25,6 +26,7 @@ class SkillRegistry:
         skill_dirs: list[tuple[str, Path]] | None = None,
         store: SkillStore | None = None,
         validator: SkillValidator | None = None,
+        builtin_config_paths: list[Path] | None = None,
     ) -> None:
         """初始化 Skill 注册表。"""
         self.skill_dirs = skill_dirs or [
@@ -34,6 +36,7 @@ class SkillRegistry:
         ]
         self.store = store or SkillStore()
         self.validator = validator or SkillValidator()
+        self.builtin_config_paths = builtin_config_paths or builtin_skill_config_paths()
         self._definitions: dict[str, SkillDefinition] = {}
 
     def refresh(self) -> None:
@@ -202,7 +205,7 @@ class SkillRegistry:
             state = self.store.load_state(definition.name) or self.store.create_state(definition.name)
             validation = self.validator.validate(definition)
             self.store.save_validation(definition.name, validation)
-            config_enabled = self._config_enabled(Path(definition.source_path))
+            config_enabled = self._config_enabled(definition)
             if state.status == "disabled" or not config_enabled:
                 disabled_state = self.store.load_state(definition.name)
                 if disabled_state is not None:
@@ -214,18 +217,29 @@ class SkillRegistry:
             # Skill 状态存储不可写时保持注册表可构建，避免运行时初始化失败。
             return
 
-    def _config_enabled(self, source_path: Path) -> bool:
+    def _config_enabled(self, definition: SkillDefinition) -> bool:
+        source_path = Path(definition.source_path)
         config_path = source_path / "config.yaml"
+        enabled = True
         if not config_path.is_file():
-            return True
-        try:
-            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError:
-            return True
-        if not isinstance(data, dict):
-            return True
-        enabled = data.get("enabled")
-        return enabled if isinstance(enabled, bool) else True
+            data = {}
+        else:
+            try:
+                data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError:
+                data = {}
+        if isinstance(data, dict):
+            local_enabled = data.get("enabled")
+            if isinstance(local_enabled, bool):
+                enabled = local_enabled
+        if definition.source == "buildin":
+            builtin_enabled = load_builtin_skill_config(
+                definition.name,
+                config_paths=self.builtin_config_paths,
+            ).get("enabled")
+            if isinstance(builtin_enabled, bool):
+                enabled = builtin_enabled
+        return enabled
 
 
 def create_skill_registry() -> SkillRegistry:

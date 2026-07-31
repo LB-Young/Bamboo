@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+PACKAGE_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "configs"
+
 
 class BambooConfig:
     """Configuration manager for Bamboo.
@@ -80,3 +82,59 @@ class BambooConfig:
     def __contains__(self, name: str) -> bool:
         """Allow 'in' operator, e.g., 'models' in config."""
         return name in self._configs
+
+
+def load_builtin_skill_config(skill_name: str, *, config_paths: list[Path] | None = None) -> dict[str, Any]:
+    """Load merged package and user config for one built-in skill."""
+    merged: dict[str, Any] = {}
+    for path in config_paths or builtin_skill_config_paths():
+        if not path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        skills = data.get("skills")
+        if not isinstance(skills, dict):
+            continue
+        raw_config = skills.get(skill_name)
+        if isinstance(raw_config, dict):
+            merged = _deep_merge(merged, raw_config)
+    return merged
+
+
+def load_builtin_skill_variables(skill_name: str, *, config_paths: list[Path] | None = None) -> dict[str, Any]:
+    """Load resolved variables for one built-in skill."""
+    config = load_builtin_skill_config(skill_name, config_paths=config_paths)
+    variables = config.get("variables")
+    if not isinstance(variables, dict):
+        return {}
+    return {str(key): _resolve_config_value(value) for key, value in variables.items()}
+
+
+def builtin_skill_config_paths() -> list[Path]:
+    """Return package defaults and user overrides for built-in skill config."""
+    return [
+        PACKAGE_CONFIGS_DIR / "skills_buildin.yaml",
+        BambooConfig.get_configs_dir() / "skills_buildin.yaml",
+    ]
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    result = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(dict(result[key]), value)
+        else:
+            result[key] = value
+    return result
+
+
+def _resolve_config_value(value: Any) -> Any:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("${") and stripped.endswith("}") and len(stripped) > 3:
+            return os.environ.get(stripped[2:-1].strip(), "")
+    return value

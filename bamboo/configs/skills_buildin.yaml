@@ -1,0 +1,69 @@
+schema_version: 1
+
+# Central defaults for Bamboo built-in skills.
+# SkillRegistry only reads `enabled`.
+# Other entries are read by the corresponding skill implementation when needed.
+skills:
+  anysearch:
+    enabled: true
+    variables:
+      ANYSEARCH_API_KEY: "${ANYSEARCH_API_KEY}"
+    requirements:
+      bins:
+        - python3
+      env:
+        - ANYSEARCH_API_KEY
+
+  youtube-reach:
+    enabled: true
+    variables:
+      YOUTUBE_REACH_LANGUAGES: "en,zh-Hans,zh-Hant,zh-CN,zh-TW"
+    requirements:
+      bins:
+        - python3
+        - yt-dlp
+      env: []
+
+  rss-reach:
+    enabled: true
+    variables:
+      RSS_REACH_USER_AGENT: "Bamboo RSS Reach/1"
+    requirements:
+      bins:
+        - python3
+      env: []
+
+  bilibili-reach:
+    enabled: true
+    variables:
+      BILIBILI_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Bilibili Reach/1"
+      BILIBILI_REACH_REFERER: "https://www.bilibili.com/"
+    requirements:
+      bins:
+        - python3
+      env: []
+
+  xiaohongshu-reach:
+    enabled: true
+    variables:
+      XIAOHONGSHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Xiaohongshu Reach/1"
+      XIAOHONGSHU_REACH_REFERER: "https://www.xiaohongshu.com/"
+    requirements:
+      bins:
+        - python3
+      env: []
+
+  systematic-debugging:
+    enabled: true
+  test-driven-development:
+    enabled: true
+  writing-plans:
+    enabled: true
+  requesting-code-review:
+    enabled: true
+  github-pr-workflow:
+    enabled: true
+  native-mcp:
+    enabled: true
+  skill-creator:
+    enabled: true
