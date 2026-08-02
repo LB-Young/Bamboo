@@ -14,6 +14,24 @@ skills:
       env:
         - ANYSEARCH_API_KEY
 
+  github-reach:
+    enabled: true
+    variables:
+      GITHUB_REACH_USER_AGENT: "Bamboo GitHub Reach/1"
+    requirements:
+      bins:
+        - python3
+      env: []
+
+  paper-reach:
+    enabled: true
+    variables:
+      PAPER_REACH_USER_AGENT: "Bamboo Paper Reach/1"
+    requirements:
+      bins:
+        - python3
+      env: []
+
   youtube-reach:
     enabled: true
     variables:
@@ -48,6 +66,16 @@ skills:
     variables:
       XIAOHONGSHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Xiaohongshu Reach/1"
       XIAOHONGSHU_REACH_REFERER: "https://www.xiaohongshu.com/"
+    requirements:
+      bins:
+        - python3
+      env: []
+
+  zhihu-reach:
+    enabled: true
+    variables:
+      ZHIHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Zhihu Reach/1"
+      ZHIHU_REACH_REFERER: "https://www.zhihu.com/"
     requirements:
       bins:
         - python3

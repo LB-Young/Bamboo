@@ -243,10 +243,13 @@ def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
         "github-pr-workflow",
         "native-mcp",
         "anysearch",
+        "github-reach",
+        "paper-reach",
         "youtube-reach",
         "rss-reach",
         "bilibili-reach",
         "xiaohongshu-reach",
+        "zhihu-reach",
     }
     assert expected.issubset(names)
 
@@ -263,13 +266,24 @@ def test_builtin_skills_config_lists_reach_skills() -> None:
     data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     skills = data.get("skills", {})
 
-    for name in ("youtube-reach", "rss-reach", "bilibili-reach", "xiaohongshu-reach"):
+    for name in (
+        "github-reach",
+        "paper-reach",
+        "youtube-reach",
+        "rss-reach",
+        "bilibili-reach",
+        "xiaohongshu-reach",
+        "zhihu-reach",
+    ):
         assert skills[name]["enabled"] is True
         assert isinstance(skills[name].get("variables"), dict)
+    assert skills["github-reach"]["variables"]["GITHUB_REACH_USER_AGENT"]
+    assert skills["paper-reach"]["variables"]["PAPER_REACH_USER_AGENT"]
     assert "yt-dlp" in skills["youtube-reach"]["requirements"]["bins"]
     assert skills["rss-reach"]["variables"]["RSS_REACH_USER_AGENT"]
     assert skills["bilibili-reach"]["variables"]["BILIBILI_REACH_REFERER"] == "https://www.bilibili.com/"
     assert skills["xiaohongshu-reach"]["variables"]["XIAOHONGSHU_REACH_REFERER"] == "https://www.xiaohongshu.com/"
+    assert skills["zhihu-reach"]["variables"]["ZHIHU_REACH_REFERER"] == "https://www.zhihu.com/"
 
 
 def test_builtin_skill_variables_load_from_shared_helper(
@@ -325,10 +339,13 @@ def test_builtin_anysearch_cli_exposes_expected_commands() -> None:
 def test_builtin_reach_clis_expose_expected_commands() -> None:
     """验证平台 reach skill 的最小 CLI 入口存在。"""
     scripts = {
+        "github-reach/scripts/github_cli.py": ["parse", "repo", "releases", "issues", "prs", "user"],
+        "paper-reach/scripts/paper_cli.py": ["arxiv-search", "arxiv-id", "doi"],
         "youtube-reach/scripts/youtube_cli.py": ["info", "transcript", "playlist"],
         "rss-reach/scripts/rss_cli.py": ["read", "latest", "check"],
         "bilibili-reach/scripts/bilibili_cli.py": ["search", "video"],
         "xiaohongshu-reach/scripts/xiaohongshu_cli.py": ["parse", "note", "search-url"],
+        "zhihu-reach/scripts/zhihu_cli.py": ["parse", "page", "search-url"],
     }
 
     for script_name, expected_commands in scripts.items():
@@ -364,3 +381,40 @@ def test_builtin_xiaohongshu_parse_extracts_note_id() -> None:
     output = json.loads(result.stdout)
     assert output["note_ids"] == ["65f123456789abcdef123456"]
     assert output["canonical_urls"] == ["https://www.xiaohongshu.com/explore/65f123456789abcdef123456"]
+
+
+def test_builtin_github_repo_argument_parser_accepts_url() -> None:
+    """验证 GitHub reach 的 repo 参数解析接受 GitHub URL。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "github-reach" / "scripts" / "github_cli.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "parse", "https://github.com/openai/codex.git"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["full_name"] == "openai/codex"
+
+
+def test_builtin_zhihu_parse_extracts_question_and_answer() -> None:
+    """验证 Zhihu reach 可以从公开链接文本提取 question/answer 实体。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "zhihu-reach" / "scripts" / "zhihu_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "parse",
+            "https://www.zhihu.com/question/123456/answer/789012",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["entities"] == [{"type": "answer", "id": "789012", "question_id": "123456"}]
