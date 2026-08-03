@@ -32,6 +32,16 @@ skills:
         - python3
       env: []
 
+  douyin-reach:
+    enabled: true
+    variables:
+      DOUYIN_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Douyin Reach/1"
+      DOUYIN_REACH_REFERER: "https://www.douyin.com/"
+    requirements:
+      bins:
+        - python3
+      env: []
+
   youtube-reach:
     enabled: true
     variables:

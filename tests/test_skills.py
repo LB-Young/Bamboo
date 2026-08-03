@@ -245,6 +245,7 @@ def test_builtin_phase4_skills_validate(tmp_path: Path) -> None:
         "anysearch",
         "github-reach",
         "paper-reach",
+        "douyin-reach",
         "youtube-reach",
         "rss-reach",
         "bilibili-reach",
@@ -269,6 +270,7 @@ def test_builtin_skills_config_lists_reach_skills() -> None:
     for name in (
         "github-reach",
         "paper-reach",
+        "douyin-reach",
         "youtube-reach",
         "rss-reach",
         "bilibili-reach",
@@ -279,6 +281,7 @@ def test_builtin_skills_config_lists_reach_skills() -> None:
         assert isinstance(skills[name].get("variables"), dict)
     assert skills["github-reach"]["variables"]["GITHUB_REACH_USER_AGENT"]
     assert skills["paper-reach"]["variables"]["PAPER_REACH_USER_AGENT"]
+    assert skills["douyin-reach"]["variables"]["DOUYIN_REACH_REFERER"] == "https://www.douyin.com/"
     assert "yt-dlp" in skills["youtube-reach"]["requirements"]["bins"]
     assert skills["rss-reach"]["variables"]["RSS_REACH_USER_AGENT"]
     assert skills["bilibili-reach"]["variables"]["BILIBILI_REACH_REFERER"] == "https://www.bilibili.com/"
@@ -341,6 +344,7 @@ def test_builtin_reach_clis_expose_expected_commands() -> None:
     scripts = {
         "github-reach/scripts/github_cli.py": ["parse", "repo", "releases", "issues", "prs", "user"],
         "paper-reach/scripts/paper_cli.py": ["arxiv-search", "arxiv-id", "doi"],
+        "douyin-reach/scripts/douyin_cli.py": ["parse", "page", "search-url", "capability"],
         "youtube-reach/scripts/youtube_cli.py": ["info", "transcript", "playlist"],
         "rss-reach/scripts/rss_cli.py": ["read", "latest", "check"],
         "bilibili-reach/scripts/bilibili_cli.py": ["search", "video"],
@@ -381,6 +385,28 @@ def test_builtin_xiaohongshu_parse_extracts_note_id() -> None:
     output = json.loads(result.stdout)
     assert output["note_ids"] == ["65f123456789abcdef123456"]
     assert output["canonical_urls"] == ["https://www.xiaohongshu.com/explore/65f123456789abcdef123456"]
+
+
+def test_builtin_douyin_parse_extracts_video_id() -> None:
+    """验证 Douyin reach 可以从公开链接文本提取 video id。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "parse",
+            "看看这个 https://www.douyin.com/video/7123456789012345678?previous_page=app_code_link",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["video_ids"] == ["7123456789012345678"]
+    assert output["canonical_video_urls"] == ["https://www.douyin.com/video/7123456789012345678"]
 
 
 def test_builtin_github_repo_argument_parser_accepts_url() -> None:
