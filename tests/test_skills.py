@@ -278,15 +278,27 @@ def test_builtin_skills_config_lists_reach_skills() -> None:
         "zhihu-reach",
     ):
         assert skills[name]["enabled"] is True
+        assert skills[name]["user_invocable"] is True
+        assert skills[name]["load_experiences"] is False
+        assert isinstance(skills[name].get("load_policy"), dict)
         assert isinstance(skills[name].get("variables"), dict)
+        assert isinstance(skills[name].get("requirements"), dict)
+        assert isinstance(skills[name].get("permissions"), dict)
     assert skills["github-reach"]["variables"]["GITHUB_REACH_USER_AGENT"]
     assert skills["paper-reach"]["variables"]["PAPER_REACH_USER_AGENT"]
     assert skills["douyin-reach"]["variables"]["DOUYIN_REACH_REFERER"] == "https://www.douyin.com/"
+    assert skills["douyin-reach"]["variables"]["DOUYIN_REACH_MAX_DOWNLOAD_MB"] == "200"
+    assert "ffmpeg" in skills["douyin-reach"]["requirements"]["optional_bins"]
     assert "yt-dlp" in skills["youtube-reach"]["requirements"]["bins"]
     assert skills["rss-reach"]["variables"]["RSS_REACH_USER_AGENT"]
     assert skills["bilibili-reach"]["variables"]["BILIBILI_REACH_REFERER"] == "https://www.bilibili.com/"
     assert skills["xiaohongshu-reach"]["variables"]["XIAOHONGSHU_REACH_REFERER"] == "https://www.xiaohongshu.com/"
     assert skills["zhihu-reach"]["variables"]["ZHIHU_REACH_REFERER"] == "https://www.zhihu.com/"
+
+
+def test_builtin_skill_directories_do_not_keep_local_config_yaml() -> None:
+    """验证内置 Skill 配置集中在 skills_buildin.yaml，不保留目录级 config.yaml。"""
+    assert list(PACKAGE_BUILTIN_SKILLS_DIR.glob("*/config.yaml")) == []
 
 
 def test_builtin_skill_variables_load_from_shared_helper(
@@ -344,7 +356,22 @@ def test_builtin_reach_clis_expose_expected_commands() -> None:
     scripts = {
         "github-reach/scripts/github_cli.py": ["parse", "repo", "releases", "issues", "prs", "user"],
         "paper-reach/scripts/paper_cli.py": ["arxiv-search", "arxiv-id", "doi"],
-        "douyin-reach/scripts/douyin_cli.py": ["parse", "page", "search-url", "capability"],
+        "douyin-reach/scripts/douyin_cli.py": [
+            "parse",
+            "resolve",
+            "page",
+            "search-url",
+            "video-info",
+            "download",
+            "extract-audio",
+            "transcript",
+            "explain-file",
+            "creator-profile",
+            "collection-list",
+            "creator-analyze",
+            "publish-plan",
+            "capability",
+        ],
         "youtube-reach/scripts/youtube_cli.py": ["info", "transcript", "playlist"],
         "rss-reach/scripts/rss_cli.py": ["read", "latest", "check"],
         "bilibili-reach/scripts/bilibili_cli.py": ["search", "video"],
@@ -407,6 +434,101 @@ def test_builtin_douyin_parse_extracts_video_id() -> None:
     output = json.loads(result.stdout)
     assert output["video_ids"] == ["7123456789012345678"]
     assert output["canonical_video_urls"] == ["https://www.douyin.com/video/7123456789012345678"]
+
+
+def test_builtin_douyin_parse_extracts_user_and_collection_ids() -> None:
+    """验证 Douyin reach 可以解析用户和合集链接。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "parse",
+            "主页 https://www.douyin.com/user/MS4wLjABAAAAabcd 合集 https://www.douyin.com/collection/7345678901234567890",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["user_ids"] == ["MS4wLjABAAAAabcd"]
+    assert output["collection_ids"] == ["7345678901234567890"]
+
+
+def test_builtin_douyin_capability_lists_internal_modules() -> None:
+    """验证 Douyin reach 暴露单 skill 内部能力分层。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "capability"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert "video" in output["modules"]
+    assert "creator" in output["modules"]
+    assert "publish" in output["modules"]
+    assert "publish" in output["requires_explicit_user_confirmation"]
+
+
+def test_builtin_douyin_publish_plan_requires_confirmation(tmp_path: Path) -> None:
+    """验证 Douyin 发布能力只生成受控计划，不静默发布。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
+    media = tmp_path / "demo.mp4"
+    media.write_bytes(b"demo")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "publish-plan",
+            "--title",
+            "标题",
+            "--body",
+            "正文",
+            "--media",
+            str(media),
+            "--tag",
+            "测试",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["can_auto_publish"] is False
+    assert output["requires_visible_browser"] is True
+    assert output["requires_final_user_confirmation"] is True
+    assert output["media"][0]["exists"] is True
+
+
+def test_builtin_douyin_transcript_reads_sidecar(tmp_path: Path) -> None:
+    """验证 Douyin 视频模块可以读取本地字幕 sidecar。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
+    video = tmp_path / "demo.mp4"
+    transcript_path = tmp_path / "demo.txt"
+    video.write_bytes(b"demo")
+    transcript_path.write_text("这是一段字幕", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(script), "transcript", str(video)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["available"] is True
+    assert output["text"] == "这是一段字幕"
 
 
 def test_builtin_github_repo_argument_parser_accepts_url() -> None:

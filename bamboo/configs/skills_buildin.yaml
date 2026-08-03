@@ -6,6 +6,12 @@ schema_version: 1
 skills:
   anysearch:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 4000
     variables:
       ANYSEARCH_API_KEY: "${ANYSEARCH_API_KEY}"
     requirements:
@@ -13,37 +19,85 @@ skills:
         - python3
       env:
         - ANYSEARCH_API_KEY
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   github-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
     variables:
       GITHUB_REACH_USER_AGENT: "Bamboo GitHub Reach/1"
     requirements:
       bins:
         - python3
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   paper-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
     variables:
       PAPER_REACH_USER_AGENT: "Bamboo Paper Reach/1"
     requirements:
       bins:
         - python3
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   douyin-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 5500
     variables:
       DOUYIN_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Douyin Reach/1"
       DOUYIN_REACH_REFERER: "https://www.douyin.com/"
+      DOUYIN_REACH_DOWNLOAD_DIR: "douyin-downloads"
+      DOUYIN_REACH_MAX_DOWNLOAD_MB: "200"
     requirements:
       bins:
         - python3
       env: []
+      optional_bins:
+        - ffmpeg
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   youtube-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
     variables:
       YOUTUBE_REACH_LANGUAGES: "en,zh-Hans,zh-Hant,zh-CN,zh-TW"
     requirements:
@@ -51,18 +105,40 @@ skills:
         - python3
         - yt-dlp
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   rss-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3000
     variables:
       RSS_REACH_USER_AGENT: "Bamboo RSS Reach/1"
     requirements:
       bins:
         - python3
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   bilibili-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
     variables:
       BILIBILI_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Bilibili Reach/1"
       BILIBILI_REACH_REFERER: "https://www.bilibili.com/"
@@ -70,9 +146,20 @@ skills:
       bins:
         - python3
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   xiaohongshu-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
     variables:
       XIAOHONGSHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Xiaohongshu Reach/1"
       XIAOHONGSHU_REACH_REFERER: "https://www.xiaohongshu.com/"
@@ -80,9 +167,20 @@ skills:
       bins:
         - python3
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   zhihu-reach:
     enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
     variables:
       ZHIHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Zhihu Reach/1"
       ZHIHU_REACH_REFERER: "https://www.zhihu.com/"
@@ -90,6 +188,11 @@ skills:
       bins:
         - python3
       env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
 
   systematic-debugging:
     enabled: true

@@ -41,7 +41,7 @@ Every Bamboo skill has a source directory and a runtime state directory:
 ```text
 ~/.bamboo/skills/<skill-name>/
 ├── SKILL.md           # Required: YAML frontmatter + Markdown body
-├── config.yaml        # Required: load policy, requirements, permissions
+├── config.yaml        # User-space skills only: load policy, requirements, permissions
 ├── scripts/           # Optional: executable helper scripts
 ├── references/        # Optional: detailed docs loaded on demand
 ├── assets/            # Optional: templates, examples, images, or generated assets
@@ -86,6 +86,12 @@ Do not use when...
 ```
 
 ## config.yaml Format
+
+User-created and installed skills keep their own `config.yaml`.
+
+Built-in skills do not keep `config.yaml` in each skill directory. Their
+configuration belongs in `bamboo/configs/skills_buildin.yaml` so registration,
+default variables, requirements, and permissions have one source of truth.
 
 ```yaml
 schema_version: 1
@@ -146,7 +152,8 @@ permissions:
 - Body explains the workflow clearly.
 - Long references are not pasted directly into `SKILL.md`.
 - Scripts, references, assets, and experiences are only added when they are useful.
-- `config.yaml` exists and names the same skill.
+- For user-space skills, `config.yaml` exists and names the same skill.
+- For built-in skills, configuration exists in `bamboo/configs/skills_buildin.yaml`.
 - Runtime state files exist under `~/.bamboo/storage/skills/<skill-name>/`.
 - The skill name matches the directory name.
 - The skill does not depend on Bamboo internals unless that dependency is documented.

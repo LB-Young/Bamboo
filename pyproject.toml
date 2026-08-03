@@ -83,7 +83,6 @@ bamboo = [
     "memory/templates/*/*.md",
     "subagents/buildin/*.yaml",
     "skills/buildin/*/SKILL.md",
-    "skills/buildin/*/config.yaml",
     "skills/buildin/*/scripts/*",
     "skills/buildin/*/experiences/*.md",
     "workflows/buildin/*/WORKFLOW.md",

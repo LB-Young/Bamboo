@@ -218,28 +218,24 @@ class SkillRegistry:
             return
 
     def _config_enabled(self, definition: SkillDefinition) -> bool:
-        source_path = Path(definition.source_path)
-        config_path = source_path / "config.yaml"
-        enabled = True
-        if not config_path.is_file():
-            data = {}
-        else:
-            try:
-                data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-            except yaml.YAMLError:
-                data = {}
-        if isinstance(data, dict):
-            local_enabled = data.get("enabled")
-            if isinstance(local_enabled, bool):
-                enabled = local_enabled
         if definition.source == "buildin":
             builtin_enabled = load_builtin_skill_config(
                 definition.name,
                 config_paths=self.builtin_config_paths,
             ).get("enabled")
-            if isinstance(builtin_enabled, bool):
-                enabled = builtin_enabled
-        return enabled
+            return builtin_enabled if isinstance(builtin_enabled, bool) else True
+
+        config_path = Path(definition.source_path) / "config.yaml"
+        if not config_path.is_file():
+            return True
+        try:
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            return True
+        if not isinstance(data, dict):
+            return True
+        enabled = data.get("enabled")
+        return enabled if isinstance(enabled, bool) else True
 
 
 def create_skill_registry() -> SkillRegistry:

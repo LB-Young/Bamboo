@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from bamboo.helpers.config import load_builtin_skill_config
 from bamboo.skills.models import SkillDefinition, SkillValidationResult
 from bamboo.skills.store import utc_now
 
@@ -76,10 +77,17 @@ class SkillValidator:
                         else:
                             checks["metadata.bamboo.tags"] = "ok"
 
-        config = self._read_config(config_path, errors, warnings)
-        checks["config_yaml"] = "ok" if config_path.is_file() else "warning"
-        if not config_path.is_file():
-            warnings.append("config.yaml is missing")
+        if definition.source == "buildin":
+            config = load_builtin_skill_config(definition.name)
+            checks["builtin_config"] = "ok" if config else "warning"
+            if not config:
+                warnings.append("built-in skill config is missing from skills_buildin.yaml")
+            checks["config_yaml"] = "centralized"
+        else:
+            config = self._read_config(config_path, errors, warnings)
+            checks["config_yaml"] = "ok" if config_path.is_file() else "warning"
+            if not config_path.is_file():
+                warnings.append("config.yaml is missing")
 
         requirement_checks = self._validate_requirements(config)
         checks["requirements"] = requirement_checks
