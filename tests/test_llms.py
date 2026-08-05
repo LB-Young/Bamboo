@@ -37,6 +37,7 @@ from bamboo.llms.providers import (
     ClaudeClient,
     DeepSeekClient,
     GPTClient,
+    HttpProviderClient,
     KimiClient,
     MimoClient,
     MiniMaxClient,
@@ -312,6 +313,51 @@ def test_kimi_client_respects_configured_extra_body() -> None:
         client = KimiClient(config, transport=httpx.MockTransport(handler))
         response = await client.complete(LLMRequest(messages=[LLMMessage(role="user", content="hello")]))
         assert response.content == "configured"
+
+    anyio.run(run_test)
+
+
+def test_http_provider_client_uses_deployed_proxy_request_shape() -> None:
+    """验证 http_provider 兼容 prod_check_agent 中 deployed proxy 的请求结构。"""
+    document = _model_document("http_provider")
+    document["models"]["test-model"]["model"] = "local_openai-gpt-5.2-chat"
+    document["models"]["test-model"]["base_url"] = "https://proxy.test/callLargeModelProxy"
+    document["models"]["test-model"]["max_tokens"] = 4096
+    document["models"]["test-model"]["temperature"] = 1.0
+    config = ModelCatalog.from_mapping(document).models["test-model"].resolve_environment()
+
+    async def run_test() -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            assert request.url == "https://proxy.test/callLargeModelProxy"
+            assert request.headers["content-type"] == "application/json"
+            assert payload["model"] == "openai-gpt-5.2-chat"
+            assert payload["timeout"] == 30
+            assert payload["request"]["max_completion_tokens"] == 4096
+            assert payload["request"]["temperature"] == 1.0
+            assert payload["request"]["messages"] == [
+                {"role": "system", "content": [{"type": "text", "text": "system prompt"}]},
+                {"role": "user", "content": [{"type": "text", "text": "hello"}]},
+            ]
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "errorCode": 1000000,
+                    "result": {
+                        "model": "openai-gpt-5.2-chat",
+                        "choices": [{"message": {"content": "proxy answer"}, "finish_reason": "stop"}],
+                    },
+                },
+            )
+
+        client = HttpProviderClient(config, transport=httpx.MockTransport(handler))
+        response = await client.complete(
+            LLMRequest(system_prompt="system prompt", messages=[LLMMessage(role="user", content="hello")])
+        )
+        assert response.content == "proxy answer"
+        assert response.model == "openai-gpt-5.2-chat"
+        assert response.provider == "http_provider"
 
     anyio.run(run_test)
 

@@ -14,6 +14,7 @@ from bamboo.llms.providers import (
     ClaudeClient,
     DeepSeekClient,
     GPTClient,
+    HttpProviderClient,
     KimiClient,
     MiniMaxClient,
     MimoClient,
@@ -35,6 +36,7 @@ class LLMFactory:
         self._providers: dict[str, ProviderBuilder] = {}
         self._clients: dict[str, LLMClient] = {}
         self.register_provider("gpt", GPTClient)
+        self.register_provider("http_provider", HttpProviderClient)
         self.register_provider("aliyun", AliyunClient)
         self.register_provider("deepseek", DeepSeekClient)
         self.register_provider("kimi", KimiClient)

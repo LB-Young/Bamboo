@@ -4,6 +4,7 @@ from bamboo.llms.providers.aliyun import AliyunClient
 from bamboo.llms.providers.claude import ClaudeClient
 from bamboo.llms.providers.deepseek import DeepSeekClient
 from bamboo.llms.providers.gpt import GPTClient
+from bamboo.llms.providers.http_provider import HttpProviderClient
 from bamboo.llms.providers.kimi import KimiClient
 from bamboo.llms.providers.minimax import MiniMaxClient
 from bamboo.llms.providers.mimo import MimoClient
@@ -16,6 +17,7 @@ __all__ = [
     "ClaudeClient",
     "DeepSeekClient",
     "GPTClient",
+    "HttpProviderClient",
     "KimiClient",
     "MiniMaxClient",
     "MimoClient",

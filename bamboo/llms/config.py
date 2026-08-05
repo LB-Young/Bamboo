@@ -24,6 +24,7 @@ SUPPORTED_PROVIDERS = frozenset(
         "openrouter",
         "flux",
         "generic_http",
+        "http_provider",
     }
 )
 SUPPORTED_MODEL_TYPES = frozenset({"text", "vision", "image_generation", "image_edit", "video_generation"})

@@ -144,7 +144,7 @@ The WeChat adapter uses iLink QR login and stores the token in `~/.wxbot/token.j
 
 ## Other Models
 
-Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `aliyun`, `openrouter`, `flux`, `generic_http`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set chat models to `model_type: text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
+Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `aliyun`, `openrouter`, `flux`, `generic_http`, `http_provider`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set chat models to `model_type: text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
 
 Aliyun Bailian / DashScope text models can be used as the main Bamboo model through the OpenAI-compatible endpoint:
 
@@ -162,6 +162,28 @@ models:
     max_tokens: 4096
     capabilities:
       tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+```
+
+For deployed HTTP proxy models that use the `prod_check_agent` request shape, register `http_provider`:
+
+```yaml
+models:
+  local-openai-gpt-5-2-chat:
+    provider: http_provider
+    model: local_openai-gpt-5.2-chat
+    model_type: text
+    prompt_profile: gpt
+    api_key: "sk-"
+    base_url: http://your-proxy/brush/api/pie/callLargeModelProxy
+    timeout: 60
+    temperature: 1.0
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: false
       json_schema: false
       vision: false
       max_parallel_tools: 1
