@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-
+import json
 import httpx
 
 from bamboo.llms.base import (
@@ -183,7 +183,7 @@ def _serialize_messages(request: LLMRequest) -> list[dict[str, Any]]:
                 {
                     "id": tool_call.id,
                     "type": "function",
-                    "function": {"name": tool_call.name, "arguments": tool_call.arguments},
+                    "function": {"name": tool_call.name, "arguments": json.dumps(tool_call.arguments)},
                 }
                 for tool_call in message.tool_calls
             ]
