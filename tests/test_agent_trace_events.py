@@ -1,4 +1,4 @@
-"""验证 Agent trace events、pattern 订阅和 LLM 脱敏事件。"""
+"""验证 Agent trace events、pattern 订阅和 LLM prompt trace。"""
 
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ def test_event_bus_pattern_subscription_matches_legacy_event_names() -> None:
     assert event_bus.count_subscribers("text-delta") == 0
 
 
-def test_agent_runtime_emits_redacted_llm_trace_events() -> None:
-    """验证主模型调用会发出脱敏 request/response trace，并建立 parent_event_id。"""
+def test_agent_runtime_emits_full_prompt_llm_trace_events() -> None:
+    """验证主模型调用会发出完整 prompt request trace，并建立 parent_event_id。"""
     event_bus = EventBus()
     events: list[object] = []
     event_bus.subscribe(events.append, patterns="llm.*")
@@ -63,15 +63,16 @@ def test_agent_runtime_emits_redacted_llm_trace_events() -> None:
     assert llm_request.provider == "deepseek"
     assert llm_request.message_count >= 1
     assert llm_request.input_chars > 0
-    assert "secret user content" not in str(llm_request.to_dict())
+    assert "secret user content" in llm_request.full_prompt
+    assert llm_request.messages[-1]["content"] == "secret user content"
     assert llm_response.parent_event_id == llm_request.event_id
     assert llm_response.success is True
     assert llm_response.output_chars == len("trace answer")
     assert "trace answer" not in str(llm_response.to_dict())
 
 
-def test_trace_recorder_persists_llm_events(tmp_path, monkeypatch) -> None:
-    """验证 TaskRuntime 的 events.jsonl 会包含 LLM 脱敏 trace。"""
+def test_trace_recorder_persists_llm_prompt_events(tmp_path, monkeypatch) -> None:
+    """验证 TaskRuntime 的 events.jsonl 会包含 LLM prompt trace。"""
     home_dir = tmp_path / "home"
     home_dir.mkdir()
     monkeypatch.setenv("HOME", str(home_dir))
@@ -100,7 +101,7 @@ def test_trace_recorder_persists_llm_events(tmp_path, monkeypatch) -> None:
     llm_lines = [line for line in lines if "llm-request" in line or "llm-response" in line]
     assert any("llm-request" in line for line in llm_lines)
     assert any("llm-response" in line for line in llm_lines)
-    assert all("persist secret" not in line for line in llm_lines)
+    assert any("persist secret" in line for line in llm_lines)
 
 
 def _model_document() -> dict:

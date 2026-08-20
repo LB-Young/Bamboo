@@ -21,7 +21,7 @@ from bamboo.adapters.app_fancy.main import (
     _untracked_file_diff,
 )
 from bamboo.factory.task_factory import TaskFactory
-from bamboo.helpers.constant import ReasoningDeltaEvent, SessionCompactEvent, SessionMode, ToolResultEvent
+from bamboo.helpers.constant import LLMRequestEvent, ReasoningDeltaEvent, SessionCompactEvent, SessionMode, ToolResultEvent
 from bamboo.helpers.requests_params import RunParams
 from bamboo.run import app
 
@@ -185,6 +185,26 @@ def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
         "output": "摘要输出",
         "truncated": True,
     }
+
+
+def test_app_event_payload_includes_llm_full_prompt() -> None:
+    payload = _event_payload(
+        LLMRequestEvent(
+            session_id="session-1",
+            task_id="task-1",
+            model_name="model-a",
+            provider="provider-a",
+            input_chars=42,
+            system_prompt="system",
+            messages=[{"role": "user", "content": "hello"}],
+            full_prompt="# System Prompt\n\nsystem\n\n# Messages\n\nhello",
+        )
+    )
+
+    assert payload["type"] == "llm_request"
+    assert payload["model_name"] == "model-a"
+    assert payload["full_prompt"].startswith("# System Prompt")
+    assert payload["messages"] == [{"role": "user", "content": "hello"}]
 
 
 def test_app_bridge_opens_only_external_web_links(monkeypatch) -> None:

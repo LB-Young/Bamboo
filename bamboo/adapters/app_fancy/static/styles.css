@@ -675,6 +675,14 @@ textarea {
   gap: 8px;
 }
 
+.session-item.running {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.session-item.running small {
+  color: var(--accent);
+}
+
 .session-item span,
 .change-row span,
 .source-row {
@@ -1267,6 +1275,19 @@ textarea {
   padding: 11px;
   color: var(--canvas-text);
   white-space: pre-wrap;
+}
+
+.log-section-title {
+  display: block;
+  border-top: 1px solid var(--line);
+  padding: 10px 11px 0;
+  color: var(--text);
+}
+
+.log-row pre.log-prompt {
+  max-height: 520px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
 }
 
 .event-row summary {

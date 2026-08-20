@@ -11,11 +11,14 @@ import platform
 import subprocess
 import threading
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from bamboo.adapters.app.main import AppDependencyError, BambooAppBridge, _parse_numstat
+from bamboo.adapters.app.main import APP_EVENT_PATTERNS, AppDependencyError, BambooAppBridge, _parse_numstat
 from bamboo.adapters.cli.commands import expand_command_message
+from bamboo.adapters.web.session_utils import load_session as load_session_record
+from bamboo.adapters.web.session_utils import serialize_messages
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import LLMResponseEvent, SessionCompactEvent, SessionMode
 from bamboo.helpers.logging import setup_logging
@@ -27,6 +30,17 @@ from bamboo.runtime.context_compactor import HeuristicTokenCounter
 STATIC_DIR = Path(__file__).parent / "static"
 ASSET_DIR = STATIC_DIR / "assets"
 WINDOWS_APP_USER_MODEL_ID = "YoungL.Bamboo.AppFancy"
+
+
+@dataclass(slots=True)
+class SessionRunHandle:
+    """Track one running app-fancy session turn."""
+
+    project: Path
+    mode: SessionMode
+    loop: asyncio.AbstractEventLoop | None = None
+    task: asyncio.Task[Task] | None = None
+    stop_requested: bool = False
 
 
 def _app_icon_path() -> Path:
@@ -105,6 +119,13 @@ class BambooFancyAppBridge(BambooAppBridge):
         self.worker_task: asyncio.Task[Task] | None = None
         self.worker_lock = threading.Lock()
         self.stop_requested = False
+        self.session_tasks: dict[str, Task] = {}
+        self.running_sessions: dict[str, SessionRunHandle] = {}
+        self.unsubscribe()
+        self.unsubscribe = self.event_bus.subscribe(
+            self._handle_event,
+            patterns=APP_EVENT_PATTERNS,
+        )
         self.llm_unsubscribe = self.event_bus.subscribe(
             self._handle_llm_event,
             event_types={"llm-response", "session-compact"},
@@ -119,18 +140,69 @@ class BambooFancyAppBridge(BambooAppBridge):
         return state
 
     def new_session(self, project_path: str = "") -> dict[str, Any]:
-        result = super().new_session(project_path)
-        result["context"] = self.get_context_usage()
-        result["models"] = self.get_model_selector_state()
-        result["permission_state"] = self.get_permission_state()
+        project, mode = self._resolve_scope(project_path)
+        self.session_id = str(uuid.uuid4())
+        self.active_project = project
+        self.active_session_mode = mode
+        self.current_task = None
+        result = {
+            "ok": True,
+            "session_id": self.session_id,
+            "mode": mode.value,
+            "project_path": "" if mode == SessionMode.chat else str(project),
+            "sessions": self.list_sessions(project_path),
+            "changes": self.get_changes(project_path),
+            "context": self.get_context_usage(),
+            "models": self.get_model_selector_state(),
+            "permission_state": self.get_permission_state(),
+        }
         return result
 
     def load_session(self, record_dir: str) -> dict[str, Any]:
-        result = super().load_session(record_dir)
-        result["context"] = self.get_context_usage()
-        result["models"] = self.get_model_selector_state()
-        result["permission_state"] = self.get_permission_state()
-        return result
+        session = load_session_record(Path(record_dir).expanduser())
+        mode = SessionMode.project if session.context.metadata.get("prompt_mode") == "project" else SessionMode.chat
+        project = session.context.project_root.expanduser().resolve(strict=False)
+        self.session_id = session.session_id
+        self.active_project = project
+        self.active_session_mode = mode
+        model_name = self.model or session.model or self._configured_default_model_name()
+        config = self.runtime.llm_factory.get_model_config(model_name)
+        run_params = RunParams(
+            platform="app",
+            message="",
+            project=str(project),
+            model=model_name,
+            provider=self.provider or session.provider or config.provider,
+            permission=self.permission,
+            session_mode=mode,
+            task_id=str(uuid.uuid4()),
+            session_id=session.session_id,
+        )
+        task = Task(
+            platform="app",
+            session_id=session.session_id,
+            task_id=run_params.task_id,
+            user_query="",
+            session=session,
+            config=self.runtime.task_factory.config,
+            run_params=run_params,
+            memory_dir=session.context.memory_dir,
+            status="completed",
+        )
+        self.current_task = task
+        self.session_tasks[session.session_id] = task
+        return {
+            "ok": True,
+            "session_id": session.session_id,
+            "mode": mode.value,
+            "project_path": "" if mode == SessionMode.chat else str(project),
+            "messages": serialize_messages(session),
+            "changes": self.get_changes(str(project) if mode == SessionMode.project else ""),
+            "context": self.get_context_usage(),
+            "models": self.get_model_selector_state(),
+            "permission_state": self.get_permission_state(),
+            "running": session.session_id in self.running_sessions,
+        }
 
     def get_model_selector_state(self) -> dict[str, Any]:
         """Return available model registrations and the model selected for new turns."""
@@ -175,8 +247,8 @@ class BambooFancyAppBridge(BambooAppBridge):
         message = (message or "").strip()
         if not message and not image_paths:
             return {"ok": False, "error": "message is empty"}
-        if self.running:
-            return {"ok": False, "error": "task is running"}
+        if self.session_id in self.running_sessions:
+            return {"ok": False, "error": "this session is already running"}
         selected_model = self._resolve_requested_model(model_name)
         if selected_model is None:
             return {"ok": False, "error": f"Model is not configured: {model_name}"}
@@ -187,6 +259,8 @@ class BambooFancyAppBridge(BambooAppBridge):
         if self._scope_changed(project, mode):
             self.session_id = str(uuid.uuid4())
             self.current_task = None
+        session_id = self.session_id
+        self.current_task = self.session_tasks.get(session_id)
         self.model = selected_model
         self.provider = self.runtime.llm_factory.get_model_config(selected_model).provider
         self.active_project = project
@@ -200,21 +274,37 @@ class BambooFancyAppBridge(BambooAppBridge):
             images_from_text(message),
         )
         self._apply_selected_model_to_current_session(selected_model, project, mode)
-        self.running = True
+        handle = SessionRunHandle(project=project, mode=mode)
+        self.running_sessions[session_id] = handle
+        self.running = bool(self.running_sessions)
         self._emit_ui(
             {
                 "type": "run_start",
-                "session_id": self.session_id,
+                "session_id": session_id,
                 "mode": mode.value,
                 "project_path": "" if mode == SessionMode.chat else str(project),
                 "message": message,
                 "model": selected_model,
             }
         )
-        threading.Thread(target=self._run_message, args=(message, images, project, mode), daemon=True).start()
+        threading.Thread(
+            target=self._run_message,
+            args=(
+                session_id,
+                message,
+                images,
+                project,
+                mode,
+                selected_model,
+                self.provider,
+                self.permission,
+                self.yes_all,
+            ),
+            daemon=True,
+        ).start()
         return {
             "ok": True,
-            "session_id": self.session_id,
+            "session_id": session_id,
             "model": selected_model,
             "permission_state": self.get_permission_state(),
         }
@@ -273,76 +363,95 @@ class BambooFancyAppBridge(BambooAppBridge):
 
     def stop_current_task(self) -> dict[str, Any]:
         """Request cancellation of the currently running desktop task."""
-        if not self.running:
+        handle = self.running_sessions.get(self.session_id)
+        if handle is None:
             return {"ok": False, "error": "no task is running"}
+        handle.stop_requested = True
         self.stop_requested = True
         for pending in list(self.pending_permissions.values()):
             pending.decision = "deny"
             pending.event.set()
         with self.worker_lock:
-            loop = self.worker_loop
-            task = self.worker_task
+            loop = handle.loop
+            task = handle.task
         if loop is not None and task is not None and not task.done():
             loop.call_soon_threadsafe(task.cancel)
-        self._emit_ui({"type": "cancelled", "message": "cancelled by user"})
+        self._emit_ui({"type": "cancelled", "session_id": self.session_id, "message": "cancelled by user"})
         return {"ok": True, "status": "cancelling"}
 
-    def _run_message(self, message: str, images: list[Any], project: Path, mode: SessionMode) -> None:
+    def _run_message(
+        self,
+        session_id: str,
+        message: str,
+        images: list[Any],
+        project: Path,
+        mode: SessionMode,
+        model: str,
+        provider: str,
+        permission: str,
+        yes_all: bool,
+    ) -> None:
         async def run_turn() -> Task:
-            if self.current_task is None:
+            previous_task = self.session_tasks.get(session_id)
+            if previous_task is None:
                 params = RunParams(
                     platform="app",
                     message=message,
                     images=images,
                     project=str(project),
-                    model=self.model,
-                    provider=self.provider,
-                    permission=self.permission,
-                    yes_all=self.yes_all,
+                    model=model,
+                    provider=provider,
+                    permission=permission,
+                    yes_all=yes_all,
                     session_mode=mode,
                     task_id=str(uuid.uuid4()),
-                    session_id=self.session_id,
+                    session_id=session_id,
                 )
                 task = self.runtime.create_task(params)
             else:
-                self.current_task.run_params.permission = self.permission
-                self.current_task.run_params.yes_all = self.yes_all
-                task = self.runtime.create_followup_task(self.current_task, message, images=images)
+                previous_task.run_params.permission = permission
+                previous_task.run_params.yes_all = yes_all
+                task = self.runtime.create_followup_task(previous_task, message, images=images)
             return await self.runtime.run_existing_task(task)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         task = loop.create_task(run_turn())
         with self.worker_lock:
-            self.worker_loop = loop
-            self.worker_task = task
-            if self.stop_requested:
+            handle = self.running_sessions.get(session_id)
+            if handle is not None:
+                handle.loop = loop
+                handle.task = task
+            if handle is not None and handle.stop_requested:
                 loop.call_soon(task.cancel)
         try:
-            self.current_task = loop.run_until_complete(task)
+            completed_task = loop.run_until_complete(task)
+            self.session_tasks[session_id] = completed_task
+            if self.session_id == session_id:
+                self.current_task = completed_task
         except asyncio.CancelledError:
-            self._emit_ui({"type": "cancelled", "message": "cancelled by user"})
+            self._emit_ui({"type": "cancelled", "session_id": session_id, "message": "cancelled by user"})
         except Exception as exc:  # pragma: no cover - surfaced in desktop UI
-            if not self.stop_requested:
-                self._emit_ui({"type": "error", "error": str(exc)})
+            handle = self.running_sessions.get(session_id)
+            if handle is None or not handle.stop_requested:
+                self._emit_ui({"type": "error", "session_id": session_id, "error": str(exc)})
         finally:
-            with self.worker_lock:
-                self.worker_loop = None
-                self.worker_task = None
             loop.close()
-            self.running = False
-            stopped = self.stop_requested
-            self.stop_requested = False
+            handle = self.running_sessions.pop(session_id, None)
+            stopped = bool(handle.stop_requested) if handle is not None else False
+            self.running = bool(self.running_sessions)
+            self.stop_requested = any(item.stop_requested for item in self.running_sessions.values())
             self._emit_ui(
                 {
                     "type": "run_finish",
-                    "session_id": self.session_id,
+                    "session_id": session_id,
                     "cancelled": stopped,
-                    "sessions": self.list_sessions("" if self.active_session_mode == SessionMode.chat else str(self.active_project)),
-                    "changes": self.get_changes("" if self.active_session_mode == SessionMode.chat else str(self.active_project)),
+                    "sessions": self.list_sessions("" if mode == SessionMode.chat else str(project)),
+                    "changes": self.get_changes("" if mode == SessionMode.chat else str(project)),
                 }
             )
-            self._emit_ui({"type": "context_usage", "context": self.get_context_usage()})
+            if self.session_id == session_id:
+                self._emit_ui({"type": "context_usage", "session_id": session_id, "context": self.get_context_usage()})
 
     def _context_window(self) -> int:
         if self.current_task is None:

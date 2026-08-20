@@ -536,6 +536,13 @@ def _load_record_metadata(record_dir: Path) -> SessionRecord | None:
 
 def _session_metadata(record_dir: Path, meta: dict[str, Any]) -> dict[str, Any]:
     metadata = dict(meta.get("metadata") or {})
+    if not metadata.get("platform"):
+        for payload in _read_jsonl(record_dir / "tasks.jsonl"):
+            platform = str(payload.get("platform") or "").strip()
+            if platform:
+                metadata["platform"] = platform
+                metadata["inferred_platform"] = "true"
+                break
     if metadata.get("subagent_name"):
         return metadata
     for payload in _read_jsonl(record_dir / "messages.jsonl"):

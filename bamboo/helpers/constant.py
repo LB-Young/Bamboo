@@ -94,6 +94,9 @@ class LLMRequestEvent(BaseEvent):
     tool_count: int = 0
     system_prompt_chars: int = 0
     input_chars: int = 0
+    system_prompt: str = ""
+    messages: list[dict[str, Any]] = field(default_factory=list)
+    full_prompt: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -106,6 +109,9 @@ class LLMRequestEvent(BaseEvent):
             "tool_count": self.tool_count,
             "system_prompt_chars": self.system_prompt_chars,
             "input_chars": self.input_chars,
+            "system_prompt": self.system_prompt,
+            "messages": self.messages,
+            "full_prompt": self.full_prompt,
         }
 
 

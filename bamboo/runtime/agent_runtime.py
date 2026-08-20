@@ -80,6 +80,61 @@ class AgentRuntimeError(RuntimeError):
     """表示 Agent 已耗尽恢复预算。"""
 
 
+def _serialize_llm_messages_for_trace(request: LLMRequest) -> list[dict[str, Any]]:
+    """Serialize the exact LLM messages used for a provider request."""
+    rows: list[dict[str, Any]] = []
+    for index, message in enumerate(request.messages):
+        rows.append(
+            {
+                "index": index,
+                "role": message.role,
+                "content": message.content,
+                "images": [
+                    {"source": image.source, "media_type": image.media_type, "detail": image.detail}
+                    for image in message.images
+                ],
+                "tool_calls": [
+                    {"id": tool_call.id, "name": tool_call.name, "arguments": dict(tool_call.arguments)}
+                    for tool_call in message.tool_calls
+                ],
+                "tool_call_id": message.tool_call_id,
+                "tool_name": message.tool_name,
+            }
+        )
+    return rows
+
+
+def _render_llm_request_for_trace(request: LLMRequest) -> str:
+    """Render the full prompt sent to an LLM in a log-friendly format."""
+    sections = ["# System Prompt", request.system_prompt or "(empty)", "# Messages"]
+    if not request.messages:
+        sections.append("(none)")
+    for index, message in enumerate(request.messages, start=1):
+        chunks = [f"## Message {index} · {message.role}", message.content or ""]
+        if message.images:
+            chunks.append(
+                "Images:\n"
+                + "\n".join(
+                    f"- {image.source} media_type={image.media_type or 'auto'} detail={image.detail}"
+                    for image in message.images
+                )
+            )
+        if message.tool_calls:
+            chunks.append(
+                "Tool Calls:\n"
+                + "\n".join(
+                    f"- {tool_call.name}({tool_call.arguments}) id={tool_call.id}"
+                    for tool_call in message.tool_calls
+                )
+            )
+        if message.tool_call_id:
+            chunks.append(f"tool_call_id: {message.tool_call_id}")
+        sections.append("\n\n".join(chunks).strip())
+    if request.tools:
+        sections.extend(["# Tools", "\n".join(f"- {tool.get('name', '')}" for tool in request.tools)])
+    return "\n\n".join(sections)
+
+
 class AgentRuntime:
     """运行 OTA 循环，并在可恢复错误后继续。"""
 
@@ -223,6 +278,9 @@ class AgentRuntime:
             tool_count=len(request.tools),
             system_prompt_chars=len(request.system_prompt),
             input_chars=len(request.system_prompt) + sum(len(message.content) for message in request.messages),
+            system_prompt=request.system_prompt,
+            messages=_serialize_llm_messages_for_trace(request),
+            full_prompt=_render_llm_request_for_trace(request),
         )
         await self.event_bus.emit(request_event)
         try:

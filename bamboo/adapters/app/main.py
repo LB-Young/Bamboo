@@ -24,6 +24,8 @@ from bamboo.adapters.web.session_utils import list_sessions, load_session, seria
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
+    LLMRequestEvent,
+    LLMResponseEvent,
     PermissionRequestEvent,
     PermissionResultEvent,
     ReasoningDeltaEvent,
@@ -53,6 +55,7 @@ from bamboo.security.permission_resolver import permission_request_id
 STATIC_DIR = Path(__file__).parent / "static"
 
 APP_EVENT_PATTERNS = {
+    "llm.*",
     "task.*",
     "session.*",
     "step.*",
@@ -409,6 +412,11 @@ class BambooAppBridge:
     def _handle_event(self, event: BaseEvent) -> None:
         payload = _event_payload(event)
         if payload:
+            payload.setdefault("session_id", event.session_id)
+            payload.setdefault("task_id", event.task_id)
+            payload.setdefault("event_id", event.event_id)
+            payload.setdefault("parent_event_id", event.parent_event_id)
+            payload.setdefault("timestamp", event.timestamp)
             self._emit_ui(payload)
 
     def _emit_ui(self, payload: dict[str, Any]) -> None:
@@ -431,6 +439,36 @@ class BambooAppBridge:
 
 
 def _event_payload(event: BaseEvent) -> dict[str, Any]:
+    if isinstance(event, LLMRequestEvent):
+        return {
+            "type": "llm_request",
+            "role": event.role,
+            "model_name": event.model_name,
+            "provider": event.provider,
+            "prompt_profile": event.prompt_profile,
+            "message_count": event.message_count,
+            "tool_count": event.tool_count,
+            "system_prompt_chars": event.system_prompt_chars,
+            "input_chars": event.input_chars,
+            "system_prompt": event.system_prompt,
+            "messages": event.messages,
+            "full_prompt": event.full_prompt,
+        }
+    if isinstance(event, LLMResponseEvent):
+        return {
+            "type": "llm_response",
+            "role": event.role,
+            "model_name": event.model_name,
+            "provider": event.provider,
+            "response_model": event.response_model,
+            "finish_reason": event.finish_reason,
+            "output_chars": event.output_chars,
+            "tool_call_count": event.tool_call_count,
+            "usage": event.usage,
+            "success": event.success,
+            "error_type": event.error_type,
+            "error": event.error,
+        }
     if isinstance(event, TaskCreateEvent):
         return {"type": "task_create", "task_id": event.task_id, "title": event.title}
     if isinstance(event, TaskStatusChangeEvent):

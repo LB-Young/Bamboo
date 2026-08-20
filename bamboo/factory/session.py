@@ -181,7 +181,7 @@ class SessionFactory:
             project_root=project_root,
             memory_dir=memory_dir_path,
             system_prompt=system_prompt,
-            metadata={"prompt_mode": prompt_mode},
+            metadata={"prompt_mode": prompt_mode, "platform": run_params.platform},
         )
         record_dir = self._resolve_record_dir(
             memory_dir_path=memory_dir_path,

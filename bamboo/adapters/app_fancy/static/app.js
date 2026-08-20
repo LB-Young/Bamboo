@@ -15,6 +15,8 @@ const state = {
   models: { selected: "", configured: "", options: [] },
   activeView: "chat",
   logs: [],
+  runningSessions: new Set(),
+  pendingPermissions: new Map(),
   stopRequested: false,
   theme: localStorage.getItem("bamboo.app.theme") || "dark",
   permissionMode: localStorage.getItem("bamboo.app.permissionMode") || "default",
@@ -102,6 +104,7 @@ async function init() {
   renderModels(data.models || {});
   renderPermissionState(data.permission_state || {}, { preferStored: true });
   newSessionView();
+  updateActiveRunStatus();
   setStatus("idle");
   if (data.initial_message || (data.initial_image_paths || []).length) {
     els.messageInput.value = [data.initial_message || "", ...(data.initial_image_paths || [])].filter(Boolean).join("\n");
@@ -228,15 +231,24 @@ function renderSessions(sessions) {
     item.type = "button";
     item.className = "session-item";
     item.classList.toggle("active", session.session_id === state.currentSessionId);
+    item.classList.toggle("running", state.runningSessions.has(session.session_id));
     item.addEventListener("click", () => loadSession(session));
-    item.innerHTML = `<span>${escapeHtml(session.label || session.session_id)}</span><small>${escapeHtml(formatTime(session.updated_at || session.created_at))}</small>`;
+    const running = state.runningSessions.has(session.session_id) ? " · running" : "";
+    item.innerHTML = `<span>${escapeHtml(session.label || session.session_id)}</span><small>${escapeHtml(formatTime(session.updated_at || session.created_at))}${running}</small>`;
     els.sessionList.appendChild(item);
   }
 }
 
 function filterSessions(sessions) {
   if (state.sessionFilter === "all") return sessions || [];
-  return (sessions || []).filter((session) => !isSubagentSession(session));
+  return (sessions || []).filter((session) => isUserAppSession(session));
+}
+
+function isUserAppSession(session) {
+  if (isSubagentSession(session)) return false;
+  const metadata = session?.metadata || {};
+  const platform = String(metadata.platform || "").toLowerCase();
+  return platform === "app";
 }
 
 function isSubagentSession(session) {
@@ -271,6 +283,10 @@ async function loadSession(session) {
   renderContext(data.context || {});
   renderModels(data.models || {});
   renderPermissionState(data.permission_state || {});
+  if (data.running) state.runningSessions.add(state.currentSessionId);
+  updateActiveRunStatus();
+  renderLogs();
+  renderActivePermission();
 }
 
 async function newSession() {
@@ -285,6 +301,9 @@ async function newSession() {
   renderModels(data.models || {});
   renderPermissionState(data.permission_state || {});
   newSessionView();
+  updateActiveRunStatus();
+  renderLogs();
+  renderActivePermission();
 }
 
 function newSessionView() {
@@ -323,14 +342,22 @@ async function sendMessage() {
     showSystem(result.error || "Send failed", "error");
     setStatus("idle");
   } else if (result.model) {
+    if (result.session_id) state.runningSessions.add(result.session_id);
     setSelectedModel(result.model);
     if (result.permission_state) renderPermissionState(result.permission_state);
+    updateActiveRunStatus();
   }
 }
 
 function handleEvent(event) {
   addLog(event);
+  const current = isCurrentSessionEvent(event);
   if (event.type === "run_start") {
+    if (event.session_id) state.runningSessions.add(event.session_id);
+    if (!current) {
+      renderSessions(state.sessions);
+      return;
+    }
     state.currentSessionId = event.session_id;
     if (event.model) setSelectedModel(event.model);
     state.startedAt = Date.now();
@@ -344,6 +371,11 @@ function handleEvent(event) {
     return;
   }
   if (event.type === "run_finish") {
+    if (event.session_id) state.runningSessions.delete(event.session_id);
+    if (!current) {
+      renderSessions(event.sessions || state.sessions);
+      return;
+    }
     const cancelled = Boolean(event.cancelled || state.stopRequested);
     setStatus("idle");
     state.stopRequested = false;
@@ -355,6 +387,23 @@ function handleEvent(event) {
     updateRunStage("review", cancelled ? "idle" : ((event.changes?.files || []).length ? "active" : "done"), cancelled ? "Cancelled by user" : ((event.changes?.files || []).length ? "Review changes" : "No changes"));
     return;
   }
+  if (event.type === "permission_request") {
+    if (event.session_id) state.pendingPermissions.set(event.session_id, event);
+    if (current) {
+      updateRunStage("review", "active", `Permission: ${event.name}`);
+      showPermission(event);
+    }
+    return;
+  }
+  if (event.type === "permission_result") {
+    if (event.session_id) state.pendingPermissions.delete(event.session_id);
+    if (current) {
+      updateRunStage("review", event.approved ? "done" : "error", event.approved ? "Approved" : "Rejected");
+      closePermission();
+    }
+    return;
+  }
+  if (!current) return;
   if (event.type === "cancelled") {
     state.stopRequested = true;
     setStatus("running", "Stopping");
@@ -415,15 +464,11 @@ function handleEvent(event) {
     updateRunStage("executing", "error", `Tool failed: ${event.name}`);
     return showToolError(event);
   }
-  if (event.type === "permission_request") {
-    updateRunStage("review", "active", `Permission: ${event.name}`);
-    return showPermission(event);
-  }
-  if (event.type === "permission_result") {
-    updateRunStage("review", event.approved ? "done" : "error", event.approved ? "Approved" : "Rejected");
-    return closePermission();
-  }
   if (event.type === "context_usage") return renderContext(event.context || {});
+}
+
+function isCurrentSessionEvent(event) {
+  return !event.session_id || event.session_id === state.currentSessionId;
 }
 
 function appendMessage(role, text) {
@@ -820,6 +865,16 @@ function closePermission() {
   els.permissionDock.innerHTML = "";
 }
 
+function renderActivePermission() {
+  const pending = state.pendingPermissions.get(state.currentSessionId);
+  if (pending) {
+    updateRunStage("review", "active", `Permission: ${pending.name}`);
+    showPermission(pending);
+  } else {
+    closePermission();
+  }
+}
+
 function renderChanges(changes) {
   const files = changes.files || [];
   els.changeSummary.textContent = `+${changes.additions || 0} -${changes.deletions || 0}`;
@@ -1109,6 +1164,20 @@ function setStatus(status, text = "") {
   els.stopButton.disabled = !busy || state.stopRequested;
 }
 
+function updateActiveRunStatus() {
+  const activeRunning = state.currentSessionId && state.runningSessions.has(state.currentSessionId);
+  if (activeRunning) {
+    setStatus("running", "Executing");
+    if (!state.startedAt) {
+      els.runTimer.textContent = "Running";
+    }
+  } else {
+    setStatus("idle");
+    stopTimer();
+  }
+  renderSessions(state.sessions);
+}
+
 function startTimer() {
   stopTimer();
   state.timer = setInterval(() => {
@@ -1208,19 +1277,45 @@ function addLog(event) {
 
 function renderLogs() {
   els.logList.innerHTML = "";
-  for (const item of state.logs.slice().reverse()) {
+  const visibleLogs = state.logs.filter((item) => !item.payload.session_id || item.payload.session_id === state.currentSessionId);
+  if (!visibleLogs.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "No logs for this session";
+    els.logList.appendChild(empty);
+    return;
+  }
+  for (const item of visibleLogs.slice().reverse()) {
     const details = document.createElement("details");
     details.className = "log-row";
     const summary = document.createElement("summary");
     summary.innerHTML = `<time>${escapeHtml(item.time)}</time><strong>${escapeHtml(item.type)}</strong><span>${escapeHtml(item.summary)}</span>`;
+    details.appendChild(summary);
+    if (item.type === "llm_request" && item.payload.full_prompt) {
+      const promptTitle = document.createElement("strong");
+      promptTitle.className = "log-section-title";
+      promptTitle.textContent = "Full prompt";
+      const prompt = document.createElement("pre");
+      prompt.className = "log-prompt";
+      prompt.textContent = item.payload.full_prompt || "";
+      details.append(promptTitle, prompt);
+    }
     const pre = document.createElement("pre");
     pre.textContent = JSON.stringify(item.payload, null, 2);
-    details.append(summary, pre);
+    details.appendChild(pre);
     els.logList.appendChild(details);
   }
 }
 
 function logSummary(event) {
+  if (event.type === "llm_request") {
+    return `${event.role || "main"} · ${event.model_name || event.provider || "model"} · ${event.input_chars || 0} chars`;
+  }
+  if (event.type === "llm_response") {
+    return event.success === false
+      ? `${event.role || "main"} failed · ${event.error_type || "error"}`
+      : `${event.role || "main"} done · ${event.output_chars || 0} chars`;
+  }
   if (event.type === "tool_call") return `${event.name || "tool"} started`;
   if (event.type === "tool_result") return `${event.name || "tool"} success`;
   if (event.type === "tool_error") return `${event.name || "tool"} error`;
