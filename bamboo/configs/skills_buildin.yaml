@@ -208,3 +208,5 @@ skills:
     enabled: true
   skill-creator:
     enabled: true
+  steelman-argument:
+    enabled: true

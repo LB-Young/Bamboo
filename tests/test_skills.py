@@ -128,6 +128,23 @@ def test_skill_registry_honors_builtin_central_disabled_config(tmp_path: Path) -
     assert state.status == "disabled"
 
 
+def test_builtin_steelman_argument_skill_is_registered(tmp_path: Path) -> None:
+    """验证双向钢人论证已作为内置 Skill 注册。"""
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    registry = SkillRegistry(
+        skill_dirs=[("buildin", PACKAGE_BUILTIN_SKILLS_DIR)],
+        store=store,
+    )
+    registry.refresh()
+
+    definition = registry.get("steelman-argument")
+
+    assert definition is not None
+    assert "steel-man" in definition.description
+    assert definition.user_invocable is True
+    assert "双向钢人论证" in registry.load_skill_content("steelman-argument")
+
+
 def test_skill_registry_tolerates_corrupt_state_file(tmp_path: Path) -> None:
     """验证损坏的 state.json 不会阻断 Bamboo 启动。"""
     skills_dir = tmp_path / "skills"
