@@ -456,6 +456,7 @@ def load_session_record(record_dir: Path):
         memory_store=store,
     )
     session.messages = _load_messages(record_dir / "messages.jsonl")
+    _apply_compaction_state(session.messages, _read_jsonl(record_dir / "compactions.jsonl"))
     return session
 
 
@@ -597,6 +598,25 @@ def _load_messages(path: Path):
             )
         )
     return messages
+
+
+def _apply_compaction_state(messages: list[Any], compactions: list[dict[str, Any]]) -> None:
+    """Restore active prompt flags from append-only compaction records."""
+    if not compactions:
+        return
+    by_id = {getattr(message, "message_id", ""): message for message in messages if getattr(message, "message_id", "")}
+    for compaction in compactions:
+        for message_id in compaction.get("before_message_ids") or []:
+            message = by_id.get(str(message_id))
+            if message is None:
+                continue
+            message.active_for_prompt = False
+            message.compressed = True
+        summary_id = str(compaction.get("summary_message_id") or "")
+        summary = by_id.get(summary_id)
+        if summary is not None:
+            summary.active_for_prompt = True
+            summary.compressed = False
 
 
 def _restore_images(raw_images: Any, llm_image_type: Any) -> list[Any]:

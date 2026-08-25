@@ -369,7 +369,7 @@ textarea {
 .inspector {
   border-left: 1px solid var(--line);
   display: grid;
-  grid-template-rows: auto minmax(160px, 1fr) minmax(130px, 0.65fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -418,6 +418,12 @@ textarea {
   gap: 8px;
 }
 
+.knowledge-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .session-filter {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -442,11 +448,34 @@ textarea {
   color: var(--text);
 }
 
+.knowledge-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 118px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.knowledge-toggle button {
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: none;
+}
+
+.knowledge-toggle button.selected {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
 .new-chat,
 .agent-card,
 .session-item,
-.change-row,
-.source-row,
 .folded {
   width: 100%;
   border: 1px solid var(--line);
@@ -641,29 +670,28 @@ textarea {
 }
 
 .session-list,
-.change-list,
-#sourceList {
+.knowledge-list {
   display: grid;
   gap: 7px;
   margin-top: 10px;
 }
 
-.changes-panel,
-.sources-panel {
+.knowledge-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.change-list,
-#sourceList {
+.knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 2px;
 }
 
 .session-item,
-.change-row,
-.source-row,
 .folded {
   padding: 9px 10px;
   text-align: left;
@@ -683,9 +711,16 @@ textarea {
   color: var(--accent);
 }
 
-.session-item span,
-.change-row span,
-.source-row {
+.session-item.needs-permission {
+  background: color-mix(in srgb, #f5c451 12%, var(--panel));
+  border-color: color-mix(in srgb, #f5c451 70%, var(--line));
+}
+
+.session-item.needs-permission small {
+  color: #f5c451;
+}
+
+.session-item span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -693,8 +728,6 @@ textarea {
 
 .session-item.active,
 .session-item:hover,
-.change-row:hover,
-.source-row:hover,
 .folded:hover {
   border-color: rgba(99, 217, 164, 0.45);
   background: var(--panel-strong);
@@ -1644,39 +1677,81 @@ textarea {
   justify-content: space-between;
 }
 
-.change-summary {
+.knowledge-summary {
   color: var(--muted);
   font-weight: 600;
 }
 
-.source-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+.knowledge-file {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+  overflow: hidden;
 }
 
-.change-row {
+.knowledge-file-head {
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-file-head[aria-expanded="false"] {
+  border-bottom: 0;
+}
+
+.knowledge-file.collapsed > .knowledge-file-body {
+  display: none !important;
+}
+
+.knowledge-file ul {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 74px;
-  align-items: center;
-  gap: 10px;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  list-style: none;
 }
 
-.change-row code {
-  min-width: 0;
+.knowledge-file li {
+  display: grid;
+  gap: 4px;
+}
+
+.knowledge-file small {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.knowledge-file p {
+  margin: 0;
   color: var(--muted);
-  overflow: hidden;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.change-row span,
-.source-row span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.knowledge-full-content {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1180px) {

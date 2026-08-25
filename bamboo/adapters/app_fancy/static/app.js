@@ -17,12 +17,19 @@ const state = {
   logs: [],
   runningSessions: new Set(),
   pendingPermissions: new Map(),
+  knowledgeUpdates: new Map(),
+  pendingMemoryToolCalls: new Map(),
+  knowledgeView: localStorage.getItem("bamboo.app.knowledgeView") || "session",
+  scopeKnowledge: { projectPath: "", loading: false, files: [], error: "" },
+  collapsedKnowledgeFiles: new Set(),
   stopRequested: false,
   theme: localStorage.getItem("bamboo.app.theme") || "dark",
   permissionMode: localStorage.getItem("bamboo.app.permissionMode") || "default",
   recentProjects: [],
   projectMenuOpen: false,
 };
+
+window.BambooFancyVersion = "knowledge-panel-v8";
 
 applyTheme(state.theme);
 
@@ -55,10 +62,10 @@ const els = {
   contextSpirit: document.getElementById("contextSpirit"),
   reasoningCount: document.getElementById("reasoningCount"),
   toolCount: document.getElementById("toolCount"),
-  changeSummary: document.getElementById("changeSummary"),
-  changeList: document.getElementById("changeList"),
+  knowledgeSummary: document.getElementById("knowledgeSummary"),
+  knowledgeList: document.getElementById("knowledgeList"),
+  knowledgeViewButtons: Array.from(document.querySelectorAll("[data-knowledge-view]")),
   fileTree: document.getElementById("fileTree"),
-  sourceList: document.getElementById("sourceList"),
   diffFile: document.getElementById("diffFile"),
   diffCount: document.getElementById("diffCount"),
   diffView: document.getElementById("diffView"),
@@ -103,6 +110,7 @@ async function init() {
   renderContext(data.context || {});
   renderModels(data.models || {});
   renderPermissionState(data.permission_state || {}, { preferStored: true });
+  await refreshKnowledgePanel();
   newSessionView();
   updateActiveRunStatus();
   setStatus("idle");
@@ -148,8 +156,7 @@ function projectMenuItem(label, value, title) {
 async function applyProjectPath() {
   renderScope();
   rememberProjectPath(state.projectPath);
-  await refreshSidebar();
-  renderChanges(await apiCall("get_changes", state.projectPath));
+  await newSession();
 }
 
 function toggleProjectMenu() {
@@ -214,8 +221,8 @@ async function refreshSidebar() {
 }
 
 function renderSessions(sessions) {
-  state.sessions = sessions;
-  const visibleSessions = filterSessions(sessions);
+  state.sessions = dedupeSessions(sessions);
+  const visibleSessions = filterSessions(state.sessions);
   els.sessionCount.textContent = `${visibleSessions.length}`;
   els.sessionList.innerHTML = "";
   renderSessionFilter();
@@ -230,13 +237,28 @@ function renderSessions(sessions) {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "session-item";
+    const needsPermission = state.pendingPermissions.has(session.session_id);
     item.classList.toggle("active", session.session_id === state.currentSessionId);
     item.classList.toggle("running", state.runningSessions.has(session.session_id));
+    item.classList.toggle("needs-permission", needsPermission);
+    if (needsPermission) item.title = "Waiting for permission approval";
     item.addEventListener("click", () => loadSession(session));
-    const running = state.runningSessions.has(session.session_id) ? " · running" : "";
-    item.innerHTML = `<span>${escapeHtml(session.label || session.session_id)}</span><small>${escapeHtml(formatTime(session.updated_at || session.created_at))}${running}</small>`;
+    const status = needsPermission ? " · approval needed" : (state.runningSessions.has(session.session_id) ? " · running" : "");
+    item.innerHTML = `<span>${escapeHtml(session.label || session.session_id)}</span><small>${escapeHtml(formatTime(session.updated_at || session.created_at))}${status}</small>`;
     els.sessionList.appendChild(item);
   }
+}
+
+function dedupeSessions(sessions) {
+  const seen = new Set();
+  const deduped = [];
+  for (const session of sessions || []) {
+    const key = session.session_id || session.record_dir || "";
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(session);
+  }
+  return deduped;
 }
 
 function filterSessions(sessions) {
@@ -270,6 +292,7 @@ async function loadSession(session) {
   state.currentSessionId = data.session_id;
   state.mode = data.mode || "chat";
   state.projectPath = data.project_path || "";
+  setSessionKnowledgeUpdates(state.currentSessionId, data.knowledge_updates || []);
   els.projectPath.value = state.projectPath;
   rememberProjectPath(state.projectPath);
   renderScope();
@@ -287,6 +310,7 @@ async function loadSession(session) {
   updateActiveRunStatus();
   renderLogs();
   renderActivePermission();
+  await refreshKnowledgePanel();
 }
 
 async function newSession() {
@@ -295,6 +319,7 @@ async function newSession() {
   const data = await apiCall("new_session", state.projectPath);
   if (!data.ok) return showSystem(data.error || "New session failed", "error");
   state.currentSessionId = data.session_id;
+  state.knowledgeUpdates.set(state.currentSessionId, []);
   renderSessions(data.sessions || []);
   renderChanges(data.changes || {});
   renderContext(data.context || {});
@@ -304,6 +329,7 @@ async function newSession() {
   updateActiveRunStatus();
   renderLogs();
   renderActivePermission();
+  await refreshKnowledgePanel();
 }
 
 function newSessionView() {
@@ -371,7 +397,10 @@ function handleEvent(event) {
     return;
   }
   if (event.type === "run_finish") {
-    if (event.session_id) state.runningSessions.delete(event.session_id);
+    if (event.session_id) {
+      state.runningSessions.delete(event.session_id);
+      state.pendingPermissions.delete(event.session_id);
+    }
     if (!current) {
       renderSessions(event.sessions || state.sessions);
       return;
@@ -389,6 +418,7 @@ function handleEvent(event) {
   }
   if (event.type === "permission_request") {
     if (event.session_id) state.pendingPermissions.set(event.session_id, event);
+    renderSessions(state.sessions);
     if (current) {
       updateRunStage("review", "active", `Permission: ${event.name}`);
       showPermission(event);
@@ -397,11 +427,31 @@ function handleEvent(event) {
   }
   if (event.type === "permission_result") {
     if (event.session_id) state.pendingPermissions.delete(event.session_id);
+    renderSessions(state.sessions);
     if (current) {
       updateRunStage("review", event.approved ? "done" : "error", event.approved ? "Approved" : "Rejected");
       closePermission();
     }
     return;
+  }
+  if (event.type === "knowledge_update") {
+    addKnowledgeUpdate(event);
+    if (current) void refreshKnowledgePanel();
+    return;
+  }
+  if (event.type === "knowledge_error") {
+    addKnowledgeUpdate({ ...event, status: "error", operation: "error", content: event.reason || "" });
+    if (current) void refreshKnowledgePanel();
+    return;
+  }
+  if (event.type === "tool_call" && event.name === "memory_update") {
+    rememberMemoryToolCall(event);
+  }
+  if (event.type === "tool_result" && event.name === "memory_update") {
+    addKnowledgeUpdateFromMemoryTool(event);
+  }
+  if (event.type === "tool_error" && event.name === "memory_update") {
+    state.pendingMemoryToolCalls.delete(toolCallKey(event));
   }
   if (!current) return;
   if (event.type === "cancelled") {
@@ -877,13 +927,8 @@ function renderActivePermission() {
 
 function renderChanges(changes) {
   const files = changes.files || [];
-  els.changeSummary.textContent = `+${changes.additions || 0} -${changes.deletions || 0}`;
   els.fileTree.innerHTML = "";
-  els.changeList.innerHTML = "";
-  els.sourceList.innerHTML = "";
   if (!files.length) {
-    els.changeList.innerHTML = `<div class="empty">No changes</div>`;
-    els.sourceList.innerHTML = `<div class="empty">No sources</div>`;
     els.fileTree.innerHTML = `<li class="empty">Open a project to list files</li>`;
     els.diffFile.textContent = "Workspace Preview";
     els.diffCount.textContent = changes.project_path ? "Clean working tree" : "Chat mode";
@@ -892,8 +937,6 @@ function renderChanges(changes) {
   }
   for (const file of files) {
     addFileRow(file);
-    addChangeRow(file);
-    addSourceRow(file);
   }
 }
 
@@ -904,22 +947,250 @@ function addFileRow(file) {
   els.fileTree.appendChild(item);
 }
 
-function addChangeRow(file) {
-  const row = document.createElement("button");
-  row.type = "button";
-  row.className = "change-row";
-  row.innerHTML = `<span>${escapeHtml(file.file)}</span><code>+${file.additions} -${file.deletions}</code>`;
-  row.addEventListener("click", () => loadDiff(file.file));
-  els.changeList.appendChild(row);
+function toolCallKey(event) {
+  return `${event.session_id || ""}:${event.task_id || ""}:${event.id || ""}`;
 }
 
-function addSourceRow(file) {
-  const row = document.createElement("button");
-  row.type = "button";
-  row.className = "source-row";
-  row.innerHTML = `<span>${escapeHtml(file.file)}</span>`;
-  row.addEventListener("click", () => loadDiff(file.file));
-  els.sourceList.appendChild(row);
+function rememberMemoryToolCall(event) {
+  const input = normalizeToolInput(event.input);
+  state.pendingMemoryToolCalls.set(toolCallKey(event), {
+    session_id: event.session_id,
+    task_id: event.task_id,
+    scope: input.scope || "auto",
+    file: input.file || "",
+    operation: input.operation || "append",
+    content: input.content || "",
+  });
+}
+
+function addKnowledgeUpdateFromMemoryTool(event) {
+  const pending = state.pendingMemoryToolCalls.get(toolCallKey(event));
+  state.pendingMemoryToolCalls.delete(toolCallKey(event));
+  if (!pending || !pending.content) return;
+  if (String(event.output || "").includes("changed=False")) return;
+  addKnowledgeUpdate({
+    session_id: event.session_id || pending.session_id,
+    task_id: event.task_id || pending.task_id,
+    scope: pending.scope,
+    file: pending.file,
+    operation: pending.operation,
+    status: "applied",
+    content: pending.content,
+    timestamp: event.timestamp,
+  });
+  if (isCurrentSessionEvent(event)) void refreshKnowledgePanel();
+}
+
+function normalizeToolInput(input) {
+  if (!input) return {};
+  if (typeof input === "object") return input;
+  try {
+    const parsed = JSON.parse(input);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function addKnowledgeUpdate(event) {
+  const sessionId = event.session_id || state.currentSessionId;
+  if (!sessionId) return;
+  const updates = state.knowledgeUpdates.get(sessionId) || [];
+  updates.push({
+    scope: event.scope || "auto",
+    file: event.file || "knowledge.md",
+    operation: event.operation || "append",
+    status: event.status || "applied",
+    content: event.content || "",
+    reason: event.reason || "",
+    timestamp: event.timestamp || new Date().toISOString(),
+  });
+  state.knowledgeUpdates.set(sessionId, updates);
+}
+
+function setSessionKnowledgeUpdates(sessionId, updates) {
+  if (!sessionId) return;
+  const existing = state.knowledgeUpdates.get(sessionId) || [];
+  const merged = [...existing];
+  const seen = new Set(existing.map(knowledgeUpdateKey));
+  for (const update of updates || []) {
+    const normalized = {
+      session_id: update.session_id || sessionId,
+      task_id: update.task_id || "",
+      scope: update.scope || "auto",
+      file: update.file || "knowledge.md",
+      operation: update.operation || "append",
+      status: update.status || "applied",
+      content: update.content || "",
+      reason: update.reason || "",
+      timestamp: update.timestamp || "",
+    };
+    const key = knowledgeUpdateKey(normalized);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(normalized);
+  }
+  state.knowledgeUpdates.set(sessionId, merged);
+}
+
+function knowledgeUpdateKey(update) {
+  return [
+    update.task_id || "",
+    update.scope || "",
+    update.file || "",
+    update.operation || "",
+    update.status || "",
+    update.content || "",
+    update.reason || "",
+    update.timestamp || "",
+  ].join("\u001f");
+}
+
+function renderKnowledgePanel() {
+  renderKnowledgeViewButtons();
+  if (state.knowledgeView === "project") {
+    renderScopeKnowledgePanel();
+    return;
+  }
+  renderSessionKnowledgePanel();
+}
+
+function renderKnowledgeViewButtons() {
+  for (const button of els.knowledgeViewButtons) {
+    const selected = button.dataset.knowledgeView === state.knowledgeView;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+}
+
+async function refreshKnowledgePanel() {
+  renderKnowledgeViewButtons();
+  if (state.knowledgeView !== "project") {
+    renderSessionKnowledgePanel();
+    return;
+  }
+  await loadScopeKnowledge();
+}
+
+function renderSessionKnowledgePanel() {
+  const updates = state.knowledgeUpdates.get(state.currentSessionId) || [];
+  const grouped = new Map();
+  for (const update of updates) {
+    const fileKey = `${update.scope || "auto"}/${update.file || "knowledge.md"}`;
+    if (!grouped.has(fileKey)) grouped.set(fileKey, []);
+    grouped.get(fileKey).push(update);
+  }
+  els.knowledgeSummary.textContent = `${grouped.size} ${grouped.size === 1 ? "file" : "files"}`;
+  els.knowledgeList.innerHTML = "";
+  if (!updates.length) {
+    els.knowledgeList.innerHTML = `<div class="empty">No knowledge learned in this session</div>`;
+    return;
+  }
+  for (const [file, fileUpdates] of grouped.entries()) {
+    const collapsedKey = `session:${file}`;
+    const collapsed = state.collapsedKnowledgeFiles.has(collapsedKey);
+    const list = document.createElement("ul");
+    if (collapsed) list.hidden = true;
+    for (const update of fileUpdates) {
+      const status = update.status === "error" ? "error" : update.operation || "append";
+      const content = update.content || update.reason || "Knowledge update recorded, but this older event did not persist the content.";
+      const item = document.createElement("li");
+      const meta = document.createElement("small");
+      meta.textContent = status;
+      const paragraph = document.createElement("p");
+      paragraph.textContent = content;
+      item.append(meta, paragraph);
+      list.appendChild(item);
+    }
+    els.knowledgeList.appendChild(createKnowledgeFileSection({
+      key: collapsedKey,
+      title: file,
+      badge: String(fileUpdates.length),
+      collapsed,
+      body: list,
+    }));
+  }
+}
+
+async function loadScopeKnowledge() {
+  const projectPath = state.projectPath || "";
+  state.scopeKnowledge = { ...state.scopeKnowledge, projectPath, loading: true, error: "" };
+  renderScopeKnowledgePanel();
+  const data = await apiCall("get_knowledge", projectPath);
+  if (!data.ok) {
+    state.scopeKnowledge = { projectPath, loading: false, files: [], error: data.error || "Failed to load knowledge" };
+    renderScopeKnowledgePanel();
+    return;
+  }
+  state.scopeKnowledge = { projectPath, loading: false, files: data.files || [], error: "" };
+  renderScopeKnowledgePanel();
+}
+
+function renderScopeKnowledgePanel() {
+  const snapshot = state.scopeKnowledge;
+  els.knowledgeSummary.textContent = `${(snapshot.files || []).length} ${(snapshot.files || []).length === 1 ? "file" : "files"}`;
+  els.knowledgeList.innerHTML = "";
+  if (snapshot.loading) {
+    els.knowledgeList.innerHTML = `<div class="empty">Loading scope knowledge...</div>`;
+    return;
+  }
+  if (snapshot.error) {
+    els.knowledgeList.innerHTML = `<div class="empty">${escapeHtml(snapshot.error)}</div>`;
+    return;
+  }
+  if (!snapshot.files.length) {
+    els.knowledgeList.innerHTML = `<div class="empty">No scope knowledge files</div>`;
+    return;
+  }
+  for (const file of snapshot.files) {
+    const fileLabel = file.relative_path || file.file || "knowledge.md";
+    const collapsedKey = `scope:${fileLabel}`;
+    const collapsed = state.collapsedKnowledgeFiles.has(collapsedKey);
+    const content = file.content || "No knowledge in this file yet.";
+    const body = document.createElement("div");
+    body.className = "knowledge-full-content";
+    body.textContent = content;
+    if (collapsed) body.hidden = true;
+    els.knowledgeList.appendChild(createKnowledgeFileSection({
+      key: collapsedKey,
+      title: fileLabel,
+      badge: file.scope || "",
+      collapsed,
+      body,
+    }));
+  }
+}
+
+function createKnowledgeFileSection({ key, title, badge, collapsed, body }) {
+  const section = document.createElement("div");
+  section.className = "knowledge-file";
+  section.classList.toggle("collapsed", collapsed);
+  const head = document.createElement("div");
+  head.className = "knowledge-file-head";
+  head.setAttribute("role", "button");
+  head.setAttribute("tabindex", "0");
+  head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  head.textContent = `${collapsed ? "▸" : "▾"} ${title}${badge ? `  ${badge}` : ""}`;
+  head.title = `${title}${badge ? ` (${badge})` : ""}`;
+  head.addEventListener("click", () => toggleKnowledgeFile(key));
+  head.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleKnowledgeFile(key);
+  });
+  body.classList.add("knowledge-file-body");
+  body.hidden = collapsed;
+  section.append(head, body);
+  return section;
+}
+
+function toggleKnowledgeFile(key) {
+  if (state.collapsedKnowledgeFiles.has(key)) {
+    state.collapsedKnowledgeFiles.delete(key);
+  } else {
+    state.collapsedKnowledgeFiles.add(key);
+  }
+  renderKnowledgePanel();
 }
 
 async function loadDiff(file) {
@@ -1339,6 +1610,13 @@ for (const button of els.sessionFilterButtons) {
     state.sessionFilter = button.dataset.sessionFilter || "user";
     localStorage.setItem("bamboo.app.sessionFilter", state.sessionFilter);
     renderSessions(state.sessions);
+  });
+}
+for (const button of els.knowledgeViewButtons) {
+  button.addEventListener("click", () => {
+    state.knowledgeView = button.dataset.knowledgeView || "session";
+    localStorage.setItem("bamboo.app.knowledgeView", state.knowledgeView);
+    void refreshKnowledgePanel();
   });
 }
 els.newSession.addEventListener("click", newSession);

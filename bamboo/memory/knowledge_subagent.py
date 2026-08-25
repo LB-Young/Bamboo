@@ -250,6 +250,7 @@ class KnowledgeSubagent:
                 file=update.file,
                 operation=update.operation,
                 status=status,
+                content=update.content,
             )
         )
 

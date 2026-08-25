@@ -14,8 +14,17 @@ def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 4
     records = list_session_records(
         mode=mode,
         project_path=project_path if mode == "project" else None,
-        limit=limit,
+        limit=max(limit * 3, limit),
     )
+    unique_records = []
+    seen_session_ids: set[str] = set()
+    for record in records:
+        if record.session_id in seen_session_ids:
+            continue
+        seen_session_ids.add(record.session_id)
+        unique_records.append(record)
+        if len(unique_records) >= limit:
+            break
     return [
         {
             "session_id": record.session_id,
@@ -27,7 +36,7 @@ def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 4
             "project_root": str(record.project_root),
             "metadata": dict(record.metadata),
         }
-        for record in records
+        for record in unique_records
     ]
 
 

@@ -38,6 +38,7 @@ from bamboo.runtime.runtime_context import RuntimeContext
 from bamboo.runtime.state_machine import AgentState, AgentStateMachine
 from bamboo.runtime.tool_result_budget import ToolResultBudgeter
 from bamboo.security import PermissionDecision, PermissionRequest, PermissionResult, ToolAuditRecord
+from bamboo.tools.buildin.base import Tool
 
 
 @dataclass(slots=True)
@@ -444,8 +445,15 @@ class AgentRuntime:
             if self._can_parallelize_tool_calls(task, decision.tool_calls):
                 await self._execute_tool_calls_parallel(task, decision.tool_calls)
             else:
-                for tool_call in decision.tool_calls:
-                    await self._execute_tool_call(task, tool_call)
+                completed_tool_calls = 0
+                try:
+                    for tool_call in decision.tool_calls:
+                        await self._execute_tool_call(task, tool_call)
+                        completed_tool_calls += 1
+                except asyncio.CancelledError:
+                    for tool_call in decision.tool_calls[completed_tool_calls + 1 :]:
+                        await self._flush_tool_call_outcome(task, self._tool_cancelled_outcome(task, tool_call))
+                    raise
             current_count = int(task.metadata.get("tool_call_count", "0"))
             task.metadata["tool_call_count"] = str(current_count + len(decision.tool_calls))
             return False
@@ -516,15 +524,34 @@ class AgentRuntime:
 
     async def _execute_tool_calls_parallel(self, task: Task, tool_calls: list[LLMToolCall]) -> None:
         """Execute same-turn read-only tool calls concurrently and write results in model order."""
-        outcomes = await asyncio.gather(
-            *(self._run_tool_call(task, tool_call) for tool_call in tool_calls),
-        )
+        runners = [asyncio.create_task(self._run_tool_call(task, tool_call)) for tool_call in tool_calls]
+        try:
+            outcomes = await asyncio.gather(*runners)
+        except asyncio.CancelledError:
+            outcomes = []
+            for runner, tool_call in zip(runners, tool_calls, strict=True):
+                if runner.done() and not runner.cancelled():
+                    try:
+                        outcomes.append(runner.result())
+                        continue
+                    except Exception as exc:
+                        outcomes.append(self._tool_error_outcome(task, tool_call, f"Tool execution raised: {exc}"))
+                        continue
+                runner.cancel()
+                outcomes.append(self._tool_cancelled_outcome(task, tool_call))
+            for outcome in outcomes:
+                await self._flush_tool_call_outcome(task, outcome)
+            raise
         for outcome in outcomes:
             await self._flush_tool_call_outcome(task, outcome)
 
     async def _execute_tool_call(self, task: Task, tool_call: LLMToolCall) -> None:
         """执行一条模型 Tool Call，并把结果或错误写回 Session 与 EventBus。"""
-        outcome = await self._run_tool_call(task, tool_call)
+        try:
+            outcome = await self._run_tool_call(task, tool_call)
+        except asyncio.CancelledError:
+            await self._flush_tool_call_outcome(task, self._tool_cancelled_outcome(task, tool_call))
+            raise
         await self._flush_tool_call_outcome(task, outcome)
 
     async def _run_tool_call(self, task: Task, tool_call: LLMToolCall) -> _ToolCallOutcome:
@@ -688,6 +715,10 @@ class AgentRuntime:
                 )
             ],
         )
+
+    def _tool_cancelled_outcome(self, task: Task, tool_call: LLMToolCall) -> _ToolCallOutcome:
+        """Build a tool result placeholder so cancelled turns remain valid for later LLM calls."""
+        return self._tool_error_outcome(task, tool_call, "Tool call cancelled by user")
 
     def _can_parallelize_tool_calls(self, task: Task, tool_calls: list[LLMToolCall]) -> bool:
         """Return True only when every same-turn tool call has effective read risk."""

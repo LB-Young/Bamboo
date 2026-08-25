@@ -24,6 +24,8 @@ from bamboo.adapters.web.session_utils import list_sessions, load_session, seria
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
+    KnowledgeUpdateErrorEvent,
+    KnowledgeUpdateEvent,
     LLMRequestEvent,
     LLMResponseEvent,
     PermissionRequestEvent,
@@ -56,6 +58,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 APP_EVENT_PATTERNS = {
     "llm.*",
+    "memory.*",
     "task.*",
     "session.*",
     "step.*",
@@ -524,6 +527,23 @@ def _event_payload(event: BaseEvent) -> dict[str, Any]:
             "name": event.tool_name,
             "approved": event.approved,
             "decision": event.decision,
+            "reason": event.reason,
+        }
+    if isinstance(event, KnowledgeUpdateEvent):
+        return {
+            "type": "knowledge_update",
+            "scope": event.scope,
+            "file": event.file,
+            "operation": event.operation,
+            "status": event.status,
+            "reason": event.reason,
+            "content": event.content,
+        }
+    if isinstance(event, KnowledgeUpdateErrorEvent):
+        return {
+            "type": "knowledge_error",
+            "scope": event.scope,
+            "file": event.file,
             "reason": event.reason,
         }
     return {}

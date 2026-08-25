@@ -19,7 +19,7 @@ from bamboo.helpers.constant import TaskCreateEvent
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms import LLMFactory
 from bamboo.memory.get_memory_path import get_memory_dir_name
-from bamboo.memory.session_store import SessionMemoryStore, list_session_records
+from bamboo.memory.session_store import SessionMemoryStore, list_session_records, load_session_record
 from bamboo.runtime.task_runtime import TaskRuntime
 
 
@@ -260,6 +260,29 @@ def test_compaction_persists_before_and_after_messages(tmp_path: Path) -> None:
     assert messages[-1]["content"].startswith("[conversation-summary]")
     assert messages[-1]["compaction"]["before_messages"][0]["content"] == "first"
     assert messages[-1]["compaction"]["after_active_message_ids"]
+
+
+def test_load_session_record_restores_compacted_active_messages(tmp_path: Path) -> None:
+    """验证重新打开历史 session 时不会把已压缩的完整历史重新计入上下文。"""
+    memory_dir = tmp_path / "home" / ".bamboo" / "memory" / "dates" / "today"
+    run_params = RunParams(
+        message="first",
+        project=str(tmp_path),
+        session_mode=SessionMode.chat,
+        task_id="task-compact",
+        session_id="session-compact",
+    )
+    session = SessionFactory().create(memory_dir_path=memory_dir, run_params=run_params)
+    assistant = session.add_message("assistant", "second", agent_name="llm:test")
+    session.replace_messages_with_summary([session.messages[0], assistant], "short summary", agent_name="summary:test")
+    record_dir = next(path for path in memory_dir.iterdir() if path.is_dir())
+
+    restored = load_session_record(record_dir)
+
+    active_contents = [message.content for message in restored.active_messages()]
+    assert active_contents == ["[conversation-summary]\nshort summary"]
+    assert restored.messages[0].compressed is True
+    assert restored.messages[1].compressed is True
 
 
 def test_session_store_persists_events_and_tasks(tmp_path: Path) -> None:

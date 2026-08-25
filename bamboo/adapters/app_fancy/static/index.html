@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bamboo</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=knowledge-panel-v8" />
   </head>
   <body>
     <div id="app">
@@ -168,21 +168,22 @@
           <button class="folded" type="button">Tools <b id="toolCount">0</b></button>
         </section>
 
-        <section class="panel changes-panel">
+        <section class="panel knowledge-panel">
           <div class="panel-head">
-            <span>Changes</span>
-            <span id="changeSummary" class="change-summary">+0 -0</span>
+            <span>Knowledge</span>
+            <div class="knowledge-head-actions">
+              <div class="knowledge-toggle" role="group" aria-label="Knowledge view">
+                <button type="button" data-knowledge-view="session">Session</button>
+                <button type="button" data-knowledge-view="project">Scope</button>
+              </div>
+              <span id="knowledgeSummary" class="knowledge-summary">0 files</span>
+            </div>
           </div>
-          <div id="changeList" class="change-list"></div>
-        </section>
-
-        <section class="panel sources sources-panel">
-          <div class="panel-head"><span>Sources</span></div>
-          <div id="sourceList"></div>
+          <div id="knowledgeList" class="knowledge-list"></div>
         </section>
       </aside>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <script src="./app.js"></script>
+    <script src="./app.js?v=knowledge-panel-v8"></script>
   </body>
 </html>

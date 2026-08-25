@@ -445,6 +445,7 @@ class KnowledgeUpdateEvent(BaseEvent):
     operation: str = ""
     status: str = ""
     reason: str = ""
+    content: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -454,6 +455,7 @@ class KnowledgeUpdateEvent(BaseEvent):
             "operation": self.operation,
             "status": self.status,
             "reason": self.reason,
+            "content": self.content,
         }
 
 

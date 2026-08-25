@@ -17,6 +17,7 @@ from bamboo.adapters.app_fancy.main import (
     _app_icon_path,
     _changed_files_expanded,
     _file_diff_summary,
+    _knowledge_updates_from_events,
     _set_windows_app_user_model_id,
     _untracked_file_diff,
 )
@@ -101,6 +102,50 @@ def test_app_fancy_command_launches_fancy_adapter(monkeypatch) -> None:
             "initial_message": "hello",
             "image_paths": [],
         }
+    ]
+
+
+def test_app_fancy_recovers_session_knowledge_updates_from_events() -> None:
+    updates = _knowledge_updates_from_events(
+        [
+            {
+                "type": "memory-knowledge-update",
+                "session_id": "session-a",
+                "task_id": "task-a",
+                "scope": "project-current",
+                "file": "decisions.md",
+                "operation": "append",
+                "status": "applied",
+                "content": "- remembered",
+                "timestamp": "2026-08-21T00:00:00+00:00",
+            },
+            {
+                "type": "tool-call",
+                "session_id": "session-a",
+                "task_id": "task-b",
+                "tool_call_id": "call-b",
+                "tool_name": "memory_update",
+                "tool_input": {
+                    "scope": "project-current",
+                    "file": "workflows.md",
+                    "operation": "append",
+                    "content": "- use review mode",
+                },
+            },
+            {
+                "type": "tool-result",
+                "session_id": "session-a",
+                "task_id": "task-b",
+                "tool_call_id": "call-b",
+                "tool_name": "memory_update",
+                "output": "memory_update append project-current/workflows.md changed=True",
+            },
+        ]
+    )
+
+    assert [(item["file"], item["content"]) for item in updates] == [
+        ("decisions.md", "- remembered"),
+        ("workflows.md", "- use review mode"),
     ]
 
 

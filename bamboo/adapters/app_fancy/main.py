@@ -24,6 +24,7 @@ from bamboo.helpers.constant import LLMResponseEvent, SessionCompactEvent, Sessi
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms.media import image_from_source, images_from_text, merge_images
+from bamboo.memory.scope import MemoryScope
 from bamboo.prompts import build_system_prompt
 from bamboo.runtime.context_compactor import HeuristicTokenCounter
 
@@ -145,6 +146,7 @@ class BambooFancyAppBridge(BambooAppBridge):
         self.active_project = project
         self.active_session_mode = mode
         self.current_task = None
+        self.latest_usage = {}
         result = {
             "ok": True,
             "session_id": self.session_id,
@@ -165,6 +167,7 @@ class BambooFancyAppBridge(BambooAppBridge):
         self.session_id = session.session_id
         self.active_project = project
         self.active_session_mode = mode
+        self.latest_usage = {}
         model_name = self.model or session.model or self._configured_default_model_name()
         config = self.runtime.llm_factory.get_model_config(model_name)
         run_params = RunParams(
@@ -197,6 +200,7 @@ class BambooFancyAppBridge(BambooAppBridge):
             "mode": mode.value,
             "project_path": "" if mode == SessionMode.chat else str(project),
             "messages": serialize_messages(session),
+            "knowledge_updates": _knowledge_updates_from_events(session.memory_store.load_events() if session.memory_store else []),
             "changes": self.get_changes(str(project) if mode == SessionMode.project else ""),
             "context": self.get_context_usage(),
             "models": self.get_model_selector_state(),
@@ -233,6 +237,45 @@ class BambooFancyAppBridge(BambooAppBridge):
         return {
             "permission": self.permission or "default",
             "yes_all": bool(getattr(self, "yes_all", False)),
+        }
+
+    def get_knowledge(self, project_path: str = "") -> dict[str, Any]:
+        """Return complete editable knowledge files for the selected chat/project scope."""
+        project, mode = self._resolve_scope(project_path)
+        manager = self.runtime.runtime_context_builder.memory_manager
+        if mode == SessionMode.project:
+            scope = MemoryScope(
+                kind="project",
+                root=manager.memory_root / "projects",
+                project_hash=MemoryScope.project(project).project_hash,
+                project_root=str(project),
+            )
+        else:
+            scope = MemoryScope(kind="chat", root=manager.memory_root / "dates")
+        files: list[dict[str, str]] = []
+        for label, knowledge_dir in manager.knowledge_dirs_for_scope(scope):
+            if not manager.ensure_knowledge_templates(scope, knowledge_dir):
+                continue
+            for path in sorted(knowledge_dir.glob("*.md")):
+                try:
+                    raw_content = path.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                content = manager._strip_comment_only_template(raw_content.strip())
+                files.append(
+                    {
+                        "path": str(path),
+                        "relative_path": f"{label}/{path.name}",
+                        "scope": label,
+                        "file": path.name,
+                        "content": content,
+                    }
+                )
+        return {
+            "ok": True,
+            "mode": mode.value,
+            "project_path": str(project) if mode == SessionMode.project else "",
+            "files": files,
         }
 
     def send_message(
@@ -559,6 +602,73 @@ def _usage_output_tokens(usage: dict[str, int]) -> int:
         if isinstance(value, int) and value > 0:
             return value
     return 0
+
+
+def _knowledge_updates_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Recover per-session knowledge updates from persisted runtime events."""
+    updates: list[dict[str, Any]] = []
+    pending_memory_updates: dict[tuple[str, str], dict[str, Any]] = {}
+    for event in events:
+        event_type = str(event.get("type") or "")
+        if event_type == "memory-knowledge-update":
+            updates.append(
+                {
+                    "session_id": event.get("session_id", ""),
+                    "task_id": event.get("task_id", ""),
+                    "scope": event.get("scope", ""),
+                    "file": event.get("file", ""),
+                    "operation": event.get("operation", "append"),
+                    "status": event.get("status", "applied"),
+                    "content": event.get("content", ""),
+                    "reason": event.get("reason", ""),
+                    "timestamp": event.get("timestamp") or event.get("time", ""),
+                }
+            )
+            continue
+        if event_type == "memory-knowledge-error":
+            updates.append(
+                {
+                    "session_id": event.get("session_id", ""),
+                    "task_id": event.get("task_id", ""),
+                    "scope": event.get("scope", ""),
+                    "file": event.get("file", ""),
+                    "operation": "error",
+                    "status": "error",
+                    "content": event.get("reason", ""),
+                    "reason": event.get("reason", ""),
+                    "timestamp": event.get("timestamp") or event.get("time", ""),
+                }
+            )
+            continue
+        if event_type == "tool-call" and event.get("tool_name") == "memory_update":
+            key = (str(event.get("task_id") or ""), str(event.get("tool_call_id") or ""))
+            tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+            pending_memory_updates[key] = {
+                "session_id": event.get("session_id", ""),
+                "task_id": event.get("task_id", ""),
+                "scope": tool_input.get("scope", "auto"),
+                "file": tool_input.get("file", ""),
+                "operation": tool_input.get("operation", "append"),
+                "status": "applied",
+                "content": tool_input.get("content", ""),
+                "reason": "",
+                "timestamp": event.get("timestamp") or event.get("time", ""),
+            }
+            continue
+        if event_type == "tool-result" and event.get("tool_name") == "memory_update":
+            key = (str(event.get("task_id") or ""), str(event.get("tool_call_id") or ""))
+            update = pending_memory_updates.pop(key, None)
+            if not update or not update.get("content"):
+                continue
+            if "changed=False" in str(event.get("output") or event.get("context_output") or ""):
+                continue
+            update["timestamp"] = event.get("timestamp") or event.get("time", update.get("timestamp", ""))
+            updates.append(update)
+            continue
+        if event_type == "tool-error" and event.get("tool_name") == "memory_update":
+            key = (str(event.get("task_id") or ""), str(event.get("tool_call_id") or ""))
+            pending_memory_updates.pop(key, None)
+    return updates
 
 
 def _run_git(cwd: Path, args: list[str]) -> str:
