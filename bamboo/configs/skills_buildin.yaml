@@ -208,5 +208,15 @@ skills:
     enabled: true
   skill-creator:
     enabled: true
+  socratic-questioning:
+    enabled: true
+  first-principles:
+    enabled: true
+  minimum-experiment:
+    enabled: true
+  reverse-engineering-example:
+    enabled: true
+  vertical-horizontal-analysis:
+    enabled: true
   steelman-argument:
     enabled: true

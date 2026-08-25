@@ -128,8 +128,23 @@ def test_skill_registry_honors_builtin_central_disabled_config(tmp_path: Path) -
     assert state.status == "disabled"
 
 
-def test_builtin_steelman_argument_skill_is_registered(tmp_path: Path) -> None:
-    """验证双向钢人论证已作为内置 Skill 注册。"""
+@pytest.mark.parametrize(
+    ("skill_name", "expected_text"),
+    [
+        ("socratic-questioning", "苏格拉底式提问"),
+        ("first-principles", "第一性原理"),
+        ("minimum-experiment", "最小实验"),
+        ("reverse-engineering-example", "反向拆解"),
+        ("vertical-horizontal-analysis", "横纵分析法"),
+        ("steelman-argument", "双向钢人论证"),
+    ],
+)
+def test_prompt_toolkit_adapted_builtin_skills_are_registered(
+    tmp_path: Path,
+    skill_name: str,
+    expected_text: str,
+) -> None:
+    """验证从 prompt-toolkit 借鉴的内置 Skill 均已注册并可加载。"""
     store = SkillStore(root=tmp_path / "storage" / "skills")
     registry = SkillRegistry(
         skill_dirs=[("buildin", PACKAGE_BUILTIN_SKILLS_DIR)],
@@ -137,12 +152,11 @@ def test_builtin_steelman_argument_skill_is_registered(tmp_path: Path) -> None:
     )
     registry.refresh()
 
-    definition = registry.get("steelman-argument")
+    definition = registry.get(skill_name)
 
     assert definition is not None
-    assert "steel-man" in definition.description
     assert definition.user_invocable is True
-    assert "双向钢人论证" in registry.load_skill_content("steelman-argument")
+    assert expected_text in registry.load_skill_content(skill_name)
 
 
 def test_skill_registry_tolerates_corrupt_state_file(tmp_path: Path) -> None:
