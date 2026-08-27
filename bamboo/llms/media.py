@@ -34,7 +34,17 @@ def images_from_text(text: str) -> list[LLMImage]:
     """Extract image paths or URLs mentioned in natural language text."""
     images: list[LLMImage] = []
     seen: set[str] = set()
-    for match in [*_HTTP_IMAGE_PATTERN.finditer(text), *_ABSOLUTE_IMAGE_PATH_PATTERN.finditer(text)]:
+    occupied_spans: list[tuple[int, int]] = []
+    for match in _HTTP_IMAGE_PATTERN.finditer(text):
+        source = _strip_trailing_punctuation(match.group(0))
+        if source in seen:
+            continue
+        seen.add(source)
+        occupied_spans.append(match.span())
+        images.append(image_from_source(source))
+    for match in _ABSOLUTE_IMAGE_PATH_PATTERN.finditer(text):
+        if _overlaps_any(match.span(), occupied_spans):
+            continue
         source = _strip_trailing_punctuation(match.group(0))
         if source in seen:
             continue
@@ -147,3 +157,8 @@ def _redacted_source(source: str) -> str:
 
 def _strip_trailing_punctuation(source: str) -> str:
     return source.rstrip(".,;:!?)]}，。；：！？）】")
+
+
+def _overlaps_any(span: tuple[int, int], spans: list[tuple[int, int]]) -> bool:
+    start, end = span
+    return any(start < other_end and other_start < end for other_start, other_end in spans)

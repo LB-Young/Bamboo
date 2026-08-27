@@ -74,3 +74,19 @@ def test_web_fancy_command_starts_fancy_server(monkeypatch) -> None:
     assert cron_started == [True]
     assert opened_urls == ["http://127.0.0.1:9010"]
     assert run_calls == [("bamboo.adapters.web_fancy.app:app", "127.0.0.1", 9010, False)]
+
+
+def test_api_command_starts_api_server(monkeypatch) -> None:
+    run_calls: list[tuple[str, str, int, bool]] = []
+    cron_started: list[bool] = []
+    monkeypatch.setattr("bamboo.run._start_default_cron", lambda: cron_started.append(True))
+    monkeypatch.setattr(
+        "uvicorn.run",
+        lambda app_ref, host, port, reload: run_calls.append((app_ref, host, port, reload)),
+    )
+
+    result = CliRunner().invoke(app, ["api", "--port", "8898"])
+
+    assert result.exit_code == 0
+    assert cron_started == [True]
+    assert run_calls == [("bamboo.adapters.api.app:app", "127.0.0.1", 8898, False)]

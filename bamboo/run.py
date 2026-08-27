@@ -518,6 +518,20 @@ def web_fancy(
 
 
 @app.command()
+def api(
+    host: str = typer.Option("127.0.0.1", "--host", help="API server host"),
+    port: int = typer.Option(8898, "--port", "-p", help="API server port"),
+    reload: bool = typer.Option(False, "--reload", help="Enable uvicorn reload"),
+) -> None:
+    """启动 Bamboo HTTP API 入口。"""
+    import uvicorn
+
+    _start_default_cron()
+    console.print(f"[green]Bamboo API[/green] http://{host}:{port}")
+    uvicorn.run("bamboo.adapters.api.app:app", host=host, port=port, reload=reload)
+
+
+@app.command()
 def wechat(
     project: Path | None = PROJECT_OPTION,
     model: str | None = MODEL_OPTION,

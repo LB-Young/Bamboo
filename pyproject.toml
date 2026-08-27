@@ -36,6 +36,7 @@ packages = [
     "bamboo.eval",
     "bamboo.commands",
     "bamboo.adapters",
+    "bamboo.adapters.api",
     "bamboo.adapters.app",
     "bamboo.adapters.app_fancy",
     "bamboo.adapters.cli",

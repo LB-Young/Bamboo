@@ -32,21 +32,21 @@ from bamboo.helpers.logging import get_logger
 
 # RunParams 是 CLI 或调试入口整理后的运行参数。
 from bamboo.helpers.requests_params import RunParams
-from bamboo.llms.base import LLMImage
-from bamboo.llms.media import images_from_text, merge_images
 
 # LLMFactory 在 TaskRuntime 初始化时加载模型配置，并为本次执行提供模型路由。
 from bamboo.llms import LLMFactory
+from bamboo.llms.base import LLMImage
+from bamboo.llms.media import images_from_text, merge_images
+from bamboo.memory.knowledge_subagent import KnowledgeSubagent
 from bamboo.prompts import hash_prompt_text
 
 # AgentRuntime 执行 Agent 的 OTA 循环，AgentRuntimeError 表示 Agent 层运行失败。
 from bamboo.runtime.agent_runtime import AgentRuntime, AgentRuntimeError
-from bamboo.memory.knowledge_subagent import KnowledgeSubagent
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
-from bamboo.runtime.trace_recorder import TraceRecorder
 
 # InMemoryTaskStore 保存任务生命周期快照，当前实现是内存级存储。
 from bamboo.runtime.store import InMemoryTaskStore, get_task_store
+from bamboo.runtime.trace_recorder import TraceRecorder
 
 
 @dataclass(slots=True)

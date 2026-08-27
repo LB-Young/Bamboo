@@ -10,8 +10,7 @@ from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.requests_params import RunParams
-from bamboo.llms import LLMImage
-from bamboo.llms import LLMFactory, ModelCatalog
+from bamboo.llms import LLMFactory, LLMImage, ModelCatalog
 from bamboo.llms.media import images_from_text
 from bamboo.prompts import read_provider_prompt_sections
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
@@ -137,6 +136,13 @@ def test_images_from_text_extracts_http_image_url() -> None:
     images = images_from_text("look at https://example.com/a/1.webp?x=1")
 
     assert images[0].source == "https://example.com/a/1.webp?x=1"
+
+
+def test_images_from_text_does_not_duplicate_url_as_absolute_path() -> None:
+    """验证 HTTP URL 不会被绝对路径规则重复识别。"""
+    images = images_from_text("look at https://example.com/a/1.webp")
+
+    assert [image.source for image in images] == ["https://example.com/a/1.webp"]
 
 
 def test_mimo_provider_prompt_is_available() -> None:
