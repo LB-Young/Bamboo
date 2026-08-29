@@ -545,12 +545,14 @@ def wechat(
     from bamboo.adapters.wechat import launch_wechat
 
     _start_default_cron()
-    console.print("[green]Bamboo WeChat[/green] starting")
+    permission_mode = permission or "bypass"
+    console.print(f"[green]Bamboo WeChat[/green] starting [yellow]permission={permission_mode}[/yellow]")
+    console.print("[dim]Use --permission default/read-only/bypass/yolo to choose another permission mode.[/dim]")
     launch_wechat(
         project=project,
         model=model or "",
         provider=provider or "",
-        permission=permission or "default",
+        permission=permission_mode,
         session_mode=session_mode,
         yes_all=yes_all,
         relogin=relogin,

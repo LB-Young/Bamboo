@@ -13,9 +13,10 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import anyio
 import httpx
@@ -287,6 +288,7 @@ class BambooWeChatAdapter:
         context_token = str(message.get("context_token", ""))
         if not text or not user_id:
             return
+        print(f"[WeChat] received user={_short_user_id(user_id)} chars={len(text)} preview={_preview_text(text)}")
         threading.Thread(
             target=self._handle_message,
             args=(user_id, context_token, text),
@@ -296,24 +298,30 @@ class BambooWeChatAdapter:
     def _handle_message(self, user_id: str, context_token: str, text: str) -> None:
         user_lock = self._user_lock(user_id)
         if not user_lock.acquire(blocking=False):
+            print(f"[WeChat] busy user={_short_user_id(user_id)} message rejected")
             self._send(user_id, "上一条消息还在处理中，请稍后再发。", context_token=context_token)
             return
         try:
             if text in {"/new", "/reset"}:
                 self.sessions.pop(user_id, None)
+                print(f"[WeChat] reset session user={_short_user_id(user_id)}")
                 self._send(user_id, "已开启新的 Bamboo 会话。", context_token=context_token)
                 return
             if text in {"/help", "help"}:
+                print(f"[WeChat] help user={_short_user_id(user_id)}")
                 self._send(
                     user_id,
                     "Bamboo 微信入口已连接。\n/new 开启新会话\n/reset 重置当前会话\n直接发送文本即可提问。",
                     context_token=context_token,
                 )
                 return
+            print(f"[WeChat] run start user={_short_user_id(user_id)}")
             output = anyio.run(self._run_turn, user_id, text)
             self._send_chunks(user_id, output or "[Bamboo 没有返回文本输出]", context_token=context_token)
+            print(f"[WeChat] run complete user={_short_user_id(user_id)} output_chars={len(output or '')}")
         except Exception as exc:
             self.log.exception("wechat message failed user_id={user_id}", user_id=user_id)
+            print(f"[WeChat] run failed user={_short_user_id(user_id)} error={exc}")
             self._send(user_id, f"Bamboo 执行失败：{exc}", context_token=context_token)
         finally:
             user_lock.release()
@@ -411,3 +419,16 @@ def _chunk_text(text: str, *, max_chars: int) -> list[str]:
     if content:
         chunks.append(content)
     return chunks
+
+
+def _short_user_id(user_id: str) -> str:
+    if len(user_id) <= 12:
+        return user_id
+    return f"{user_id[:6]}...{user_id[-4:]}"
+
+
+def _preview_text(text: str, *, max_chars: int = 80) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_chars:
+        return repr(normalized)
+    return repr(normalized[: max_chars - 3] + "...")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -137,6 +138,7 @@ def test_skill_registry_honors_builtin_central_disabled_config(tmp_path: Path) -
         ("reverse-engineering-example", "反向拆解"),
         ("vertical-horizontal-analysis", "横纵分析法"),
         ("steelman-argument", "双向钢人论证"),
+        ("macos-harness", "macos-harness doctor"),
     ],
 )
 def test_prompt_toolkit_adapted_builtin_skills_are_registered(
@@ -192,6 +194,14 @@ def test_skill_registry_tolerates_legacy_state_schema(tmp_path: Path) -> None:
     state = store.load_state("demo-skill")
     assert state is not None
     assert state.schema_version == 1
+
+
+def test_macos_harness_is_macos_only_project_dependency() -> None:
+    """验证 macos-harness 通过平台条件依赖随 macOS 安装 Bamboo。"""
+    pyproject = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+
+    dependencies = pyproject["project"]["dependencies"]
+    assert any(dependency.startswith("macos-harness>=0.1.2;") and "sys_platform" in dependency and "darwin" in dependency for dependency in dependencies)
 
 
 def test_skill_registry_renders_tool_catalog_and_resource_files(tmp_path: Path) -> None:

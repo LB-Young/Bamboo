@@ -206,6 +206,11 @@ skills:
     enabled: true
   native-mcp:
     enabled: true
+  macos-harness:
+    enabled: true
+    requirements:
+      bins:
+        - macos-harness
   skill-creator:
     enabled: true
   socratic-questioning:

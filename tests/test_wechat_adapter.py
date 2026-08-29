@@ -4,7 +4,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from bamboo.adapters.wechat.app import ITEM_TEXT, MSG_USER, WeChatBotClient, _chunk_text
+from bamboo.adapters.wechat.app import ITEM_TEXT, MSG_USER, WeChatBotClient, _chunk_text, _preview_text, _short_user_id
 from bamboo.helpers.constant import SessionMode
 from bamboo.run import app
 
@@ -49,6 +49,19 @@ def test_wechat_command_launches_adapter(monkeypatch) -> None:
     ]
 
 
+def test_wechat_command_defaults_to_bypass_permission(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("bamboo.run._start_default_cron", lambda: None)
+    monkeypatch.setattr("bamboo.adapters.wechat.launch_wechat", lambda **kwargs: calls.append(kwargs))
+
+    result = CliRunner().invoke(app, ["wechat"])
+
+    assert result.exit_code == 0
+    assert "permission=bypass" in result.output
+    assert "--permission default/read-only/bypass/yolo" in result.output
+    assert calls[0]["permission"] == "bypass"
+
+
 def test_wechat_client_extracts_text_items() -> None:
     message = {
         "message_type": MSG_USER,
@@ -67,3 +80,9 @@ def test_wechat_chunk_text_prefers_line_boundaries() -> None:
     chunks = _chunk_text("alpha\n\nbeta\n\ngamma", max_chars=12)
 
     assert chunks == ["alpha\n\nbeta", "gamma"]
+
+
+def test_wechat_log_helpers_keep_output_compact() -> None:
+    assert _short_user_id("abcdef1234567890") == "abcdef...7890"
+    assert _preview_text("hello\nworld") == "'hello world'"
+    assert _preview_text("x" * 90, max_chars=12) == "'xxxxxxxxx...'"

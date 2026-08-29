@@ -63,6 +63,8 @@ def test_build_project_prompt_includes_project_instructions(tmp_path: Path) -> N
     assert "# Tool Results" in prompt
     assert "# Skills" in prompt
     assert "先使用 `skill_load` 加载该 skill 的完整说明" in prompt
+    assert "能力选择遵循“专用能力优先，通用能力兜底”" in prompt
+    assert "优先加载 `macos-harness` skill" in prompt
     assert "# Runtime Environment" in prompt
     assert f"Project Root (authoritative project directory): `{tmp_path}`" in prompt
     assert "Working Directory: `" in prompt

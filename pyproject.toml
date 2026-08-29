@@ -21,6 +21,7 @@ dependencies = [
     "playwright>=1.40.0",
     "pywebview>=5.0",
     "qrcode>=7.4",
+    "macos-harness>=0.1.2; sys_platform == 'darwin'",
     "skillspector @ git+https://github.com/NVIDIA/skillspector.git@3f11bfa4117ed8beff02d45f660f557489f6bbe5",
 ]
 
