@@ -72,12 +72,12 @@ yt-dlp --version
 The bundled helper wraps common public-data operations:
 
 ```bash
-python3 <skill_dir>/scripts/youtube_cli.py info "https://www.youtube.com/watch?v=VIDEO_ID"
-python3 <skill_dir>/scripts/youtube_cli.py transcript "https://www.youtube.com/watch?v=VIDEO_ID" --languages en,zh-Hans
-python3 <skill_dir>/scripts/youtube_cli.py playlist "https://www.youtube.com/playlist?list=PLAYLIST_ID" --flat
+python <skill_dir>/scripts/youtube_cli.py info "https://www.youtube.com/watch?v=VIDEO_ID"
+python <skill_dir>/scripts/youtube_cli.py transcript "https://www.youtube.com/watch?v=VIDEO_ID" --languages en,zh-Hans
+python <skill_dir>/scripts/youtube_cli.py playlist "https://www.youtube.com/playlist?list=PLAYLIST_ID" --flat
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## CLI Fallback Workflow
 

@@ -28,12 +28,12 @@ Use public arXiv and Crossref metadata only. Do not attempt to access paid journ
 ## Commands
 
 ```bash
-python3 <skill_dir>/scripts/paper_cli.py arxiv-search "query" --max-results 5
-python3 <skill_dir>/scripts/paper_cli.py arxiv-id 2401.00001
-python3 <skill_dir>/scripts/paper_cli.py doi 10.1145/3368089.3409742
+python <skill_dir>/scripts/paper_cli.py arxiv-search "query" --max-results 5
+python <skill_dir>/scripts/paper_cli.py arxiv-id 2401.00001
+python <skill_dir>/scripts/paper_cli.py doi 10.1145/3368089.3409742
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## Workflow
 

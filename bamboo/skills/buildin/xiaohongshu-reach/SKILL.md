@@ -64,12 +64,12 @@ State-changing actions such as like, favorite, follow, comment, private message,
 The bundled helper supports public URL and share-text workflows:
 
 ```bash
-python3 <skill_dir>/scripts/xiaohongshu_cli.py parse "share text or Xiaohongshu URL"
-python3 <skill_dir>/scripts/xiaohongshu_cli.py note "https://www.xiaohongshu.com/explore/..."
-python3 <skill_dir>/scripts/xiaohongshu_cli.py search-url "keyword"
+python <skill_dir>/scripts/xiaohongshu_cli.py parse "share text or Xiaohongshu URL"
+python <skill_dir>/scripts/xiaohongshu_cli.py note "https://www.xiaohongshu.com/explore/..."
+python <skill_dir>/scripts/xiaohongshu_cli.py search-url "keyword"
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## CLI Fallback Workflow
 

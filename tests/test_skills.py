@@ -337,6 +337,30 @@ def test_builtin_skills_config_lists_reach_skills() -> None:
     assert skills["zhihu-reach"]["variables"]["ZHIHU_REACH_REFERER"] == "https://www.zhihu.com/"
 
 
+def test_scripted_builtin_skills_use_bamboo_python_environment() -> None:
+    """验证内置脚本型 Skill 引导模型使用 Bamboo 所在 Python 环境。"""
+    scripted_skills = (
+        "anysearch",
+        "github-reach",
+        "paper-reach",
+        "douyin-reach",
+        "youtube-reach",
+        "rss-reach",
+        "bilibili-reach",
+        "xiaohongshu-reach",
+        "zhihu-reach",
+    )
+    config = yaml.safe_load(Path("bamboo/configs/skills_buildin.yaml").read_text(encoding="utf-8")) or {}
+    skills = config.get("skills", {})
+
+    for name in scripted_skills:
+        content = (PACKAGE_BUILTIN_SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
+        assert "python3 <skill_dir>" not in content
+        assert "Use the same `python` environment that runs Bamboo." in content
+        assert "python" in skills[name]["requirements"]["bins"]
+        assert "python3" not in skills[name]["requirements"]["bins"]
+
+
 def test_builtin_skill_directories_do_not_keep_local_config_yaml() -> None:
     """验证内置 Skill 配置集中在 skills_buildin.yaml，不保留目录级 config.yaml。"""
     assert list(PACKAGE_BUILTIN_SKILLS_DIR.glob("*/config.yaml")) == []

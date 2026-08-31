@@ -83,26 +83,26 @@ State-changing actions such as publish, upload, like, favorite, follow, comment,
 Run all subcommands through the single bundled entrypoint:
 
 ```bash
-python3 <skill_dir>/scripts/douyin_cli.py parse "share text or Douyin URL"
-python3 <skill_dir>/scripts/douyin_cli.py resolve "https://v.douyin.com/..."
-python3 <skill_dir>/scripts/douyin_cli.py page "https://www.douyin.com/video/..."
-python3 <skill_dir>/scripts/douyin_cli.py search-url "keyword"
+python <skill_dir>/scripts/douyin_cli.py parse "share text or Douyin URL"
+python <skill_dir>/scripts/douyin_cli.py resolve "https://v.douyin.com/..."
+python <skill_dir>/scripts/douyin_cli.py page "https://www.douyin.com/video/..."
+python <skill_dir>/scripts/douyin_cli.py search-url "keyword"
 
-python3 <skill_dir>/scripts/douyin_cli.py video-info "https://www.douyin.com/video/..."
-python3 <skill_dir>/scripts/douyin_cli.py download "https://www.douyin.com/video/..." --output-dir ./downloads
-python3 <skill_dir>/scripts/douyin_cli.py extract-audio ./video.mp4
-python3 <skill_dir>/scripts/douyin_cli.py transcript ./video.mp4
-python3 <skill_dir>/scripts/douyin_cli.py explain-file ./video.mp4
+python <skill_dir>/scripts/douyin_cli.py video-info "https://www.douyin.com/video/..."
+python <skill_dir>/scripts/douyin_cli.py download "https://www.douyin.com/video/..." --output-dir ./downloads
+python <skill_dir>/scripts/douyin_cli.py extract-audio ./video.mp4
+python <skill_dir>/scripts/douyin_cli.py transcript ./video.mp4
+python <skill_dir>/scripts/douyin_cli.py explain-file ./video.mp4
 
-python3 <skill_dir>/scripts/douyin_cli.py creator-profile "https://www.douyin.com/user/..."
-python3 <skill_dir>/scripts/douyin_cli.py collection-list "https://www.douyin.com/collection/..."
-python3 <skill_dir>/scripts/douyin_cli.py creator-analyze "https://www.douyin.com/user/..."
+python <skill_dir>/scripts/douyin_cli.py creator-profile "https://www.douyin.com/user/..."
+python <skill_dir>/scripts/douyin_cli.py collection-list "https://www.douyin.com/collection/..."
+python <skill_dir>/scripts/douyin_cli.py creator-analyze "https://www.douyin.com/user/..."
 
-python3 <skill_dir>/scripts/douyin_cli.py publish-plan --title "..." --body "..." --media ./video.mp4 --tag topic
-python3 <skill_dir>/scripts/douyin_cli.py capability
+python <skill_dir>/scripts/douyin_cli.py publish-plan --title "..." --body "..." --media ./video.mp4 --tag topic
+python <skill_dir>/scripts/douyin_cli.py capability
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## Single Video Workflow
 

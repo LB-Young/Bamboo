@@ -27,15 +27,15 @@ Use public GitHub API responses by default. Do not read local git credentials, b
 ## Commands
 
 ```bash
-python3 <skill_dir>/scripts/github_cli.py repo owner/name
-python3 <skill_dir>/scripts/github_cli.py parse "https://github.com/owner/name"
-python3 <skill_dir>/scripts/github_cli.py releases owner/name --max-results 5
-python3 <skill_dir>/scripts/github_cli.py issues owner/name --state open --max-results 10
-python3 <skill_dir>/scripts/github_cli.py prs owner/name --state open --max-results 10
-python3 <skill_dir>/scripts/github_cli.py user owner
+python <skill_dir>/scripts/github_cli.py repo owner/name
+python <skill_dir>/scripts/github_cli.py parse "https://github.com/owner/name"
+python <skill_dir>/scripts/github_cli.py releases owner/name --max-results 5
+python <skill_dir>/scripts/github_cli.py issues owner/name --state open --max-results 10
+python <skill_dir>/scripts/github_cli.py prs owner/name --state open --max-results 10
+python <skill_dir>/scripts/github_cli.py user owner
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## Workflow
 

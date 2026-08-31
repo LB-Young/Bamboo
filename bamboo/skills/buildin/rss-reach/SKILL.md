@@ -28,12 +28,12 @@ RSS/Atom feed reads send the feed URL to the feed host. Do not include private b
 The bundled helper uses Python standard library XML parsing:
 
 ```bash
-python3 <skill_dir>/scripts/rss_cli.py read "https://example.com/feed.xml" --max-items 20
-python3 <skill_dir>/scripts/rss_cli.py latest "https://example.com/feed.xml"
-python3 <skill_dir>/scripts/rss_cli.py check "https://example.com/feed.xml" --since "2026-07-01T00:00:00Z"
+python <skill_dir>/scripts/rss_cli.py read "https://example.com/feed.xml" --max-items 20
+python <skill_dir>/scripts/rss_cli.py latest "https://example.com/feed.xml"
+python <skill_dir>/scripts/rss_cli.py check "https://example.com/feed.xml" --since "2026-07-01T00:00:00Z"
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## Workflow
 

@@ -30,13 +30,13 @@ An API key is optional. Anonymous access may work with lower rate limits. If the
 The bundled Bamboo integration is intentionally minimal:
 
 ```bash
-python3 <skill_dir>/scripts/anysearch_cli.py search "query" --max-results 5
-python3 <skill_dir>/scripts/anysearch_cli.py batch-search --query "q1" --query "q2" --max-results 3
-python3 <skill_dir>/scripts/anysearch_cli.py extract "https://example.com/page"
-python3 <skill_dir>/scripts/anysearch_cli.py get-sub-domains --domain finance
+python <skill_dir>/scripts/anysearch_cli.py search "query" --max-results 5
+python <skill_dir>/scripts/anysearch_cli.py batch-search --query "q1" --query "q2" --max-results 3
+python <skill_dir>/scripts/anysearch_cli.py extract "https://example.com/page"
+python <skill_dir>/scripts/anysearch_cli.py get-sub-domains --domain finance
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## Workflow
 
@@ -57,7 +57,7 @@ Supported domains include:
 For vertical search, `--sdp` accepts comma-separated key-value pairs:
 
 ```bash
-python3 <skill_dir>/scripts/anysearch_cli.py search "AAPL" --domain finance --sub-domain finance.quote --sdp type=stock,symbol=AAPL,cn_code= --max-results 5
+python <skill_dir>/scripts/anysearch_cli.py search "AAPL" --domain finance --sub-domain finance.quote --sdp type=stock,symbol=AAPL,cn_code= --max-results 5
 ```
 
 ## Error Handling

@@ -60,12 +60,12 @@ State-changing actions such as like, favorite, coin, follow, comment, danmaku, u
 The bundled helper uses public Bilibili endpoints:
 
 ```bash
-python3 <skill_dir>/scripts/bilibili_cli.py search "keyword" --max-results 10
-python3 <skill_dir>/scripts/bilibili_cli.py video BV1xx411c7mD
-python3 <skill_dir>/scripts/bilibili_cli.py video "https://www.bilibili.com/video/BV1xx411c7mD"
+python <skill_dir>/scripts/bilibili_cli.py search "keyword" --max-results 10
+python <skill_dir>/scripts/bilibili_cli.py video BV1xx411c7mD
+python <skill_dir>/scripts/bilibili_cli.py video "https://www.bilibili.com/video/BV1xx411c7mD"
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## CLI Fallback Workflow
 

@@ -16,8 +16,9 @@ skills:
       ANYSEARCH_API_KEY: "${ANYSEARCH_API_KEY}"
     requirements:
       bins:
-        - python3
-      env:
+        - python
+      env: []
+      optional_env:
         - ANYSEARCH_API_KEY
       python_packages: []
     permissions:
@@ -37,7 +38,7 @@ skills:
       GITHUB_REACH_USER_AGENT: "Bamboo GitHub Reach/1"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       python_packages: []
     permissions:
@@ -57,7 +58,7 @@ skills:
       PAPER_REACH_USER_AGENT: "Bamboo Paper Reach/1"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       python_packages: []
     permissions:
@@ -80,7 +81,7 @@ skills:
       DOUYIN_REACH_MAX_DOWNLOAD_MB: "200"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       optional_bins:
         - ffmpeg
@@ -102,7 +103,7 @@ skills:
       YOUTUBE_REACH_LANGUAGES: "en,zh-Hans,zh-Hant,zh-CN,zh-TW"
     requirements:
       bins:
-        - python3
+        - python
         - yt-dlp
       env: []
       python_packages: []
@@ -123,7 +124,7 @@ skills:
       RSS_REACH_USER_AGENT: "Bamboo RSS Reach/1"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       python_packages: []
     permissions:
@@ -144,7 +145,7 @@ skills:
       BILIBILI_REACH_REFERER: "https://www.bilibili.com/"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       python_packages: []
     permissions:
@@ -165,7 +166,7 @@ skills:
       XIAOHONGSHU_REACH_REFERER: "https://www.xiaohongshu.com/"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       python_packages: []
     permissions:
@@ -186,7 +187,7 @@ skills:
       ZHIHU_REACH_REFERER: "https://www.zhihu.com/"
     requirements:
       bins:
-        - python3
+        - python
       env: []
       python_packages: []
     permissions:

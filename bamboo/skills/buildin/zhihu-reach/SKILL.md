@@ -62,12 +62,12 @@ State-changing actions such as like, favorite, follow, comment, answer, edit, pu
 ## Commands
 
 ```bash
-python3 <skill_dir>/scripts/zhihu_cli.py parse "Zhihu share text or URL"
-python3 <skill_dir>/scripts/zhihu_cli.py page "https://www.zhihu.com/question/..."
-python3 <skill_dir>/scripts/zhihu_cli.py search-url "keyword"
+python <skill_dir>/scripts/zhihu_cli.py parse "Zhihu share text or URL"
+python <skill_dir>/scripts/zhihu_cli.py page "https://www.zhihu.com/question/..."
+python <skill_dir>/scripts/zhihu_cli.py search-url "keyword"
 ```
 
-Use `python` instead of `python3` only when `python3` is unavailable and `python --version` reports Python 3.
+Use the same `python` environment that runs Bamboo.
 
 ## CLI Fallback Workflow
 
