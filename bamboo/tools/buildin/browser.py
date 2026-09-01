@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -95,6 +96,11 @@ class BrowserTool(Tool):
             )
         try:
             effective_timeout = _login_timeout(timeout_ms) if normalized_action == "wait_for_login" else _timeout(timeout_ms)
+            effective_headless = _effective_headless(
+                action=normalized_action,
+                url=url,
+                headless=_browser_headless_default() if headless is None else bool(headless),
+            )
             result = await self.session.execute(
                 BrowserAction(
                     action=normalized_action,
@@ -108,7 +114,7 @@ class BrowserTool(Tool):
                     wait_until=wait_until or "load",
                     screenshot_path=screenshot_path,
                     full_page=full_page,
-                    headless=_browser_headless_default() if headless is None else bool(headless),
+                    headless=effective_headless,
                 )
             )
         except BrowserToolError as exc:
@@ -150,6 +156,7 @@ class BrowserSession:
         self._browser: Any = None
         self._page: Any = None
         self._headless: bool | None = None
+        self._user_data_dir: Path | None = None
 
     async def execute(self, action: BrowserAction) -> ToolResult:
         """Dispatch one browser action."""
@@ -177,7 +184,9 @@ class BrowserSession:
 
     async def _ensure_page(self, *, headless: bool) -> Any:
         if self._page is not None:
-            return self._page
+            if self._headless == headless:
+                return self._page
+            await self.close()
         try:
             from playwright.async_api import async_playwright
         except ImportError as exc:
@@ -187,9 +196,14 @@ class BrowserSession:
             ) from exc
         try:
             self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.launch(headless=headless)
+            self._user_data_dir = _browser_user_data_dir()
+            self._user_data_dir.mkdir(parents=True, exist_ok=True)
+            self._browser = await self._playwright.chromium.launch_persistent_context(
+                user_data_dir=str(self._user_data_dir),
+                headless=headless,
+            )
             self._headless = headless
-            self._page = await self._browser.new_page()
+            self._page = self._browser.pages[0] if self._browser.pages else await self._browser.new_page()
             return self._page
         except Exception as exc:
             await self.close()
@@ -208,7 +222,13 @@ class BrowserSession:
         status = getattr(response, "status", None) if response is not None else None
         return ToolResult(
             content=f"Opened {current_url}\ntitle: {title}\nstatus: {status or 'n/a'}",
-            metadata={"action": "open", "url": current_url, "title": title, "status": status},
+            metadata={
+                **self._session_metadata(),
+                "action": "open",
+                "url": current_url,
+                "title": title,
+                "status": status,
+            },
         )
 
     async def _click(self, action: BrowserAction) -> ToolResult:
@@ -247,10 +267,16 @@ class BrowserSession:
     async def _extract_text(self, action: BrowserAction) -> ToolResult:
         page = await self._require_page(action)
         selector = action.selector.strip() or "body"
-        text = await page.locator(selector).inner_text(timeout=action.timeout_ms)
+        locator = page.locator(selector)
+        count = await locator.count()
+        if count > 1:
+            texts = [text.strip() for text in await locator.all_inner_texts() if text.strip()]
+            text = "\n\n".join(texts)
+        else:
+            text = await locator.inner_text(timeout=action.timeout_ms)
         return ToolResult(
             content=text,
-            metadata={"action": "extract_text", "selector": selector, "length": len(text)},
+            metadata={"action": "extract_text", "selector": selector, "match_count": count, "length": len(text)},
         )
 
     async def _eval(self, action: BrowserAction) -> ToolResult:
@@ -266,7 +292,7 @@ class BrowserSession:
     async def _wait_for(self, action: BrowserAction) -> ToolResult:
         page = await self._require_page(action)
         if action.selector.strip():
-            await page.locator(action.selector).wait_for(timeout=action.timeout_ms)
+            await page.locator(action.selector).first.wait_for(timeout=action.timeout_ms)
             return ToolResult(
                 content=f"Waited for `{action.selector}`.",
                 metadata={"action": "wait_for", "selector": action.selector},
@@ -296,6 +322,7 @@ class BrowserSession:
                 return ToolResult(
                     content=f"Login appears complete.\nurl: {page.url}\ntitle: {title}",
                     metadata={
+                        **self._session_metadata(),
                         "action": "wait_for_login",
                         "url": page.url,
                         "title": title,
@@ -347,10 +374,17 @@ class BrowserSession:
         if self._browser is not None:
             await self._browser.close()
             self._browser = None
+        self._user_data_dir = None
         if self._playwright is not None:
             await self._playwright.stop()
             self._playwright = None
         return ToolResult(content="Closed browser.", metadata={"action": "close"})
+
+    def _session_metadata(self) -> dict[str, Any]:
+        return {
+            "headless": self._headless,
+            "user_data_dir": str(self._user_data_dir) if self._user_data_dir else None,
+        }
 
 
 _browser_session: BrowserSession | None = None
@@ -387,16 +421,51 @@ def _looks_like_login_url(url: str) -> bool:
 
 def _browser_headless_default() -> bool:
     """Load the default browser launch mode from tools_buildin.yaml."""
+    browser_config = _browser_config()
+    return _as_bool(browser_config.get("headless"), default=True)
+
+
+def _browser_user_data_dir() -> Path:
+    """Return the persistent Playwright profile directory for BrowserTool."""
+    browser_config = _browser_config()
+    configured = str(browser_config.get("user_data_dir") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve(strict=False)
+    return get_userspace_dir() / "storage" / "browser" / "default"
+
+
+def _browser_config() -> dict[str, Any]:
+    """Load BrowserTool config from tools_buildin.yaml."""
     try:
         tools_config = BambooConfig().get("tools_buildin", {})
     except Exception:
-        return True
+        return {}
     if not isinstance(tools_config, dict):
-        return True
+        return {}
     browser_config = tools_config.get("browser", {})
     if not isinstance(browser_config, dict):
-        return True
-    return _as_bool(browser_config.get("headless"), default=True)
+        return {}
+    return browser_config
+
+
+def _effective_headless(*, action: str, url: str, headless: bool) -> bool:
+    if headless and action in {"open", "wait_for_login"} and _requires_headful_for_url(url):
+        return False
+    return headless
+
+
+def _requires_headful_for_url(url: str) -> bool:
+    hostname = (urllib.parse.urlparse(url).hostname or "").lower()
+    return (
+        hostname == "douyin.com"
+        or hostname.endswith(".douyin.com")
+        or hostname == "xiaohongshu.com"
+        or hostname.endswith(".xiaohongshu.com")
+        or hostname == "xhslink.com"
+        or hostname.endswith(".xhslink.com")
+        or hostname == "zhihu.com"
+        or hostname.endswith(".zhihu.com")
+    )
 
 
 def _as_bool(value: Any, *, default: bool) -> bool:

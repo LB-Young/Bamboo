@@ -44,6 +44,8 @@ Use public URLs and public HTML for quick link parsing, but use Bamboo's `browse
 
 Do not read browser cookies, local storage, QR-login state, account tokens, private APIs, creator-center analytics, or private account data directly. Login must happen only through a visible browser window opened by `browser action=open` with `headless=false`; the user completes QR/SMS/CAPTCHA manually. Do not bypass CAPTCHA, login walls, rate limits, or risk-control pages.
 
+For every Douyin browser action that opens or waits on a page, set `headless=false`. If transcript or speech-to-text capability is unavailable, report that the actual spoken content cannot be summarized from the available evidence; do not install Python packages, create ad hoc speech-recognition scripts, or replace video-content analysis with unrelated web research unless the user explicitly asks for that fallback.
+
 State-changing actions such as publish, upload, like, favorite, follow, comment, share, delete, or account switch require an explicit final user confirmation after showing the exact account, target, text, media, cover, tags, and schedule.
 
 ## Browser Workflows
@@ -143,3 +145,5 @@ Before any publish/upload action:
 ## Failure Handling
 
 If public pages fail, redirect to login, return risk-control content, or hide data, report the status and ask for a public URL, uploaded file, transcript, or visible-browser approval. Do not bypass platform protections.
+
+If the user explicitly says not to try other methods after this skill fails, stop after the bundled CLI/browser workflow fails and report the exact failure. Do not fall back to generic `web_fetch`, raw `curl`, generic search, or unrelated tools.

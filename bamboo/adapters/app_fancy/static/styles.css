@@ -1142,6 +1142,8 @@ textarea {
 .message.assistant ul,
 .message.assistant .md-table-wrap,
 .message.assistant .mermaid-wrap,
+.message.assistant .math-wrap,
+.message.assistant .katex-display,
 .message.assistant pre,
 .message.assistant h1,
 .message.assistant h2,
@@ -1154,6 +1156,8 @@ textarea {
 .message.assistant ul:last-child,
 .message.assistant .md-table-wrap:last-child,
 .message.assistant .mermaid-wrap:last-child,
+.message.assistant .math-wrap:last-child,
+.message.assistant .katex-display:last-child,
 .message.assistant pre:last-child {
   margin-bottom: 0;
 }
@@ -1202,6 +1206,28 @@ textarea {
 
 .message.assistant a {
   color: var(--accent-2);
+}
+
+.message.assistant .katex {
+  font-size: 1.04em;
+}
+
+.message.assistant .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 4px;
+}
+
+.message.assistant .math-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--code-bg);
+  padding: 12px;
+}
+
+.message.assistant .math-block {
+  min-width: max-content;
 }
 
 .message.assistant .mermaid-wrap {
@@ -1445,7 +1471,7 @@ textarea {
   grid-column: 2 / 5;
   justify-self: end;
   display: grid;
-  grid-template-columns: auto 150px;
+  grid-template-columns: auto minmax(130px, 150px) auto;
   align-items: center;
   gap: 8px;
   color: var(--muted);
@@ -1456,6 +1482,18 @@ textarea {
   height: 28px;
   padding: 0 8px;
   color: var(--text);
+}
+
+.copy-session-path {
+  height: 28px;
+  padding: 0 10px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.copy-session-path:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .context-panel {

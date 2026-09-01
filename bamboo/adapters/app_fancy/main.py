@@ -24,6 +24,7 @@ from bamboo.helpers.constant import LLMResponseEvent, SessionCompactEvent, Sessi
 from bamboo.helpers.logging import setup_logging
 from bamboo.helpers.requests_params import RunParams
 from bamboo.llms.media import image_from_source, images_from_text, merge_images
+from bamboo.memory.get_memory_path import get_date_memory_path, get_project_memory_path
 from bamboo.memory.scope import MemoryScope
 from bamboo.prompts import build_system_prompt
 from bamboo.runtime.context_compactor import HeuristicTokenCounter
@@ -135,9 +136,11 @@ class BambooFancyAppBridge(BambooAppBridge):
 
     def get_initial_state(self) -> dict[str, Any]:
         state = super().get_initial_state()
+        project, mode = self._resolve_scope(self.initial_project_path)
         state["context"] = self.get_context_usage()
         state["models"] = self.get_model_selector_state()
         state["permission_state"] = self.get_permission_state()
+        state["messages_path"] = self._messages_path_for(self.session_id, project, mode)
         return state
 
     def new_session(self, project_path: str = "") -> dict[str, Any]:
@@ -157,6 +160,7 @@ class BambooFancyAppBridge(BambooAppBridge):
             "context": self.get_context_usage(),
             "models": self.get_model_selector_state(),
             "permission_state": self.get_permission_state(),
+            "messages_path": self._messages_path_for(self.session_id, project, mode),
         }
         return result
 
@@ -205,6 +209,7 @@ class BambooFancyAppBridge(BambooAppBridge):
             "context": self.get_context_usage(),
             "models": self.get_model_selector_state(),
             "permission_state": self.get_permission_state(),
+            "messages_path": self._messages_path_for(session.session_id, project, mode),
             "running": session.session_id in self.running_sessions,
         }
 
@@ -350,6 +355,7 @@ class BambooFancyAppBridge(BambooAppBridge):
             "session_id": session_id,
             "model": selected_model,
             "permission_state": self.get_permission_state(),
+            "messages_path": self._messages_path_for(session_id, project, mode),
         }
 
     def get_changes(self, project_path: str = "") -> dict[str, Any]:
@@ -491,6 +497,7 @@ class BambooFancyAppBridge(BambooAppBridge):
                     "cancelled": stopped,
                     "sessions": self.list_sessions("" if mode == SessionMode.chat else str(project)),
                     "changes": self.get_changes("" if mode == SessionMode.chat else str(project)),
+                    "messages_path": self._messages_path_for(session_id, project, mode),
                 }
             )
             if self.session_id == session_id:
@@ -586,6 +593,15 @@ class BambooFancyAppBridge(BambooAppBridge):
                 system_prompt=self.current_task.session.context.system_prompt,
                 metadata=self.current_task.session.context.metadata,
             )
+
+    def _messages_path_for(self, session_id: str, project: Path, mode: SessionMode) -> str:
+        """Return the full local messages.jsonl path for a session."""
+        if self.current_task is not None and self.current_task.session.session_id == session_id:
+            store = self.current_task.session.memory_store
+            if store is not None:
+                return str(store.session_dir / "messages.jsonl")
+        memory_dir = get_project_memory_path(project) if mode == SessionMode.project else get_date_memory_path()
+        return str(memory_dir / session_id / "messages.jsonl")
 
 
 def _usage_input_tokens(usage: dict[str, int]) -> int:

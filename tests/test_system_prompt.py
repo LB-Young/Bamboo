@@ -177,6 +177,20 @@ def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     assert not (layout.root / "prompts" / "system_prompt.py").exists()
 
 
+def test_ensure_userspace_refreshes_builtin_skill_mirror() -> None:
+    """验证内置 skill 镜像会随包内版本刷新。"""
+    layout = ensure_userspace()
+    builtin_skill = layout.root / "buildin_skills" / "skill-creator" / "SKILL.md"
+    user_prompt = layout.root / "prompts" / "chat" / "00-identity.md"
+    builtin_skill.write_text("# stale builtin skill\n", encoding="utf-8")
+    user_prompt.write_text("# Custom Chat Identity\n\nkeep custom prompt", encoding="utf-8")
+
+    ensure_userspace()
+
+    assert "name: skill-creator" in builtin_skill.read_text(encoding="utf-8")
+    assert user_prompt.read_text(encoding="utf-8") == "# Custom Chat Identity\n\nkeep custom prompt"
+
+
 def test_build_prompt_prefers_userspace_prompt_sections(tmp_path: Path) -> None:
     """验证运行时优先读取用户空间中的 prompt section。"""
     layout = ensure_userspace()

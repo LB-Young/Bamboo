@@ -5,7 +5,13 @@ from __future__ import annotations
 import anyio
 
 from bamboo.tools.buildin.base import ToolResult
-from bamboo.tools.buildin.browser import BrowserAction, BrowserSession, BrowserTool, _format_browser_launch_error
+from bamboo.tools.buildin.browser import (
+    BrowserAction,
+    BrowserSession,
+    BrowserTool,
+    _browser_user_data_dir,
+    _format_browser_launch_error,
+)
 
 
 def test_browser_tool_dispatches_single_action_parameter() -> None:
@@ -97,6 +103,8 @@ def test_browser_session_wait_for_login_can_open_login_url() -> None:
 
         assert result.success
         assert result.metadata == {
+            "headless": False,
+            "user_data_dir": None,
             "action": "wait_for_login",
             "url": "https://example.com/dashboard",
             "title": "Dashboard",
@@ -104,6 +112,36 @@ def test_browser_session_wait_for_login_can_open_login_url() -> None:
         }
         assert session.launched_headless is False
         assert session.page.goto_calls == [("https://example.com/login", "load", 5000)]
+
+    anyio.run(run_test)
+
+
+def test_browser_session_wait_for_uses_first_matching_locator() -> None:
+    session = _FakeMultiMatchSession()
+
+    async def run_test() -> None:
+        result = await session.execute(
+            BrowserAction(
+                action="wait_for",
+                selector=".note-content, .title",
+                timeout_ms=5000,
+            )
+        )
+
+        assert result.success
+        assert session.locator.waited_timeout == 5000
+
+    anyio.run(run_test)
+
+
+def test_browser_session_extract_text_combines_multiple_matches() -> None:
+    session = _FakeMultiMatchSession()
+
+    async def run_test() -> None:
+        result = await session.execute(BrowserAction(action="extract_text", selector=".note-content, .title"))
+
+        assert result.content == "title\n\nbody"
+        assert result.metadata["match_count"] == 2  # type: ignore[index]
 
     anyio.run(run_test)
 
@@ -122,6 +160,23 @@ def test_browser_tool_uses_configured_headless_default(monkeypatch) -> None:
     anyio.run(run_test)
 
 
+def test_browser_tool_uses_configured_persistent_profile(monkeypatch, tmp_path) -> None:
+    profile = tmp_path / "profile"
+    monkeypatch.setattr(
+        "bamboo.tools.buildin.browser.BambooConfig",
+        lambda: _StubConfig({"browser": {"user_data_dir": str(profile)}}),
+    )
+
+    assert _browser_user_data_dir() == profile
+
+
+def test_browser_tool_defaults_to_userspace_persistent_profile(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("bamboo.tools.buildin.browser.BambooConfig", lambda: _StubConfig({"browser": {}}))
+    monkeypatch.setattr("bamboo.tools.buildin.browser.get_userspace_dir", lambda: tmp_path / ".bamboo")
+
+    assert _browser_user_data_dir() == tmp_path / ".bamboo" / "storage" / "browser" / "default"
+
+
 def test_browser_tool_call_headless_overrides_config(monkeypatch) -> None:
     fake = _FakeBrowserSession()
     monkeypatch.setattr("bamboo.tools.buildin.browser.BambooConfig", lambda: _StubConfig({"browser": {"headless": True}}))
@@ -129,6 +184,20 @@ def test_browser_tool_call_headless_overrides_config(monkeypatch) -> None:
 
     async def run_test() -> None:
         result = await tool.execute(action="open", url="https://example.com", headless=False)
+
+        assert result.success
+        assert fake.actions[0].headless is False
+
+    anyio.run(run_test)
+
+
+def test_browser_tool_forces_headful_for_guarded_social_domains(monkeypatch) -> None:
+    fake = _FakeBrowserSession()
+    monkeypatch.setattr("bamboo.tools.buildin.browser.BambooConfig", lambda: _StubConfig({"browser": {"headless": True}}))
+    tool = BrowserTool(session=fake)
+
+    async def run_test() -> None:
+        result = await tool.execute(action="open", url="https://www.zhihu.com/question/1")
 
         assert result.success
         assert fake.actions[0].headless is False
@@ -195,6 +264,38 @@ class _FakeLoginLocator:
 
     async def count(self) -> int:
         return 1 if self.selector == ".account-menu" and self.page.url.endswith("/dashboard") else 0
+
+
+class _FakeMultiMatchSession(BrowserSession):
+    def __init__(self) -> None:
+        super().__init__()
+        self.locator = _FakeMultiMatchLocator()
+        self._page = _FakeMultiMatchPage(self.locator)
+
+
+class _FakeMultiMatchLocator:
+    def __init__(self) -> None:
+        self.selector = ""
+        self.first = self
+        self.waited_timeout: int | None = None
+
+    async def wait_for(self, *, timeout: int) -> None:
+        self.waited_timeout = timeout
+
+    async def count(self) -> int:
+        return 2
+
+    async def all_inner_texts(self) -> list[str]:
+        return ["title", "", "body"]
+
+
+class _FakeMultiMatchPage:
+    def __init__(self, locator: _FakeMultiMatchLocator) -> None:
+        self._locator = locator
+
+    def locator(self, selector: str):
+        self._locator.selector = selector
+        return self._locator
 
 
 class _StubConfig:

@@ -26,6 +26,8 @@ Use Bamboo's `browser` tool as the primary execution path when login, dynamic no
 
 Do not read browser cookies, local app storage, QR-login state, account tokens, or private API credentials directly. Login must happen only through a visible browser window opened by `browser action=open` with `headless=false`; the user completes QR/SMS/CAPTCHA manually. If Xiaohongshu returns login walls, risk-control pages, CAPTCHA, or incomplete public HTML, use `browser action=wait_for_login` or ask for visible-browser approval instead of trying credential extraction.
 
+For every Xiaohongshu browser action that opens or waits on a page, set `headless=false`. Use original share URLs with `xsec_token` when available; canonical `/explore/<id>` URLs may 404 for shared notes that require the signed share token.
+
 State-changing actions such as like, favorite, follow, comment, private message, publish, upload, delete, or account switch require an explicit final user confirmation after showing the exact target and content.
 
 ## Browser Workflows
@@ -33,9 +35,10 @@ State-changing actions such as like, favorite, follow, comment, private message,
 ### Login
 
 1. Open `https://www.xiaohongshu.com/` or the target note URL with `browser action=open`, `headless=false`.
-2. Ask the user to complete QR/SMS/CAPTCHA in the visible browser.
-3. Use `browser action=wait_for_login` with a selector or URL pattern that indicates login has completed.
-4. Continue in the same browser session; never copy cookies or tokens into prompts, files, or command arguments.
+2. Inspect the visible page before asking the user to log in. If account-only UI is already visible, continue directly and do not ask for a new login.
+3. Ask the user to complete QR/SMS/CAPTCHA only when the page clearly shows a login wall, login dialog, CAPTCHA, or risk-control challenge.
+4. Use `browser action=wait_for_login` with a selector, script, or URL pattern that indicates the current page is usable after login or verification.
+5. Continue in the same browser session; never copy cookies or tokens into prompts, files, or command arguments.
 
 ### Note Explanation
 
@@ -58,6 +61,13 @@ State-changing actions such as like, favorite, follow, comment, private message,
 2. Extract visible profile fields, note cards, topics, stats, and recent post metadata.
 3. Sample visible notes and summarize topics, formats, hooks, audience assumptions, and update rhythm.
 4. Clearly mark gaps when data is hidden by login, pagination, or risk control.
+
+### Personalized Pages
+
+1. For user-specific pages such as personal collections, likes, or the logged-in user's profile, first open Xiaohongshu in the visible persistent browser and check whether the account UI is already present.
+2. Do not announce that login is required until a login wall, dialog, or verification page is actually visible.
+3. Prefer clicking exact logged-in-user navigation such as the `我` entry. Do not infer the current user's profile from arbitrary `user/profile` links in the feed.
+4. If a CAPTCHA or manual verification appears, wait for the user to complete it in the visible browser, then continue on the same page. Do not switch to cookie extraction, raw APIs, or repeated alternate page probes.
 
 ## Commands
 
@@ -84,3 +94,5 @@ Use the same `python` environment that runs Bamboo.
 ## Failure Handling
 
 If public pages fail, redirect to a login wall, or return risk-control content, report the status and ask for a public note URL or pasted public content. Do not bypass rate limits, CAPTCHA, or login requirements.
+
+If the user explicitly says not to try other methods after this skill fails, stop after the bundled CLI/browser workflow fails and report the exact failure. Do not fall back to generic `web_fetch`, raw `curl`, generic search, or unrelated tools.

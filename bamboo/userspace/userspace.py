@@ -32,6 +32,7 @@ dirs: list[str] = [
     "storage/dates",            # 日期级存储
     "storage/skills",           # Skill 状态、索引、校验和使用记录
     "storage/plugins",          # Plugin lock 和审计记录
+    "storage/browser",          # BrowserTool 持久化 profile
     "storage/bkn",              # BKN 索引、缓存、审计和状态
     "storage/bkn/indexes",      # BKN 轻量索引
     "storage/bkn/cache",        # BKN 可选数据源缓存
@@ -51,6 +52,10 @@ OVERWRITABLE_BUILTIN_DIRS: set[str] = {
     "buildin_skills",
     "buildin_subagents",
     "buildin_workflows",
+}
+
+NEVER_OVERWRITE_DIRS: set[str] = {
+    "memory",
 }
 
 
@@ -106,7 +111,7 @@ def ensure_userspace(*, overwrite: bool = False) -> UserspaceLayout:
 
     for subdir in dirs:
         target = bamboo_root_dir / subdir
-        if overwrite and subdir in OVERWRITABLE_BUILTIN_DIRS and target.exists():
+        if overwrite and subdir in OVERWRITABLE_BUILTIN_DIRS and subdir not in NEVER_OVERWRITE_DIRS and target.exists():
             shutil.rmtree(target)
         target.mkdir(parents=True, exist_ok=True)
 
@@ -115,6 +120,7 @@ def ensure_userspace(*, overwrite: bool = False) -> UserspaceLayout:
         else:
             logger.info(f"Ensured directory: {target}")
     MemoryManager(memory_root=bamboo_root_dir / "memory").ensure_base_knowledge_templates()
+    _ensure_env_file(bamboo_root_dir)
     _ensure_cron_jobs_template(bamboo_root_dir)
     return UserspaceLayout(root=bamboo_root_dir)
 
@@ -137,12 +143,23 @@ def copy_builtin_info(subdir: str, target_dir: Path) -> None:
             destination_path = target_dir / relative_path
             if source_path.is_dir():
                 destination_path.mkdir(parents=True, exist_ok=True)
-            elif not destination_path.exists():
+            elif _should_copy_builtin_file(subdir, source_path, destination_path):
                 destination_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source_path, destination_path)
         logger.info(f"Copied built-in {subdir} to {target_dir}")
     else:
         logger.warning(f"Built-in {subdir} not found in package.")
+
+
+def _should_copy_builtin_file(subdir: str, source_path: Path, destination_path: Path) -> bool:
+    if not destination_path.exists():
+        return True
+    if subdir not in OVERWRITABLE_BUILTIN_DIRS:
+        return False
+    try:
+        return source_path.read_bytes() != destination_path.read_bytes()
+    except OSError:
+        return True
 
 
 def _ensure_cron_jobs_template(bamboo_root_dir: Path) -> None:
@@ -156,5 +173,16 @@ def _ensure_cron_jobs_template(bamboo_root_dir: Path) -> None:
         "# Start scheduler with: bamboo cron start\n"
         "# Run one tick with: bamboo cron tick\n"
         "jobs: []\n",
+        encoding="utf-8",
+    )
+
+
+def _ensure_env_file(bamboo_root_dir: Path) -> None:
+    """Create the user secret env file without overwriting existing keys."""
+    env_path = bamboo_root_dir / ".env"
+    if env_path.exists():
+        return
+    env_path.write_text(
+        "# Bamboo local secrets. Reference these from configs with ${ENV_NAME}.\n",
         encoding="utf-8",
     )

@@ -12,8 +12,8 @@ from typer.testing import CliRunner
 from bamboo.adapters.app import AppDependencyError
 from bamboo.adapters.app.main import BambooAppBridge, _event_payload, _parse_numstat
 from bamboo.adapters.app_fancy.main import (
-    BambooFancyAppBridge,
     WINDOWS_APP_USER_MODEL_ID,
+    BambooFancyAppBridge,
     _app_icon_path,
     _changed_files_expanded,
     _file_diff_summary,
@@ -22,7 +22,13 @@ from bamboo.adapters.app_fancy.main import (
     _untracked_file_diff,
 )
 from bamboo.factory.task_factory import TaskFactory
-from bamboo.helpers.constant import LLMRequestEvent, ReasoningDeltaEvent, SessionCompactEvent, SessionMode, ToolResultEvent
+from bamboo.helpers.constant import (
+    LLMRequestEvent,
+    ReasoningDeltaEvent,
+    SessionCompactEvent,
+    SessionMode,
+    ToolResultEvent,
+)
 from bamboo.helpers.requests_params import RunParams
 from bamboo.run import app
 
@@ -206,6 +212,28 @@ def test_app_fancy_context_usage_tracks_active_prompt_messages(monkeypatch) -> N
     assert bridge.latest_usage == {}
     assert usage["used_tokens"] < bridge.token_counter.count_text(inactive.content)
     assert usage["percent"] < 100
+
+
+def test_app_fancy_reports_session_messages_path(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        BambooFancyAppBridge,
+        "_create_runtime",
+        lambda self: SimpleNamespace(task_factory=SimpleNamespace(config={})),
+    )
+    monkeypatch.setattr("bamboo.adapters.app_fancy.main.get_date_memory_path", lambda: tmp_path / "dates" / "today")
+    bridge = BambooFancyAppBridge(
+        project=None,
+        model="",
+        provider="",
+        permission="default",
+        session_mode=SessionMode.chat,
+        initial_message="",
+        image_paths=[],
+    )
+
+    messages_path = bridge._messages_path_for(bridge.session_id, tmp_path, SessionMode.chat)
+
+    assert messages_path == str(tmp_path / "dates" / "today" / bridge.session_id / "messages.jsonl")
 
 
 def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:

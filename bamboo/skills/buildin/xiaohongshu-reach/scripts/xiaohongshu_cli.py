@@ -13,9 +13,29 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any
 
-from bamboo.helpers.config import load_builtin_skill_variables
+try:
+    from bamboo.helpers.config import load_builtin_skill_variables
+except ModuleNotFoundError:
+
+    def load_builtin_skill_variables(skill_name: str) -> dict[str, Any]:
+        config_path = Path.home() / ".bamboo" / "configs" / "skills_buildin.yaml"
+        if not config_path.is_file():
+            return {}
+        try:
+            import yaml
+        except ModuleNotFoundError:
+            return {}
+        try:
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            return {}
+        skills = data.get("skills") if isinstance(data, dict) else {}
+        config = skills.get(skill_name) if isinstance(skills, dict) else {}
+        variables = config.get("variables") if isinstance(config, dict) else {}
+        return {str(key): value for key, value in variables.items()} if isinstance(variables, dict) else {}
 
 FALLBACK_USER_AGENT = "Mozilla/5.0 Bamboo Xiaohongshu Reach/1"
 FALLBACK_REFERER = "https://www.xiaohongshu.com/"

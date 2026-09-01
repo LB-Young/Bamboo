@@ -129,6 +129,34 @@ def test_skill_registry_honors_builtin_central_disabled_config(tmp_path: Path) -
     assert state.status == "disabled"
 
 
+def test_skill_registry_prefers_package_builtin_over_stale_mirror(tmp_path: Path) -> None:
+    """验证用户空间旧内置镜像不会覆盖包内最新版 skill。"""
+    mirror = tmp_path / "buildin_skills"
+    stale_skill = mirror / "skill-creator" / "SKILL.md"
+    stale_skill.parent.mkdir(parents=True)
+    stale_skill.write_text(
+        "---\n"
+        "name: skill-creator\n"
+        "description: stale mirror\n"
+        "---\n"
+        "\n"
+        "# Stale\n",
+        encoding="utf-8",
+    )
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    registry = SkillRegistry(
+        skill_dirs=[("buildin", mirror), ("buildin", PACKAGE_BUILTIN_SKILLS_DIR)],
+        store=store,
+    )
+
+    registry.refresh()
+    definition = registry.get("skill-creator")
+
+    assert definition is not None
+    assert Path(definition.source_path) == PACKAGE_BUILTIN_SKILLS_DIR / "skill-creator"
+    assert definition.description != "stale mirror"
+
+
 @pytest.mark.parametrize(
     ("skill_name", "expected_text"),
     [
@@ -361,6 +389,21 @@ def test_scripted_builtin_skills_use_bamboo_python_environment() -> None:
         assert "python3" not in skills[name]["requirements"]["bins"]
 
 
+def test_reach_skills_honor_user_no_fallback_instruction() -> None:
+    """验证平台 reach skill 明确禁止违背用户的 no-fallback 限制。"""
+    for name in ("douyin-reach", "xiaohongshu-reach", "zhihu-reach"):
+        content = (PACKAGE_BUILTIN_SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
+        assert "If the user explicitly says not to try other methods" in content
+        assert "Do not fall back to generic `web_fetch`, raw `curl`, generic search, or unrelated tools." in content
+
+
+def test_reach_skills_require_headful_browser_for_guarded_platforms() -> None:
+    """验证登录态平台的 browser workflow 明确使用可见浏览器。"""
+    for name in ("douyin-reach", "xiaohongshu-reach", "zhihu-reach"):
+        content = (PACKAGE_BUILTIN_SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
+        assert "set `headless=false`" in content
+
+
 def test_builtin_skill_directories_do_not_keep_local_config_yaml() -> None:
     """验证内置 Skill 配置集中在 skills_buildin.yaml，不保留目录级 config.yaml。"""
     assert list(PACKAGE_BUILTIN_SKILLS_DIR.glob("*/config.yaml")) == []
@@ -479,6 +522,29 @@ def test_builtin_xiaohongshu_parse_extracts_note_id() -> None:
     assert output["canonical_urls"] == ["https://www.xiaohongshu.com/explore/65f123456789abcdef123456"]
 
 
+def test_builtin_xiaohongshu_parse_runs_without_bamboo_package() -> None:
+    """验证 Xiaohongshu reach 脚本没有安装 bamboo 包时仍可解析链接。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "xiaohongshu-reach" / "scripts" / "xiaohongshu_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            str(script),
+            "parse",
+            "看看这个 https://www.xiaohongshu.com/explore/65f123456789abcdef123456",
+        ],
+        cwd=script.parent,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["note_ids"] == ["65f123456789abcdef123456"]
+
+
 def test_builtin_douyin_parse_extracts_video_id() -> None:
     """验证 Douyin reach 可以从公开链接文本提取 video id。"""
     script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
@@ -499,6 +565,54 @@ def test_builtin_douyin_parse_extracts_video_id() -> None:
     output = json.loads(result.stdout)
     assert output["video_ids"] == ["7123456789012345678"]
     assert output["canonical_video_urls"] == ["https://www.douyin.com/video/7123456789012345678"]
+
+
+def test_builtin_douyin_parse_runs_without_bamboo_package() -> None:
+    """验证 Douyin reach 脚本没有安装 bamboo 包时仍可解析链接。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "douyin-reach" / "scripts" / "douyin_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            str(script),
+            "parse",
+            "看看这个 https://www.douyin.com/video/7123456789012345678",
+        ],
+        cwd=script.parent,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["video_ids"] == ["7123456789012345678"]
+
+
+def test_builtin_zhihu_parse_runs_without_bamboo_package() -> None:
+    """验证 Zhihu reach 脚本没有安装 bamboo 包时仍可解析链接。"""
+    script = PACKAGE_BUILTIN_SKILLS_DIR / "zhihu-reach" / "scripts" / "zhihu_cli.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            str(script),
+            "parse",
+            "看看这个 https://www.zhihu.com/question/1986872411988173762/answer/2069851123398226947",
+        ],
+        cwd=script.parent,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["entities"] == [
+        {"type": "answer", "id": "2069851123398226947", "question_id": "1986872411988173762"}
+    ]
 
 
 def test_builtin_douyin_parse_extracts_user_and_collection_ids() -> None:

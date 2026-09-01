@@ -2,3 +2,6 @@ browser:
   # BrowserTool uses Playwright Chromium. By default it runs headless.
   # Set to false to launch a visible browser window for debugging.
   headless: true
+  # Persistent Chromium profile used by BrowserTool. Login state for sites such
+  # as Xiaohongshu, Douyin, and Zhihu is stored here by the browser itself.
+  user_data_dir: "~/.bamboo/storage/browser/default"

@@ -25,11 +25,25 @@ const state = {
   stopRequested: false,
   theme: localStorage.getItem("bamboo.app.theme") || "dark",
   permissionMode: localStorage.getItem("bamboo.app.permissionMode") || "default",
+  sessionMessagesPath: "",
   recentProjects: [],
   projectMenuOpen: false,
 };
 
-window.BambooFancyVersion = "knowledge-panel-v8";
+window.BambooFancyVersion = "latex-v1";
+
+const MATH_ENVIRONMENTS = [
+  "equation",
+  "equation*",
+  "align",
+  "align*",
+  "aligned",
+  "gather",
+  "gather*",
+  "multline",
+  "multline*",
+  "split",
+];
 
 applyTheme(state.theme);
 
@@ -39,6 +53,7 @@ const els = {
   projectMenu: document.getElementById("projectMenu"),
   modelSelect: document.getElementById("modelSelect"),
   permissionMode: document.getElementById("permissionMode"),
+  copySessionPath: document.getElementById("copySessionPath"),
   applyProject: document.getElementById("applyProject"),
   sessionFilterButtons: Array.from(document.querySelectorAll("[data-session-filter]")),
   newSession: document.getElementById("newSession"),
@@ -101,6 +116,7 @@ async function init() {
   state.projectPath = data.project_path || "";
   state.mode = data.mode || "chat";
   state.currentSessionId = data.session_id || null;
+  setSessionMessagesPath(data.messages_path || "");
   state.recentProjects = Array.isArray(data.recent_projects) ? data.recent_projects : [];
   els.projectPath.value = state.projectPath;
   renderProjectOptions();
@@ -290,6 +306,7 @@ async function loadSession(session) {
   const data = await apiCall("load_session", session.record_dir);
   if (!data.ok) return showSystem(data.error || "Load failed", "error");
   state.currentSessionId = data.session_id;
+  setSessionMessagesPath(data.messages_path || session.messages_path || "");
   state.mode = data.mode || "chat";
   state.projectPath = data.project_path || "";
   setSessionKnowledgeUpdates(state.currentSessionId, data.knowledge_updates || []);
@@ -319,6 +336,7 @@ async function newSession() {
   const data = await apiCall("new_session", state.projectPath);
   if (!data.ok) return showSystem(data.error || "New session failed", "error");
   state.currentSessionId = data.session_id;
+  setSessionMessagesPath(data.messages_path || "");
   state.knowledgeUpdates.set(state.currentSessionId, []);
   renderSessions(data.sessions || []);
   renderChanges(data.changes || {});
@@ -369,6 +387,7 @@ async function sendMessage() {
     setStatus("idle");
   } else if (result.model) {
     if (result.session_id) state.runningSessions.add(result.session_id);
+    if (result.messages_path) setSessionMessagesPath(result.messages_path);
     setSelectedModel(result.model);
     if (result.permission_state) renderPermissionState(result.permission_state);
     updateActiveRunStatus();
@@ -406,6 +425,7 @@ function handleEvent(event) {
       return;
     }
     const cancelled = Boolean(event.cancelled || state.stopRequested);
+    if (event.messages_path) setSessionMessagesPath(event.messages_path);
     setStatus("idle");
     state.stopRequested = false;
     stopTimer();
@@ -587,6 +607,7 @@ function renderMessageContent(element, role, text) {
   if (role === "assistant") {
     body.innerHTML = markdownToHtml(text || "");
     renderMermaidBlocks(body);
+    renderMathBlocks(body);
   } else {
     body.textContent = text || "";
   }
@@ -648,6 +669,14 @@ function markdownToHtml(markdown) {
       flushList();
       continue;
     }
+    const mathEnvironment = collectMathEnvironment(lines, index);
+    if (mathEnvironment) {
+      flushParagraph();
+      flushList();
+      html.push(renderMathBlock(mathEnvironment.code));
+      index = mathEnvironment.nextIndex - 1;
+      continue;
+    }
     if (isTableStart(lines, index)) {
       flushParagraph();
       flushList();
@@ -695,7 +724,57 @@ function renderCodeBlock(language, code) {
   if (normalized === "mermaid" || normalized === "mmd") {
     return `<div class="mermaid-wrap"><div class="mermaid">${escapeHtml(code)}</div></div>`;
   }
-  return `<pre><code${language ? ` data-lang="${escapeHtml(language)}"` : ""}>${escapeHtml(code)}</code></pre>`;
+  if (isMathOnlyCodeBlock(normalized, code)) {
+    return renderMathBlock(code);
+  }
+  const mathPreviews = extractMathEnvironments(code).map((math) => renderMathBlock(math)).join("");
+  return `<pre><code${language ? ` data-lang="${escapeHtml(language)}"` : ""}>${escapeHtml(code)}</code></pre>${mathPreviews}`;
+}
+
+function renderMathBlock(code) {
+  return `<div class="math-wrap"><div class="math-block">${escapeHtml(code.trim())}</div></div>`;
+}
+
+function collectMathEnvironment(lines, startIndex) {
+  const line = lines[startIndex] || "";
+  const env = mathEnvironmentName(line);
+  if (!env) return null;
+  const endPattern = new RegExp(`\\\\end\\{${escapeRegExp(env)}\\}`);
+  const collected = [];
+  for (let index = startIndex; index < lines.length; index += 1) {
+    collected.push(lines[index]);
+    if (endPattern.test(lines[index])) {
+      return { code: collected.join("\n"), nextIndex: index + 1 };
+    }
+  }
+  return null;
+}
+
+function mathEnvironmentName(line) {
+  const match = /^\s*\\begin\{([^}]+)\}/.exec(line || "");
+  if (!match) return "";
+  return MATH_ENVIRONMENTS.includes(match[1]) ? match[1] : "";
+}
+
+function isMathOnlyCodeBlock(language, code) {
+  const normalized = String(code || "").trim();
+  if (!normalized) return false;
+  if (["math", "latex-math", "tex-math"].includes(language)) return true;
+  if (["latex", "tex"].includes(language) && extractMathEnvironments(normalized).join("\n\n").trim() === normalized) {
+    return true;
+  }
+  return extractMathEnvironments(normalized).join("\n\n").trim() === normalized;
+}
+
+function extractMathEnvironments(code) {
+  const source = String(code || "");
+  const environments = MATH_ENVIRONMENTS.map(escapeRegExp).join("|");
+  const pattern = new RegExp(`\\\\begin\\{(${environments})\\}[\\s\\S]*?\\\\end\\{\\1\\}`, "g");
+  return source.match(pattern) || [];
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function initMermaid() {
@@ -740,6 +819,44 @@ function renderMermaidBlocks(root) {
     window.mermaid.run({ nodes });
   } catch (error) {
     console.warn("mermaid render failed", error);
+  }
+}
+
+function renderMathBlocks(root) {
+  renderExplicitMathBlocks(root);
+  if (!window.renderMathInElement) return;
+  try {
+    window.renderMathInElement(root, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "\\[", right: "\\]", display: true },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "$", right: "$", display: false },
+      ],
+      ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"],
+      throwOnError: false,
+      strict: false,
+    });
+  } catch (error) {
+    console.warn("math render failed", error);
+  }
+}
+
+function renderExplicitMathBlocks(root) {
+  if (!window.katex?.render) return;
+  const nodes = Array.from(root.querySelectorAll(".math-block:not([data-processed])"));
+  for (const node of nodes) {
+    const source = node.textContent || "";
+    try {
+      window.katex.render(source, node, {
+        displayMode: true,
+        throwOnError: false,
+        strict: false,
+      });
+      node.dataset.processed = "true";
+    } catch (error) {
+      console.warn("math block render failed", error);
+    }
   }
 }
 
@@ -1375,6 +1492,52 @@ function renderPermissionState(permissionState, options = {}) {
   localStorage.setItem("bamboo.app.permissionMode", mode);
 }
 
+function setSessionMessagesPath(path) {
+  state.sessionMessagesPath = path || "";
+  if (!els.copySessionPath) return;
+  els.copySessionPath.disabled = !state.sessionMessagesPath;
+  els.copySessionPath.title = state.sessionMessagesPath
+    ? `Copy ${state.sessionMessagesPath}`
+    : "Session messages path is not available yet";
+}
+
+async function copySessionMessagesPath() {
+  if (!state.sessionMessagesPath) return;
+  const value = state.sessionMessagesPath;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      fallbackCopyText(value);
+    }
+    showCopySessionPathStatus("Copied");
+  } catch (error) {
+    fallbackCopyText(value);
+    showCopySessionPathStatus("Copied");
+  }
+}
+
+function fallbackCopyText(value) {
+  const area = document.createElement("textarea");
+  area.value = value;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
+}
+
+function showCopySessionPathStatus(text) {
+  if (!els.copySessionPath) return;
+  const original = els.copySessionPath.textContent;
+  els.copySessionPath.textContent = text;
+  window.setTimeout(() => {
+    els.copySessionPath.textContent = original || "Copy log path";
+  }, 1200);
+}
+
 function permissionStateToMode(permissionState) {
   if (!permissionState || typeof permissionState !== "object") return state.permissionMode || "default";
   const permission = String(permissionState.permission || "default").toLowerCase();
@@ -1662,6 +1825,12 @@ if (els.permissionMode) {
   els.permissionMode.addEventListener("change", () => {
     state.permissionMode = els.permissionMode.value || "default";
     localStorage.setItem("bamboo.app.permissionMode", state.permissionMode);
+  });
+}
+if (els.copySessionPath) {
+  els.copySessionPath.addEventListener("click", (event) => {
+    event.preventDefault();
+    void copySessionMessagesPath();
   });
 }
 els.messageInput.addEventListener("keydown", (event) => {

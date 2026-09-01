@@ -30,8 +30,8 @@ class SkillRegistry:
     ) -> None:
         """初始化 Skill 注册表。"""
         self.skill_dirs = skill_dirs or [
-            ("buildin", PACKAGE_BUILTIN_SKILLS_DIR),
             ("buildin", get_builtin_skills_dir()),
+            ("buildin", PACKAGE_BUILTIN_SKILLS_DIR),
             ("user", get_user_skills_dir()),
         ]
         self.store = store or SkillStore()

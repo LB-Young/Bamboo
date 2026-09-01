@@ -33,6 +33,7 @@ def list_sessions(*, mode: str, project_path: Path | None = None, limit: int = 4
             "created_at": record.created_at,
             "updated_at": record.updated_at,
             "record_dir": str(record.record_dir),
+            "messages_path": str(record.record_dir / "messages.jsonl"),
             "project_root": str(record.project_root),
             "metadata": dict(record.metadata),
         }

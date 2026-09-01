@@ -1,11 +1,12 @@
-import platform
 import os
+import platform
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 PACKAGE_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "configs"
+ENV_FILE_NAME = ".env"
 
 
 class BambooConfig:
@@ -45,6 +46,7 @@ class BambooConfig:
     def load_config(self) -> None:
         """Load all YAML config files from the user's local configs directory."""
         configs_dir = BambooConfig.get_configs_dir()
+        load_user_env()
 
         if not configs_dir.exists():
             print(f"Configs directory not found: {configs_dir}")
@@ -54,7 +56,7 @@ class BambooConfig:
         loaded: dict[str, dict[str, Any]] = {}
         for yaml_file in sorted(configs_dir.glob("*.yaml")):
             try:
-                with open(yaml_file, "r", encoding="utf-8") as f:
+                with open(yaml_file, encoding="utf-8") as f:
                     data = yaml.safe_load(f)
                 if isinstance(data, dict):
                     loaded[yaml_file.stem] = data
@@ -120,6 +122,45 @@ def builtin_skill_config_paths() -> list[Path]:
         PACKAGE_CONFIGS_DIR / "skills_buildin.yaml",
         BambooConfig.get_configs_dir() / "skills_buildin.yaml",
     ]
+
+
+def load_user_env(*, env_path: Path | None = None, override: bool = False) -> None:
+    """Load key/value pairs from ~/.bamboo/.env into process environment."""
+    path = env_path or BambooConfig.get_configs_dir().parent / ENV_FILE_NAME
+    if not path.is_file():
+        return
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except OSError:
+        return
+    for raw_line in lines:
+        parsed = _parse_env_line(raw_line)
+        if parsed is None:
+            continue
+        key, value = parsed
+        if override or key not in os.environ:
+            os.environ[key] = value
+
+
+def _parse_env_line(raw_line: str) -> tuple[str, str] | None:
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        return None
+    if line.startswith("export "):
+        line = line[len("export ") :].lstrip()
+    if "=" not in line:
+        return None
+    key, value = line.split("=", 1)
+    key = key.strip()
+    if not key or not key.replace("_", "").isalnum() or key[0].isdigit():
+        return None
+    return key, _strip_env_value(value.strip())
+
+
+def _strip_env_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    return value
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

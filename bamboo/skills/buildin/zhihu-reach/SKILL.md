@@ -26,6 +26,8 @@ Use Bamboo's `browser` tool as the primary execution path when login, dynamic an
 
 Do not read browser cookies, local storage, login state, account tokens, private drafts, private messages, or private API credentials directly. Login must happen only through a visible browser window opened by `browser action=open` with `headless=false`; the user completes QR/SMS/CAPTCHA manually. If Zhihu returns login walls, CAPTCHA, risk-control pages, or incomplete public HTML, use `browser action=wait_for_login` or ask for visible-browser approval instead of trying credential extraction.
 
+For every Zhihu browser action that opens or waits on a page, set `headless=false`. If a page returns a Zhihu risk-control JSON/error such as code `40362`, stop and report the risk-control status instead of repeatedly trying APIs, generic search, raw `curl`, or `web_fetch`.
+
 State-changing actions such as like, favorite, follow, comment, answer, edit, publish, delete, vote, report, private message, or account switch require an explicit final user confirmation after showing the exact target and content.
 
 ## Browser Workflows
@@ -82,3 +84,5 @@ Use the same `python` environment that runs Bamboo.
 ## Failure Handling
 
 If public pages fail, redirect to a login wall, or return risk-control content, report the status and ask for a public URL or pasted public content. Do not bypass rate limits, CAPTCHA, or login requirements.
+
+If the user explicitly says not to try other methods after this skill fails, stop after the bundled CLI/browser workflow fails and report the exact failure. Do not fall back to generic `web_fetch`, raw `curl`, generic search, or unrelated tools.

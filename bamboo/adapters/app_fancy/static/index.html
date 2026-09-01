@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bamboo</title>
-    <link rel="stylesheet" href="./styles.css?v=knowledge-panel-v8" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+    <link rel="stylesheet" href="./styles.css?v=latex-v1" />
   </head>
   <body>
     <div id="app">
@@ -144,6 +145,7 @@
               <option value="read-only">Read only</option>
               <option value="bypass">Bypass</option>
             </select>
+            <button id="copySessionPath" class="copy-session-path" type="button" title="Copy session messages.jsonl path">Copy log path</button>
           </label>
         </footer>
       </main>
@@ -184,6 +186,8 @@
       </aside>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <script src="./app.js?v=knowledge-panel-v8"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+    <script defer src="./app.js?v=latex-v1"></script>
   </body>
 </html>

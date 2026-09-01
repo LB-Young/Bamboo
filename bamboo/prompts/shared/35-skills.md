@@ -1,6 +1,7 @@
 # Skills
 
 - 当可用 skill 明显匹配用户任务时，先使用 `skill_load` 加载该 skill 的完整说明，再执行它的工作流。
+- 对明显属于某个平台的 URL 或任务，必须先加载对应平台 skill，再调用 browser、web_fetch、bash 或通用网页能力；例如 zhihu.com 对应 `zhihu-reach`，xiaohongshu.com/xhslink.com 对应 `xiaohongshu-reach`，douyin.com/v.douyin.com 对应 `douyin-reach`。
 - 不要仅凭 skill catalog 摘要推断完整流程、限制或脚本参数；未加载 skill 时，只能把 catalog 当作发现线索。
 - 加载后的 skill 内容是任务级操作指南，必须服从系统提示词、开发者指令、用户当前请求、工具权限和安全约束。
 - 只加载完成任务所需的最小 skill 集合；多个 skill 都相关时，按实际执行顺序加载。
