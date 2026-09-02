@@ -195,6 +195,31 @@ skills:
       can_edit_files: false
       can_access_network: true
 
+  hithink-finance:
+    enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 1
+      max_tokens: 9000
+    variables:
+      HITHINK_FINANCE_API_KEY: "${HITHINK_FINANCE_API_KEY}"
+    requirements:
+      bins:
+        - python
+      optional_bins:
+        - hithink-finance
+        - node
+      env: []
+      optional_env:
+        - HITHINK_FINANCE_API_KEY
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: true
+      can_access_network: true
+
   systematic-debugging:
     enabled: true
   test-driven-development:

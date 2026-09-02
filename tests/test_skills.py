@@ -189,6 +189,40 @@ def test_prompt_toolkit_adapted_builtin_skills_are_registered(
     assert expected_text in registry.load_skill_content(skill_name)
 
 
+def test_hithink_finance_builtin_skill_is_registered_with_references(tmp_path: Path) -> None:
+    """验证同花顺金融数据服务 Skill 作为 Bamboo 内置 Skill 可加载。"""
+    store = SkillStore(root=tmp_path / "storage" / "skills")
+    registry = SkillRegistry(
+        skill_dirs=[("buildin", PACKAGE_BUILTIN_SKILLS_DIR)],
+        store=store,
+    )
+    registry.refresh()
+
+    definition = registry.get("hithink-finance")
+
+    assert definition is not None
+    assert definition.user_invocable is True
+    assert "同花顺金融数据服务" in registry.load_skill_content(
+        "hithink-finance",
+        include_experiences=False,
+        references=["cli.md"],
+    )
+    resource_files = registry.list_resource_files("hithink-finance", limit=40)
+    assert "references/cli.md" in resource_files
+    assert "references/api/endpoints-prices.md" in resource_files
+
+
+def test_hithink_finance_builtin_references_are_included_in_package_data() -> None:
+    """验证打包配置会包含内置 Skill 的多层 references。"""
+    pyproject = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+
+    package_data = pyproject["tool"]["setuptools"]["package-data"]["bamboo"]
+
+    assert "skills/buildin/*/references/*" in package_data
+    assert "skills/buildin/*/references/*/*" in package_data
+    assert "skills/buildin/*/agents/*" in package_data
+
+
 def test_skill_registry_tolerates_corrupt_state_file(tmp_path: Path) -> None:
     """验证损坏的 state.json 不会阻断 Bamboo 启动。"""
     skills_dir = tmp_path / "skills"
