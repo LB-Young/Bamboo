@@ -138,6 +138,13 @@ def test_images_from_text_extracts_http_image_url() -> None:
     assert images[0].source == "https://example.com/a/1.webp?x=1"
 
 
+def test_images_from_text_stops_before_escaped_newline_marker() -> None:
+    """验证工具结果 JSON 里的 \\nSaved 不会被当作 URL query 的一部分。"""
+    images = images_from_text("Result URLs:\\n- https://example.com/a/1.webp?x=1\\nSaved files:")
+
+    assert images[0].source == "https://example.com/a/1.webp?x=1"
+
+
 def test_images_from_text_does_not_duplicate_url_as_absolute_path() -> None:
     """验证 HTTP URL 不会被绝对路径规则重复识别。"""
     images = images_from_text("look at https://example.com/a/1.webp")

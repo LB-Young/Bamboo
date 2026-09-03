@@ -311,6 +311,26 @@ textarea {
   align-self: flex-start;
 }
 
+.message.assistant .output-image {
+  margin: 10px 0;
+  max-width: min(100%, 760px);
+}
+
+.message.assistant .output-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.message.assistant .output-image figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .message.tool,
 .message.system {
   align-self: center;

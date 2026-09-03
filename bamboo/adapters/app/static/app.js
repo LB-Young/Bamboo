@@ -8,6 +8,7 @@ const state = {
   pendingAssistant: null,
   activeReasoning: null,
   toolRows: new Map(),
+  localImageCache: new Map(),
 };
 
 const els = {
@@ -194,12 +195,13 @@ function handleEvent(event) {
     return;
   }
   if (event.type === "text_delta") {
-    ensureAssistant().textContent += event.text || "";
+    const article = ensureAssistant();
+    renderMessageContent(article, "assistant", `${article.dataset.raw || ""}${event.text || ""}`);
     scrollToBottom();
     return;
   }
   if (event.type === "text_finish") {
-    if (event.text) ensureAssistant().textContent = event.text;
+    if (event.text) renderMessageContent(ensureAssistant(), "assistant", event.text);
     state.pendingAssistant = null;
     scrollToBottom();
     return;
@@ -228,7 +230,7 @@ function handleEvent(event) {
 function appendMessage(role, text) {
   const article = document.createElement("article");
   article.className = `message ${role}`;
-  article.textContent = text;
+  renderMessageContent(article, role, text);
   els.chatHistory.appendChild(article);
   scrollToBottom();
   return article;
@@ -250,6 +252,96 @@ function showSystem(text, kind = "system") {
 function ensureAssistant() {
   if (!state.pendingAssistant) state.pendingAssistant = appendMessage("assistant", "");
   return state.pendingAssistant;
+}
+
+function renderMessageContent(element, role, text) {
+  element.dataset.raw = text || "";
+  if (role === "assistant") {
+    element.innerHTML = renderOutputImages(escapeHtml(text || ""));
+    appendBareOutputImageGallery(element, text || "");
+    hydrateLocalImages(element);
+  } else {
+    element.textContent = text || "";
+  }
+}
+
+function renderOutputImages(html) {
+  return String(html || "")
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => renderInlineImage(src, alt));
+}
+
+function appendBareOutputImageGallery(root, text) {
+  const images = extractBareOutputImageRefs(text);
+  if (!images.length) return;
+  const gallery = document.createElement("div");
+  gallery.className = "output-image-gallery";
+  gallery.innerHTML = images.map((src) => renderInlineImage(src, "image")).join("");
+  root.appendChild(gallery);
+}
+
+function extractBareOutputImageRefs(text) {
+  const occupied = [];
+  const refs = [];
+  const seen = new Set();
+  const markdownPattern = /!\[[^\]]*]\(([^)\s]+)\)/g;
+  for (const match of String(text || "").matchAll(markdownPattern)) {
+    occupied.push([match.index, match.index + match[0].length]);
+  }
+  const barePattern = /(?:https?:\/\/[^\s\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)(?:\?[^\s\\"'<>，。；、]*)?|(?:~|\/|\.\.?\/)[^\s\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?))/gi;
+  for (const match of String(text || "").matchAll(barePattern)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (occupied.some(([from, to]) => start < to && from < end)) continue;
+    const src = cleanImageSrc(match[0]);
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    refs.push(src);
+  }
+  return refs;
+}
+
+function renderInlineImage(src, alt) {
+  const safeAlt = escapeHtml(alt || "image");
+  const localAttr = isLocalImageSrc(src) ? ` data-local-image-src="${escapeHtml(src)}"` : "";
+  return `<figure class="output-image"><img src="${escapeHtml(displayImageSrc(src))}"${localAttr} alt="${safeAlt}" loading="lazy" /><figcaption>${safeAlt}</figcaption></figure>`;
+}
+
+function displayImageSrc(src) {
+  const value = String(src || "").trim();
+  if (/^(?:https?:|data:image\/|file:\/\/)/i.test(value)) return value;
+  if (value.startsWith("/")) return `file://${encodeURI(value)}`;
+  return value;
+}
+
+function isLocalImageSrc(src) {
+  const value = String(src || "").trim();
+  return value.startsWith("/") || value.startsWith("~/");
+}
+
+function cleanImageSrc(src) {
+  return String(src || "").trim().replace(/[.,;:!?)]}，。；：！？）】]+$/g, "");
+}
+
+async function hydrateLocalImages(root) {
+  if (!window.pywebview?.api?.local_image_data_url) return;
+  const images = Array.from(root.querySelectorAll("img[data-local-image-src]"));
+  for (const image of images) {
+    const source = image.dataset.localImageSrc || "";
+    if (!source || image.dataset.localImageLoading === "true") continue;
+    image.dataset.localImageLoading = "true";
+    try {
+      if (!state.localImageCache.has(source)) {
+        state.localImageCache.set(source, await apiCall("local_image_data_url", source));
+      }
+      const result = state.localImageCache.get(source);
+      if (result?.ok && result.data_url) image.src = result.data_url;
+      else if (result?.error) image.title = result.error;
+    } catch (error) {
+      image.title = String(error);
+    } finally {
+      image.removeAttribute("data-local-image-loading");
+    }
+  }
 }
 
 function resetTurnState() {

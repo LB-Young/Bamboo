@@ -8,6 +8,9 @@ with the final task output.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import mimetypes
 import os
 import sys
 import threading
@@ -17,11 +20,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import anyio
 import httpx
 
 from bamboo.adapters.cli.commands import expand_command_message
+from bamboo.adapters.output_images import OutputImage, extract_output_images, text_without_output_image_markdown
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import get_logger, setup_logging
@@ -37,10 +42,13 @@ USER_AGENT = f"bamboo-weixin/{VERSION}"
 MSG_USER = 1
 MSG_BOT = 2
 ITEM_TEXT = 1
+ITEM_IMAGE = 2
 STATE_FINISH = 2
+IMAGE_MEDIA_TYPE = 1
+CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c"
 
 
-class WeChatAuthExpired(Exception):
+class WeChatAuthExpired(Exception):  # noqa: N818
     """Raised when the stored iLink token is expired or invalid."""
 
 
@@ -205,6 +213,187 @@ class WeChatBotClient:
             {"msg": message, "base_info": {"channel_version": VERSION}},
         )
 
+    def send_image(self, to_user_id: str, image: OutputImage, *, context_token: str = "") -> dict[str, Any]:
+        """Upload and send one image message through iLink."""
+        image_bytes, file_name, content_type = self._read_output_image(image)
+        file_key = uuid.uuid4().hex
+        aes_key = os.urandom(16)
+        ciphertext_size = _encrypted_size(len(image_bytes))
+        thumb_bytes, thumb_width, thumb_height = _make_image_thumbnail(image_bytes, content_type=content_type)
+        thumb_ciphertext_size = _encrypted_size(len(thumb_bytes)) if thumb_bytes else 0
+
+        upload_info = self._get_upload_url(
+            to_user_id=to_user_id,
+            file_key=file_key,
+            file_name=file_name,
+            raw_size=len(image_bytes),
+            encrypted_size=ciphertext_size,
+            raw_file_md5=hashlib.md5(image_bytes, usedforsecurity=False).hexdigest(),
+            aes_key_hex=aes_key.hex(),
+            thumb_raw_size=len(thumb_bytes),
+            thumb_encrypted_size=thumb_ciphertext_size,
+            thumb_raw_file_md5=hashlib.md5(thumb_bytes, usedforsecurity=False).hexdigest() if thumb_bytes else "",
+            no_need_thumb=False,
+        )
+        media = self._upload_media_content(
+            file_key=file_key,
+            upload_param=str(upload_info.get("upload_param", "")),
+            raw=image_bytes,
+            aes_key=aes_key,
+            upload_url=str(upload_info.get("upload_full_url", "")),
+        )
+        thumb_upload_param = str(upload_info.get("thumb_upload_param", ""))
+        thumb_upload_url = str(upload_info.get("thumb_upload_full_url", ""))
+        if thumb_bytes and (thumb_upload_param or thumb_upload_url):
+            thumb_media = self._upload_media_content(
+                file_key=file_key,
+                upload_param=thumb_upload_param,
+                raw=thumb_bytes,
+                aes_key=aes_key,
+                upload_url=thumb_upload_url,
+            )
+            thumb_size = thumb_ciphertext_size
+        else:
+            thumb_media = media
+            thumb_size = ciphertext_size
+        image_item = {
+            "media": media,
+            "mid_size": ciphertext_size,
+            "thumb_media": thumb_media,
+            "thumb_size": thumb_size,
+            "thumb_width": thumb_width,
+            "thumb_height": thumb_height,
+        }
+        message = self._message(
+            to_user_id,
+            [{"type": ITEM_IMAGE, "image_item": image_item}],
+            context_token=context_token,
+        )
+        return self._post(
+            "ilink/bot/sendmessage",
+            {"msg": message, "base_info": {"channel_version": VERSION}},
+        )
+
+    def _message(
+        self,
+        to_user_id: str,
+        item_list: list[dict[str, Any]],
+        *,
+        context_token: str = "",
+    ) -> dict[str, Any]:
+        message = {
+            "from_user_id": "",
+            "to_user_id": to_user_id,
+            "client_id": f"pyclient-{uuid.uuid4().hex[:16]}",
+            "message_type": MSG_BOT,
+            "message_state": STATE_FINISH,
+            "item_list": item_list,
+        }
+        if context_token:
+            message["context_token"] = context_token
+        return message
+
+    def _read_output_image(self, image: OutputImage) -> tuple[bytes, str, str]:
+        if image.source.startswith("data:image/"):
+            header, _, encoded = image.source.partition(",")
+            content_type = header.removeprefix("data:").split(";", 1)[0] or "image/png"
+            return base64.b64decode(encoded), f"bamboo-{uuid.uuid4().hex[:8]}{_suffix_for_content_type(content_type)}", content_type
+        if image.is_local:
+            path = Path(image.source).expanduser()
+            return path.read_bytes(), path.name, mimetypes.guess_type(str(path))[0] or "image/png"
+        with httpx.Client(timeout=30.0, follow_redirects=True, trust_env=False) as client:
+            response = client.get(image.source)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip() or "image/png"
+            file_name = Path(httpx.URL(image.source).path).name or f"bamboo-{uuid.uuid4().hex[:8]}{_suffix_for_content_type(content_type)}"
+            return response.content, file_name, content_type
+
+    def _get_upload_url(
+        self,
+        *,
+        to_user_id: str,
+        file_key: str,
+        file_name: str,
+        raw_size: int,
+        encrypted_size: int,
+        raw_file_md5: str,
+        aes_key_hex: str,
+        thumb_raw_size: int = 0,
+        thumb_encrypted_size: int = 0,
+        thumb_raw_file_md5: str = "",
+        no_need_thumb: bool = True,
+    ) -> dict[str, Any]:
+        payload = {
+            "filekey": file_key,
+            "media_type": IMAGE_MEDIA_TYPE,
+            "to_user_id": to_user_id,
+            "rawsize": raw_size,
+            "rawfilemd5": raw_file_md5,
+            "filesize": encrypted_size,
+            "no_need_thumb": no_need_thumb,
+            "aeskey": aes_key_hex,
+            "base_info": {"channel_version": VERSION},
+        }
+        if file_name:
+            payload["filename"] = file_name
+        if thumb_raw_size and thumb_raw_file_md5:
+            payload.update(
+                {
+                    "thumb_rawsize": thumb_raw_size,
+                    "thumb_rawfilemd5": thumb_raw_file_md5,
+                    "thumb_filesize": thumb_encrypted_size,
+                }
+            )
+        response = self._post("ilink/bot/getuploadurl", payload, timeout=30.0)
+        ret = str(response.get("ret", "0"))
+        errcode = str(response.get("errcode", "0"))
+        if ret not in {"", "0", "None"} or errcode not in {"", "0", "None"}:
+            raise RuntimeError(f"getuploadurl failed: {response.get('errmsg') or response.get('errcode') or response}")
+        if not response.get("upload_param") and not response.get("upload_full_url"):
+            raise RuntimeError(f"getuploadurl response did not include an upload URL: {response}")
+        return response
+
+    def _upload_media_content(
+        self,
+        *,
+        file_key: str,
+        upload_param: str,
+        raw: bytes,
+        aes_key: bytes,
+        upload_url: str = "",
+    ) -> dict[str, Any]:
+        url = upload_url.strip() if upload_url else f"{CDN_BASE_URL}/upload?encrypted_query_param={quote(upload_param)}&filekey={file_key}"
+        encrypted = _encrypt_wechat_media(raw, aes_key)
+        last_error: Exception | None = None
+        with httpx.Client(timeout=60.0, trust_env=False) as client:
+            for attempt in range(1, 4):
+                try:
+                    response = client.post(
+                        url,
+                        content=encrypted,
+                        headers={"Content-Type": "application/octet-stream", "User-Agent": USER_AGENT},
+                    )
+                    if 400 <= response.status_code < 500:
+                        message = response.headers.get("x-error-message") or response.text[:300]
+                        raise RuntimeError(f"CDN upload client error {response.status_code}: {message}")
+                    if response.status_code != 200:
+                        message = response.headers.get("x-error-message") or f"status {response.status_code}"
+                        raise RuntimeError(f"CDN upload server error: {message}")
+                    encrypted_param = response.headers.get("x-encrypted-param") or response.headers.get("X-Encrypted-Param")
+                    if not encrypted_param:
+                        raise RuntimeError("CDN upload response missing x-encrypted-param header")
+                    return {
+                        "encrypt_query_param": encrypted_param,
+                        "aes_key": base64.b64encode(aes_key.hex().encode("ascii")).decode("ascii"),
+                        "encrypt_type": 1,
+                    }
+                except Exception as exc:
+                    last_error = exc
+                    if "client error" in str(exc) or attempt >= 3:
+                        break
+                    print(f"[WeChat] CDN upload retry {attempt}: {exc}", file=sys.__stdout__)
+        raise RuntimeError(f"CDN upload failed: {last_error}")
+
     @staticmethod
     def extract_text(message: dict[str, Any]) -> str:
         parts: list[str] = []
@@ -317,7 +506,7 @@ class BambooWeChatAdapter:
                 return
             print(f"[WeChat] run start user={_short_user_id(user_id)}")
             output = anyio.run(self._run_turn, user_id, text)
-            self._send_chunks(user_id, output or "[Bamboo 没有返回文本输出]", context_token=context_token)
+            self._send_final_output(user_id, output or "[Bamboo 没有返回文本输出]", context_token=context_token)
             print(f"[WeChat] run complete user={_short_user_id(user_id)} output_chars={len(output or '')}")
         except Exception as exc:
             self.log.exception("wechat message failed user_id={user_id}", user_id=user_id)
@@ -361,6 +550,19 @@ class BambooWeChatAdapter:
     def _send_chunks(self, user_id: str, text: str, *, context_token: str = "") -> None:
         for chunk in _chunk_text(text, max_chars=3000):
             self._send(user_id, chunk, context_token=context_token)
+
+    def _send_final_output(self, user_id: str, text: str, *, context_token: str = "") -> None:
+        images = extract_output_images(text, base_dir=self.config.project)
+        text_output = text_without_output_image_markdown(text) if images else text
+        if text_output:
+            self._send_chunks(user_id, text_output, context_token=context_token)
+        for image in images:
+            try:
+                self.client.send_image(user_id, image, context_token=context_token)
+                time.sleep(0.15)
+            except Exception as exc:
+                self.log.warning("wechat image send failed source={source} error={error}", source=image.source, error=exc)
+                self._send(user_id, f"[图片发送失败] {image.source}", context_token=context_token)
 
     def _send(self, user_id: str, text: str, *, context_token: str = "") -> None:
         self.client.send_text(user_id, text, context_token=context_token)
@@ -432,3 +634,58 @@ def _preview_text(text: str, *, max_chars: int = 80) -> str:
     if len(normalized) <= max_chars:
         return repr(normalized)
     return repr(normalized[: max_chars - 3] + "...")
+
+
+def _encrypt_wechat_media(content: bytes, aes_key: bytes) -> bytes:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+    padded = _pkcs7_pad(content, block_size=16)
+    encryptor = Cipher(algorithms.AES(aes_key), modes.ECB()).encryptor()
+    return encryptor.update(padded) + encryptor.finalize()
+
+
+def _encrypted_size(raw_size: int) -> int:
+    return ((raw_size // 16) + 1) * 16
+
+
+def _make_image_thumbnail(content: bytes, *, content_type: str) -> tuple[bytes, int, int]:
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        image = Image.open(BytesIO(content))
+        image.thumbnail((240, 240))
+        width, height = image.size
+        if image.mode not in {"RGB", "L"}:
+            image = image.convert("RGB")
+        output = BytesIO()
+        image.save(output, format="JPEG", quality=85)
+        return output.getvalue(), width, height
+    except Exception:
+        if content_type.lower() in {"image/jpeg", "image/jpg"}:
+            return content, 0, 0
+        return b"", 0, 0
+
+
+def _pkcs7_pad(content: bytes, *, block_size: int) -> bytes:
+    padding = block_size - (len(content) % block_size)
+    return content + bytes([padding]) * padding
+
+
+def _suffix_for_content_type(content_type: str) -> str:
+    return mimetypes.guess_extension(content_type.split(";", 1)[0].strip()) or ".png"
+
+
+def _first_string(value: Any, keys: tuple[str, ...]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    for key in keys:
+        found = value.get(key)
+        if isinstance(found, str) and found:
+            return found
+    for child in value.values():
+        found = _first_string(child, keys)
+        if found:
+            return found
+    return ""

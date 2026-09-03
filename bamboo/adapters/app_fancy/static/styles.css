@@ -1143,6 +1143,7 @@ textarea {
 .message.assistant .md-table-wrap,
 .message.assistant .mermaid-wrap,
 .message.assistant .math-wrap,
+.message.assistant .output-image,
 .message.assistant .katex-display,
 .message.assistant pre,
 .message.assistant h1,
@@ -1157,9 +1158,30 @@ textarea {
 .message.assistant .md-table-wrap:last-child,
 .message.assistant .mermaid-wrap:last-child,
 .message.assistant .math-wrap:last-child,
+.message.assistant .output-image:last-child,
 .message.assistant .katex-display:last-child,
 .message.assistant pre:last-child {
   margin-bottom: 0;
+}
+
+.message.assistant .output-image {
+  max-width: min(100%, 760px);
+}
+
+.message.assistant .output-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-strong);
+  object-fit: contain;
+}
+
+.message.assistant .output-image figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .message.assistant h1 {

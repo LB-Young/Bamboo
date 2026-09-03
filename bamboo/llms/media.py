@@ -13,8 +13,8 @@ from bamboo.llms.config import ModelConfigError
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")
-_HTTP_IMAGE_PATTERN = re.compile(r"https?://[^\s\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)(?:\?[^\s\"'<>，。；、]*)?", re.I)
-_ABSOLUTE_IMAGE_PATH_PATTERN = re.compile(r"(?:~|/)[^\s\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)", re.I)
+_HTTP_IMAGE_PATTERN = re.compile(r"https?://[^\s\\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)(?:\?[^\s\\\"'<>，。；、]*)?", re.I)
+_ABSOLUTE_IMAGE_PATH_PATTERN = re.compile(r"(?:~|/)[^\s\\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)", re.I)
 
 
 def image_from_source(source: str, *, detail: str = "auto") -> LLMImage:

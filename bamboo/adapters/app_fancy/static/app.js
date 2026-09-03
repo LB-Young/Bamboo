@@ -15,6 +15,7 @@ const state = {
   models: { selected: "", configured: "", options: [] },
   activeView: "chat",
   logs: [],
+  localImageCache: new Map(),
   runningSessions: new Set(),
   pendingPermissions: new Map(),
   knowledgeUpdates: new Map(),
@@ -608,6 +609,8 @@ function renderMessageContent(element, role, text) {
     body.innerHTML = markdownToHtml(text || "");
     renderMermaidBlocks(body);
     renderMathBlocks(body);
+    appendBareOutputImageGallery(body, text || "");
+    hydrateLocalImages(body);
   } else {
     body.textContent = text || "";
   }
@@ -862,10 +865,86 @@ function renderExplicitMathBlocks(root) {
 
 function inlineMarkdown(text) {
   return escapeHtml(text)
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => renderInlineImage(src, alt))
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function appendBareOutputImageGallery(root, text) {
+  const images = extractBareOutputImageRefs(text);
+  if (!images.length) return;
+  const gallery = document.createElement("div");
+  gallery.className = "output-image-gallery";
+  gallery.innerHTML = images.map((src) => renderInlineImage(src, "image")).join("");
+  root.appendChild(gallery);
+}
+
+function extractBareOutputImageRefs(text) {
+  const occupied = [];
+  const refs = [];
+  const seen = new Set();
+  const markdownPattern = /!\[[^\]]*]\(([^)\s]+)\)/g;
+  for (const match of String(text || "").matchAll(markdownPattern)) {
+    occupied.push([match.index, match.index + match[0].length]);
+  }
+  const barePattern = /(?:https?:\/\/[^\s\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)(?:\?[^\s\\"'<>，。；、]*)?|(?:~|\/|\.\.?\/)[^\s\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?))/gi;
+  for (const match of String(text || "").matchAll(barePattern)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (occupied.some(([from, to]) => start < to && from < end)) continue;
+    const src = cleanImageSrc(match[0]);
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    refs.push(src);
+  }
+  return refs;
+}
+
+function renderInlineImage(src, alt) {
+  const safeSrc = escapeAttribute(displayImageSrc(src));
+  const safeAlt = escapeAttribute(alt || "image");
+  const localAttr = isLocalImageSrc(src) ? ` data-local-image-src="${escapeAttribute(src)}"` : "";
+  return `<figure class="output-image"><img src="${safeSrc}"${localAttr} alt="${safeAlt}" loading="lazy" /><figcaption>${safeAlt}</figcaption></figure>`;
+}
+
+function displayImageSrc(src) {
+  const value = String(src || "").trim();
+  if (/^(?:https?:|data:image\/|file:\/\/)/i.test(value)) return value;
+  if (value.startsWith("/")) return `file://${encodeURI(value)}`;
+  return value;
+}
+
+function isLocalImageSrc(src) {
+  const value = String(src || "").trim();
+  return value.startsWith("/") || value.startsWith("~/");
+}
+
+function cleanImageSrc(src) {
+  return String(src || "").trim().replace(/[.,;:!?)]}，。；：！？）】]+$/g, "");
+}
+
+async function hydrateLocalImages(root) {
+  if (!window.pywebview?.api?.local_image_data_url) return;
+  const images = Array.from(root.querySelectorAll("img[data-local-image-src]"));
+  for (const image of images) {
+    const source = image.dataset.localImageSrc || "";
+    if (!source || image.dataset.localImageLoading === "true") continue;
+    image.dataset.localImageLoading = "true";
+    try {
+      if (!state.localImageCache.has(source)) {
+        state.localImageCache.set(source, await apiCall("local_image_data_url", source));
+      }
+      const result = state.localImageCache.get(source);
+      if (result?.ok && result.data_url) image.src = result.data_url;
+      else if (result?.error) image.title = result.error;
+    } catch (error) {
+      image.title = String(error);
+    } finally {
+      image.removeAttribute("data-local-image-loading");
+    }
+  }
 }
 
 function isTableStart(lines, index) {
@@ -1639,6 +1718,16 @@ function formatTime(value) {
 }
 
 function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[char]);
+}
+
+function escapeAttribute(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",

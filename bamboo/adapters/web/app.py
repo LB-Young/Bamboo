@@ -10,11 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from bamboo.adapters.cli.commands import expand_command_message
+from bamboo.adapters.output_images import IMAGE_EXTENSIONS
 from bamboo.factory.event_bus import get_event_bus
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import (
@@ -89,6 +90,15 @@ def create_app(*, static_dir: Path = STATIC_DIR, title: str = "Bamboo Web") -> F
     @app.get("/api/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/media")
+    async def local_media(path: str = Query(...)) -> FileResponse:
+        media_path = Path(path).expanduser().resolve(strict=False)
+        if media_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only image files can be served")
+        if not media_path.is_file():
+            raise HTTPException(status_code=404, detail="Media file not found")
+        return FileResponse(str(media_path))
 
     @app.get("/api/sidebar")
     async def sidebar(

@@ -236,6 +236,30 @@ def test_app_fancy_reports_session_messages_path(monkeypatch, tmp_path: Path) ->
     assert messages_path == str(tmp_path / "dates" / "today" / bridge.session_id / "messages.jsonl")
 
 
+def test_app_bridge_serves_local_image_data_url(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        BambooAppBridge,
+        "_create_runtime",
+        lambda self: SimpleNamespace(task_factory=SimpleNamespace(config={})),
+    )
+    bridge = BambooAppBridge(
+        project=None,
+        model="",
+        provider="",
+        permission="default",
+        session_mode=SessionMode.chat,
+        initial_message="",
+        image_paths=[],
+    )
+    image_path = tmp_path / "result.png"
+    image_path.write_bytes(b"png-bytes")
+
+    result = bridge.local_image_data_url(str(image_path))
+
+    assert result["ok"] is True
+    assert str(result["data_url"]).startswith("data:image/png;base64,")
+
+
 def test_app_event_payloads_keep_reasoning_and_tools_separate() -> None:
     reasoning = _event_payload(ReasoningDeltaEvent(session_id="session-1", task_id="task-1", delta="推理过程"))
     tool = _event_payload(

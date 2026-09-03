@@ -177,7 +177,7 @@ function appendMessage(role, text) {
 
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
-  bubble.textContent = text;
+  renderMessageContent(bubble, role, text);
 
   row.append(avatar, bubble);
   els.chatHistory.appendChild(row);
@@ -288,12 +288,13 @@ function handleEvent(event) {
     return;
   }
   if (event.type === "delta") {
-    ensureAssistant().textContent += event.text || "";
+    const bubble = ensureAssistant();
+    renderMessageContent(bubble, "assistant", `${bubble.dataset.raw || ""}${event.text || ""}`);
     scrollToBottom();
     return;
   }
   if (event.type === "message") {
-    ensureAssistant().textContent = event.text || "";
+    renderMessageContent(ensureAssistant(), "assistant", event.text || "");
     pendingAssistant = null;
     addActivity("message", "Assistant response completed");
     scrollToBottom();
@@ -579,6 +580,77 @@ function scrollToBottom() {
   requestAnimationFrame(() => {
     els.chatHistory.scrollTop = els.chatHistory.scrollHeight;
   });
+}
+
+function renderMessageContent(element, role, text) {
+  element.dataset.raw = text || "";
+  if (role === "assistant") {
+    element.innerHTML = renderOutputImages(escapeHtml(text || ""));
+    appendBareOutputImageGallery(element, text || "");
+  } else {
+    element.textContent = text || "";
+  }
+}
+
+function renderOutputImages(html) {
+  return String(html || "")
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => renderInlineImage(src, alt));
+}
+
+function appendBareOutputImageGallery(root, text) {
+  const images = extractBareOutputImageRefs(text);
+  if (!images.length) return;
+  const gallery = document.createElement("div");
+  gallery.className = "output-image-gallery";
+  gallery.innerHTML = images.map((src) => renderInlineImage(src, "image")).join("");
+  root.appendChild(gallery);
+}
+
+function extractBareOutputImageRefs(text) {
+  const occupied = [];
+  const refs = [];
+  const seen = new Set();
+  const markdownPattern = /!\[[^\]]*]\(([^)\s]+)\)/g;
+  for (const match of String(text || "").matchAll(markdownPattern)) {
+    occupied.push([match.index, match.index + match[0].length]);
+  }
+  const barePattern = /(?:https?:\/\/[^\s\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)(?:\?[^\s\\"'<>，。；、]*)?|(?:~|\/|\.\.?\/)[^\s\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?))/gi;
+  for (const match of String(text || "").matchAll(barePattern)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (occupied.some(([from, to]) => start < to && from < end)) continue;
+    const src = cleanImageSrc(match[0]);
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+    refs.push(src);
+  }
+  return refs;
+}
+
+function renderInlineImage(src, alt) {
+  const safeAlt = escapeHtml(alt || "image");
+  return `<figure class="output-image"><img src="${escapeHtml(displayImageSrc(src))}" alt="${safeAlt}" loading="lazy" /><figcaption>${safeAlt}</figcaption></figure>`;
+}
+
+function displayImageSrc(src) {
+  const value = String(src || "").trim();
+  if (/^(?:https?:|data:image\/|file:\/\/)/i.test(value)) return value;
+  if (value.startsWith("/")) return `/api/media?path=${encodeURIComponent(value)}`;
+  return value;
+}
+
+function cleanImageSrc(src) {
+  return String(src || "").trim().replace(/[.,;:!?)]}，。；：！？）】]+$/g, "");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[char]);
 }
 
 function resizeOrb() {

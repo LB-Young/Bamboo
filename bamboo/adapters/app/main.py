@@ -8,7 +8,9 @@ No HTTP server is started for the desktop app.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import mimetypes
 import subprocess
 import threading
 import uuid
@@ -20,6 +22,7 @@ from typing import Any, Literal
 import anyio
 
 from bamboo.adapters.cli.commands import expand_command_message
+from bamboo.adapters.output_images import IMAGE_EXTENSIONS
 from bamboo.adapters.web.session_utils import list_sessions, load_session, serialize_messages
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import Task
@@ -190,6 +193,20 @@ class BambooAppBridge:
             return {"ok": False, "error": "only http and https links can be opened"}
         opened = webbrowser.open(normalized)
         return {"ok": bool(opened)}
+
+    def local_image_data_url(self, path: str) -> dict[str, Any]:
+        """Return a local image as a data URL for the embedded desktop webview."""
+        image_path = Path(path or "").expanduser().resolve(strict=False)
+        if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            return {"ok": False, "error": "only image files can be displayed"}
+        if not image_path.is_file():
+            return {"ok": False, "error": f"image file not found: {image_path}"}
+        data = image_path.read_bytes()
+        if len(data) > 25 * 1024 * 1024:
+            return {"ok": False, "error": "image file is too large to display inline"}
+        media_type = mimetypes.guess_type(str(image_path))[0] or "image/png"
+        encoded = base64.b64encode(data).decode("ascii")
+        return {"ok": True, "data_url": f"data:{media_type};base64,{encoded}"}
 
     def get_initial_state(self) -> dict[str, Any]:
         """Return initial app state to the frontend."""
