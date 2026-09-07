@@ -441,6 +441,7 @@ class AgentRuntime:
                 tool_calls=list(decision.tool_calls),
             )
             await self._emit_reasoning(task, message.message_id, decision.reasoning_content)
+            await self._emit_text(task, message.message_id, decision.content)
             await self._transition(task, AgentState.TOOL_CALLING, "execute model tool calls")
             if self._can_parallelize_tool_calls(task, decision.tool_calls):
                 await self._execute_tool_calls_parallel(task, decision.tool_calls)
@@ -467,28 +468,7 @@ class AgentRuntime:
             metadata={"reasoning_content": decision.reasoning_content} if decision.reasoning_content else None,
         )
         await self._emit_reasoning(task, message.message_id, decision.reasoning_content)
-        await self.event_bus.emit(
-            TextStartEvent(
-                session_id=task.session_id,
-                task_id=task.task_id,
-                message_id=message.message_id,
-            )
-        )
-        await self.event_bus.emit(
-            TextDeltaEvent(
-                session_id=task.session_id,
-                task_id=task.task_id,
-                delta=content,
-            )
-        )
-        await self.event_bus.emit(
-            TextFinishEvent(
-                session_id=task.session_id,
-                task_id=task.task_id,
-                message_id=message.message_id,
-                content=content,
-            )
-        )
+        await self._emit_text(task, message.message_id, content)
         task.output = content
         task.metadata["llm_model_name"] = self.model_name
         task.metadata["llm_model"] = decision.model
@@ -515,6 +495,33 @@ class AgentRuntime:
         )
         await self.event_bus.emit(
             ReasoningFinishEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                message_id=message_id,
+                content=content,
+            )
+        )
+
+    async def _emit_text(self, task: Task, message_id: str, content: str) -> None:
+        """Emit assistant text for both intermediate and final model messages."""
+        if not content:
+            return
+        await self.event_bus.emit(
+            TextStartEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                message_id=message_id,
+            )
+        )
+        await self.event_bus.emit(
+            TextDeltaEvent(
+                session_id=task.session_id,
+                task_id=task.task_id,
+                delta=content,
+            )
+        )
+        await self.event_bus.emit(
+            TextFinishEvent(
                 session_id=task.session_id,
                 task_id=task.task_id,
                 message_id=message_id,

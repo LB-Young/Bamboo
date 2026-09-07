@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from bamboo.adapters.web import session_utils
-from bamboo.adapters.web.session_utils import load_session, list_sessions, serialize_messages
+from bamboo.adapters.web.session_utils import list_sessions, load_session, serialize_messages
 from bamboo.memory.session_store import SessionRecord
 
 
@@ -92,6 +92,55 @@ def test_serialize_messages_includes_reasoning_metadata(tmp_path: Path) -> None:
 
     assert messages[0]["content"] == "最终答案"
     assert messages[0]["metadata"] == {"reasoning_content": "推理过程"}
+
+
+def test_serialize_messages_includes_tool_calls_and_tool_results(tmp_path: Path) -> None:
+    record_dir = tmp_path / "record"
+    record_dir.mkdir()
+    (record_dir / "session.json").write_text(
+        json.dumps(
+            {
+                "session_id": "session-1",
+                "memory_dir": str(tmp_path),
+                "project_root": str(tmp_path),
+                "model": "test-model",
+                "provider": "test-provider",
+                "metadata": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (record_dir / "system_prompt.md").write_text("system", encoding="utf-8")
+    records = [
+        {
+            "role": "assistant",
+            "content": "我先读取文件。",
+            "message_id": "message-1",
+            "time": "2026-06-30T00:00:00+00:00",
+            "tool_calls": [{"id": "call-1", "name": "read", "arguments": {"path": "a.txt"}}],
+        },
+        {
+            "role": "tool",
+            "content": "file content",
+            "message_id": "message-2",
+            "time": "2026-06-30T00:00:01+00:00",
+            "tool_call_id": "call-1",
+            "tool_name": "read",
+        },
+    ]
+    (record_dir / "messages.jsonl").write_text(
+        "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    messages = serialize_messages(load_session(record_dir))
+
+    assert messages[0]["role"] == "assistant"
+    assert messages[0]["tool_calls"] == [{"id": "call-1", "name": "read", "arguments": {"path": "a.txt"}}]
+    assert messages[1]["role"] == "tool"
+    assert messages[1]["tool_call_id"] == "call-1"
+    assert messages[1]["tool_name"] == "read"
+    assert messages[1]["content"] == "file content"
 
 
 def test_list_sessions_deduplicates_same_session_id(monkeypatch, tmp_path: Path) -> None:

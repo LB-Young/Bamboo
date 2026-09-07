@@ -145,7 +145,7 @@ async function selectSession(session) {
   state.currentRecordDir = data.record_dir || state.currentRecordDir;
   els.chatHistory.innerHTML = "";
   resetActivity();
-  for (const msg of data.messages || []) appendMessage(msg.role, msg.content);
+  appendRestoredMessages(data.messages || []);
   els.chatTitle.textContent = session.label || "Conversation";
   els.chatMeta.textContent = `${state.mode === "project" ? "Project" : "Chat"} · ${session.session_id}`;
   scrollToBottom();
@@ -173,7 +173,7 @@ function appendMessage(role, text) {
 
   const avatar = document.createElement("div");
   avatar.className = "avatar";
-  avatar.textContent = role === "user" ? "U" : role === "assistant" ? "B" : "!";
+  avatar.textContent = role === "user" ? "U" : role === "assistant" ? "B" : role === "tool" ? "T" : "!";
 
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
@@ -187,6 +187,65 @@ function appendMessage(role, text) {
 
 function showSystem(text) {
   return appendMessage("system", text);
+}
+
+function appendRestoredMessage(message) {
+  if (message.role === "assistant" && message.content) {
+    appendMessage("assistant", message.content || "");
+  } else if (message.role === "tool") {
+    appendMessage("tool", formatRestoredToolResult(message));
+  } else if (message.role !== "assistant") {
+    appendMessage(message.role, message.content || "");
+  }
+  for (const toolCall of message.tool_calls || []) {
+    appendMessage("tool", formatToolCallMessage({ name: toolCall.name, input: toolCall.arguments || {}, id: toolCall.id }, restoredToolResultFor(toolCall.id)));
+  }
+}
+
+function appendRestoredMessages(messages) {
+  state.restoredToolResults = restoredToolResultMap(messages);
+  state.renderedRestoredToolResults = new Set();
+  for (const message of messages || []) {
+    if (message.role === "tool" && message.tool_call_id && state.renderedRestoredToolResults.has(message.tool_call_id)) {
+      continue;
+    }
+    appendRestoredMessage(message);
+  }
+  state.restoredToolResults = null;
+  state.renderedRestoredToolResults = null;
+}
+
+function restoredToolResultMap(messages) {
+  const results = new Map();
+  for (const message of messages || []) {
+    if (message.role === "tool" && message.tool_call_id) results.set(message.tool_call_id, message);
+  }
+  return results;
+}
+
+function restoredToolResultFor(toolCallId) {
+  const result = state.restoredToolResults?.get(toolCallId);
+  if (result) state.renderedRestoredToolResults?.add(toolCallId);
+  return result;
+}
+
+function formatRestoredToolResult(message) {
+  const name = message.tool_name || message.agent_name || "tool";
+  return `Tool result · ${name}\n${message.content || ""}`;
+}
+
+function formatToolCallMessage(event, result = null) {
+  const call = `Tool call · ${event.name || "tool"}\n${JSON.stringify(event.input || {}, null, 2)}`;
+  return result ? `${call}\n\n${formatRestoredToolResult(result)}` : call;
+}
+
+function formatToolResultMessage(event) {
+  const suffix = event.truncated ? " (truncated)" : "";
+  return `Tool result · ${event.name || "tool"}${suffix}\n${event.output || ""}`;
+}
+
+function formatToolErrorMessage(event) {
+  return `Tool error · ${event.name || "tool"}\n${event.error || ""}`;
 }
 
 function ensureAssistant() {
@@ -300,11 +359,20 @@ function handleEvent(event) {
     scrollToBottom();
     return;
   }
-  if (event.type === "tool_call") return showToolCall(event);
+  if (event.type === "tool_call") {
+    appendMessage("tool", formatToolCallMessage(event));
+    return showToolCall(event);
+  }
   if (event.type === "permission_request") return showPermissionRequest(event);
   if (event.type === "permission_result") return updatePermissionResult(event);
-  if (event.type === "tool_result") return updateToolResult(event);
-  if (event.type === "tool_error") return updateToolError(event);
+  if (event.type === "tool_result") {
+    appendMessage("tool", formatToolResultMessage(event));
+    return updateToolResult(event);
+  }
+  if (event.type === "tool_error") {
+    appendMessage("error", formatToolErrorMessage(event));
+    return updateToolError(event);
+  }
   if (event.type === "error") {
     showSystem(event.message || "运行出错");
     addActivity("error", event.message || "Runtime error");

@@ -26,7 +26,13 @@ import anyio
 import httpx
 
 from bamboo.adapters.cli.commands import expand_command_message
-from bamboo.adapters.output_images import OutputImage, extract_output_images, text_without_output_image_markdown
+from bamboo.adapters.output_images import (
+    OutputFile,
+    OutputImage,
+    extract_output_files,
+    extract_output_images,
+    text_without_output_image_markdown,
+)
 from bamboo.factory.task_factory import Task
 from bamboo.helpers.constant import SessionMode
 from bamboo.helpers.logging import get_logger, setup_logging
@@ -43,8 +49,10 @@ MSG_USER = 1
 MSG_BOT = 2
 ITEM_TEXT = 1
 ITEM_IMAGE = 2
+ITEM_FILE = 4
 STATE_FINISH = 2
 IMAGE_MEDIA_TYPE = 1
+FILE_MEDIA_TYPE = 3
 CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c"
 
 
@@ -274,6 +282,46 @@ class WeChatBotClient:
             {"msg": message, "base_info": {"channel_version": VERSION}},
         )
 
+    def send_file(self, to_user_id: str, file: OutputFile, *, context_token: str = "") -> dict[str, Any]:
+        """Upload and send one local file message through iLink."""
+        path = Path(file.source).expanduser()
+        raw = path.read_bytes()
+        file_key = uuid.uuid4().hex
+        aes_key = os.urandom(16)
+        ciphertext_size = _encrypted_size(len(raw))
+        upload_info = self._get_upload_url(
+            to_user_id=to_user_id,
+            file_key=file_key,
+            file_name=path.name,
+            media_type=FILE_MEDIA_TYPE,
+            raw_size=len(raw),
+            encrypted_size=ciphertext_size,
+            raw_file_md5=hashlib.md5(raw, usedforsecurity=False).hexdigest(),
+            aes_key_hex=aes_key.hex(),
+            no_need_thumb=True,
+        )
+        media = self._upload_media_content(
+            file_key=file_key,
+            upload_param=str(upload_info.get("upload_param", "")),
+            raw=raw,
+            aes_key=aes_key,
+            upload_url=str(upload_info.get("upload_full_url", "")),
+        )
+        file_item = {
+            "media": media,
+            "file_name": path.name,
+            "len": str(len(raw)),
+        }
+        message = self._message(
+            to_user_id,
+            [{"type": ITEM_FILE, "file_item": file_item}],
+            context_token=context_token,
+        )
+        return self._post(
+            "ilink/bot/sendmessage",
+            {"msg": message, "base_info": {"channel_version": VERSION}},
+        )
+
     def _message(
         self,
         to_user_id: str,
@@ -318,6 +366,7 @@ class WeChatBotClient:
         encrypted_size: int,
         raw_file_md5: str,
         aes_key_hex: str,
+        media_type: int = IMAGE_MEDIA_TYPE,
         thumb_raw_size: int = 0,
         thumb_encrypted_size: int = 0,
         thumb_raw_file_md5: str = "",
@@ -325,7 +374,7 @@ class WeChatBotClient:
     ) -> dict[str, Any]:
         payload = {
             "filekey": file_key,
-            "media_type": IMAGE_MEDIA_TYPE,
+            "media_type": media_type,
             "to_user_id": to_user_id,
             "rawsize": raw_size,
             "rawfilemd5": raw_file_md5,
@@ -553,6 +602,7 @@ class BambooWeChatAdapter:
 
     def _send_final_output(self, user_id: str, text: str, *, context_token: str = "") -> None:
         images = extract_output_images(text, base_dir=self.config.project)
+        files = extract_output_files(text, base_dir=self.config.project)
         text_output = text_without_output_image_markdown(text) if images else text
         if text_output:
             self._send_chunks(user_id, text_output, context_token=context_token)
@@ -563,6 +613,13 @@ class BambooWeChatAdapter:
             except Exception as exc:
                 self.log.warning("wechat image send failed source={source} error={error}", source=image.source, error=exc)
                 self._send(user_id, f"[图片发送失败] {image.source}", context_token=context_token)
+        for file in files:
+            try:
+                self.client.send_file(user_id, file, context_token=context_token)
+                time.sleep(0.15)
+            except Exception as exc:
+                self.log.warning("wechat file send failed source={source} error={error}", source=file.source, error=exc)
+                self._send(user_id, f"[文件发送失败] {file.source}", context_token=context_token)
 
     def _send(self, user_id: str, text: str, *, context_token: str = "") -> None:
         self.client.send_text(user_id, text, context_token=context_token)

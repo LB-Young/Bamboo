@@ -1057,6 +1057,44 @@ textarea {
   white-space: pre-wrap;
 }
 
+.message.tool .message-body {
+  white-space: normal;
+}
+
+.tool-message {
+  min-width: 0;
+}
+
+.tool-message summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.tool-message-title {
+  font-weight: 700;
+}
+
+.tool-message-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tool-message pre {
+  max-height: 360px;
+  margin: 10px 0 0;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  white-space: pre-wrap;
+}
+
 .message-icon {
   display: grid;
   place-items: center;

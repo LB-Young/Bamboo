@@ -6,8 +6,14 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from bamboo.adapters.output_images import OutputImage, extract_output_images, text_without_output_image_markdown
+from bamboo.adapters.output_images import (
+    OutputFile,
+    OutputImage,
+    extract_output_images,
+    text_without_output_image_markdown,
+)
 from bamboo.adapters.wechat.app import (
+    ITEM_FILE,
     ITEM_IMAGE,
     ITEM_TEXT,
     MSG_USER,
@@ -130,6 +136,43 @@ def test_wechat_final_output_sends_text_then_images(tmp_path: Path) -> None:
     assert client.sent == [("text", "完成"), ("image", str(image_path))]
 
 
+def test_wechat_final_output_sends_existing_non_image_files(tmp_path: Path) -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.sent: list[tuple[str, str]] = []
+
+        def send_text(self, to_user_id: str, text: str, *, context_token: str = "") -> dict[str, object]:
+            self.sent.append(("text", text))
+            return {"ok": True}
+
+        def send_image(self, to_user_id: str, image, *, context_token: str = "") -> dict[str, object]:
+            self.sent.append(("image", image.source))
+            return {"ok": True}
+
+        def send_file(self, to_user_id: str, file, *, context_token: str = "") -> dict[str, object]:
+            self.sent.append(("file", file.source))
+            return {"ok": True}
+
+    report_path = tmp_path / "report.pdf"
+    image_path = tmp_path / "chart.png"
+    report_path.write_bytes(b"pdf")
+    image_path.write_bytes(b"png")
+    client = FakeClient()
+    adapter = BambooWeChatAdapter(
+        client=client,  # type: ignore[arg-type]
+        runtime=None,  # type: ignore[arg-type]
+        config=WeChatAdapterConfig(project=tmp_path),
+    )
+
+    adapter._send_final_output("user-1", f"完成\n文件：`{report_path}`\n图：`{image_path}`", context_token="ctx")
+
+    assert client.sent == [
+        ("text", f"完成\n文件：`{report_path}`\n图：`{image_path}`"),
+        ("image", str(image_path)),
+        ("file", str(report_path)),
+    ]
+
+
 def test_wechat_send_image_builds_ilink_thumbnail_media(tmp_path: Path) -> None:
     class FakeClient(WeChatBotClient):
         def __init__(self) -> None:
@@ -184,6 +227,54 @@ def test_wechat_send_image_builds_ilink_thumbnail_media(tmp_path: Path) -> None:
     assert image_item["media"]["encrypt_query_param"] == "eq-main-upload"
     assert image_item["thumb_media"]["encrypt_query_param"] == "eq-thumb-upload"
     assert image_item["thumb_size"] > 0
+
+
+def test_wechat_send_file_builds_ilink_file_media(tmp_path: Path) -> None:
+    class FakeClient(WeChatBotClient):
+        def __init__(self) -> None:
+            super().__init__(token="token", token_file=tmp_path / "token.json")
+            self.posts: list[tuple[str, dict[str, Any]]] = []
+
+        def _post(self, endpoint: str, body: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
+            self.posts.append((endpoint, body))
+            if endpoint == "ilink/bot/getuploadurl":
+                return {"upload_param": "file-upload"}
+            return {"ok": True}
+
+        def _upload_media_content(
+            self,
+            *,
+            file_key: str,
+            upload_param: str,
+            raw: bytes,
+            aes_key: bytes,
+            upload_url: str = "",
+        ) -> dict[str, Any]:
+            return {
+                "encrypt_query_param": f"eq-{upload_param}",
+                "aes_key": base64.b64encode(aes_key.hex().encode("ascii")).decode("ascii"),
+                "encrypt_type": 1,
+            }
+
+    file_path = tmp_path / "report.pdf"
+    file_path.write_bytes(b"hello file")
+
+    client = FakeClient()
+    client.send_file("user-1", OutputFile(source=str(file_path)), context_token="ctx")
+
+    upload_body = client.posts[0][1]
+    assert upload_body["media_type"] == 3
+    assert upload_body["to_user_id"] == "user-1"
+    assert upload_body["rawsize"] == file_path.stat().st_size
+    assert upload_body["filesize"] % 16 == 0
+    assert upload_body["no_need_thumb"] is True
+    send_body = client.posts[1][1]["msg"]
+    file_item = send_body["item_list"][0]["file_item"]
+    assert send_body["context_token"] == "ctx"
+    assert send_body["item_list"][0]["type"] == ITEM_FILE
+    assert file_item["media"]["encrypt_query_param"] == "eq-file-upload"
+    assert file_item["file_name"] == "report.pdf"
+    assert file_item["len"] == str(file_path.stat().st_size)
 
 
 def test_wechat_chunk_text_prefers_line_boundaries() -> None:

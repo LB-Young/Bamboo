@@ -317,7 +317,7 @@ async function loadSession(session) {
   els.chatHistory.innerHTML = "";
   resetTurnState();
   resetRunTimeline();
-  for (const msg of data.messages || []) appendRestoredMessage(msg);
+  appendRestoredMessages(data.messages || []);
   els.chatTitle.textContent = session.label || "Conversation";
   renderSessions(state.sessions);
   renderChanges(data.changes || {});
@@ -528,12 +528,20 @@ function handleEvent(event) {
   }
   if (event.type === "tool_call") {
     updateRunStage("executing", "active", `Tool: ${event.name}`);
-    return showToolCall(event);
+    appendMessage("tool", formatToolCallMessage(event));
+    showToolCall(event);
+    return scrollToBottom();
   }
-  if (event.type === "tool_result") return showToolResult(event);
+  if (event.type === "tool_result") {
+    appendMessage("tool", formatToolResultMessage(event));
+    showToolResult(event);
+    return scrollToBottom();
+  }
   if (event.type === "tool_error") {
     updateRunStage("executing", "error", `Tool failed: ${event.name}`);
-    return showToolError(event);
+    appendMessage("error", formatToolErrorMessage(event));
+    showToolError(event);
+    return scrollToBottom();
   }
   if (event.type === "context_usage") return renderContext(event.context || {});
 }
@@ -566,7 +574,43 @@ function appendRestoredMessage(message) {
     startReasoning();
     finishReasoning(reasoning);
   }
-  appendMessage(message.role, message.content || "");
+  if (message.role === "assistant" && message.content) {
+    appendMessage("assistant", message.content || "");
+  } else if (message.role === "tool") {
+    appendMessage("tool", formatRestoredToolResult(message));
+  } else if (message.role !== "assistant") {
+    appendMessage(message.role, message.content || "");
+  }
+  for (const toolCall of message.tool_calls || []) {
+    appendMessage("tool", formatToolCallMessage({ name: toolCall.name, input: toolCall.arguments || {}, id: toolCall.id }, restoredToolResultFor(toolCall.id)));
+  }
+}
+
+function appendRestoredMessages(messages) {
+  state.restoredToolResults = restoredToolResultMap(messages);
+  state.renderedRestoredToolResults = new Set();
+  for (const message of messages || []) {
+    if (message.role === "tool" && message.tool_call_id && state.renderedRestoredToolResults.has(message.tool_call_id)) {
+      continue;
+    }
+    appendRestoredMessage(message);
+  }
+  state.restoredToolResults = null;
+  state.renderedRestoredToolResults = null;
+}
+
+function restoredToolResultMap(messages) {
+  const results = new Map();
+  for (const message of messages || []) {
+    if (message.role === "tool" && message.tool_call_id) results.set(message.tool_call_id, message);
+  }
+  return results;
+}
+
+function restoredToolResultFor(toolCallId) {
+  const result = state.restoredToolResults?.get(toolCallId);
+  if (result) state.renderedRestoredToolResults?.add(toolCallId);
+  return result;
 }
 
 function showSystem(text, kind = "system") {
@@ -611,9 +655,45 @@ function renderMessageContent(element, role, text) {
     renderMathBlocks(body);
     appendBareOutputImageGallery(body, text || "");
     hydrateLocalImages(body);
+  } else if (role === "tool") {
+    body.innerHTML = renderCollapsedToolMessage(text || "");
+  } else if (role === "system" || role === "error") {
+    body.innerHTML = markdownToHtml(text || "");
   } else {
     body.textContent = text || "";
   }
+}
+
+function formatRestoredToolResult(message) {
+  const name = message.tool_name || message.agent_name || "tool";
+  return `Tool result · ${name}\n${message.content || ""}`;
+}
+
+function formatToolCallMessage(event, result = null) {
+  const call = `Tool call · ${event.name || "tool"}\n${JSON.stringify(event.input || {}, null, 2)}`;
+  return result ? `${call}\n\n${formatRestoredToolResult(result)}` : call;
+}
+
+function formatToolResultMessage(event) {
+  const suffix = event.truncated ? " (truncated)" : "";
+  return `Tool result · ${event.name || "tool"}${suffix}\n${event.output || ""}`;
+}
+
+function formatToolErrorMessage(event) {
+  return `Tool error · ${event.name || "tool"}\n${event.error || ""}`;
+}
+
+function renderCollapsedToolMessage(text) {
+  const normalized = String(text || "").trim();
+  const [titleLine, ...detailLines] = normalized.split("\n");
+  const detail = detailLines.join("\n").trim();
+  const summary = summarize(detail || titleLine || "Tool message");
+  return [
+    '<details class="tool-message">',
+    `<summary><span class="tool-message-title">${escapeHtml(titleLine || "Tool message")}</span><code class="tool-message-preview">${escapeHtml(summary)}</code></summary>`,
+    `<pre>${escapeHtml(detail || normalized)}</pre>`,
+    "</details>",
+  ].join("");
 }
 
 async function copyMessage(article, button) {

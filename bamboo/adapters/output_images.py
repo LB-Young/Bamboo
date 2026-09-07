@@ -9,8 +9,10 @@ from urllib.parse import urlparse
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff")
 MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*]\(([^)\s]+)\)")
+MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+]\(([^)\s]+)\)")
 HTTP_IMAGE_RE = re.compile(r"https?://[^\s\\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)(?:\?[^\s\\\"'<>，。；、]*)?", re.I)
 LOCAL_IMAGE_RE = re.compile(r"(?:~|/|\./|\.\./)[^\s\\\"'<>，。；、]+?\.(?:png|jpe?g|webp|gif|bmp|tiff?)", re.I)
+LOCAL_FILE_RE = re.compile(r"(?:~|/|\./|\.\./)[^\s\\\"'<>，。；、]+?\.[A-Za-z0-9]{1,12}", re.I)
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +21,13 @@ class OutputImage:
 
     source: str
     is_local: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OutputFile:
+    """A sendable local file reference found in assistant output."""
+
+    source: str
 
 
 def extract_output_images(text: str, *, base_dir: Path | None = None) -> list[OutputImage]:
@@ -52,6 +61,35 @@ def text_without_output_image_markdown(text: str) -> str:
             continue
         lines.append(line)
     return "\n".join(lines).strip()
+
+
+def extract_output_files(text: str, *, base_dir: Path | None = None) -> list[OutputFile]:
+    """Return unique existing non-image local file references from final output text."""
+    files: list[OutputFile] = []
+    seen: set[str] = set()
+    candidates: list[tuple[int, int, str]] = []
+    for match in MARKDOWN_LINK_RE.finditer(text or ""):
+        candidates.append((match.start(), match.end(), _clean_source(match.group(1))))
+    for match in LOCAL_FILE_RE.finditer(text or ""):
+        candidates.append((match.start(), match.end(), _clean_source(match.group(0))))
+
+    occupied = [match.span() for match in MARKDOWN_IMAGE_RE.finditer(text or "")]
+    for start, end, source in sorted(candidates):
+        if _overlaps((start, end), occupied):
+            continue
+        parsed = urlparse(source)
+        if parsed.scheme:
+            continue
+        path = Path(source).expanduser()
+        if not path.is_absolute() and base_dir is not None:
+            path = base_dir / path
+        normalized = path.resolve(strict=False)
+        normalized_str = str(normalized)
+        if normalized.suffix.lower() in IMAGE_EXTENSIONS or normalized_str in seen or not normalized.is_file():
+            continue
+        seen.add(normalized_str)
+        files.append(OutputFile(source=normalized_str))
+    return files
 
 
 def _append_image(images: list[OutputImage], seen: set[str], source: str, *, base_dir: Path | None) -> None:

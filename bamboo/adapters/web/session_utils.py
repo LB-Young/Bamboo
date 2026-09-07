@@ -66,16 +66,29 @@ def serialize_messages(session: Session) -> list[dict[str, object]]:
     """Return displayable chat messages."""
     rows: list[dict[str, object]] = []
     for message in session.messages:
-        if message.role not in {"user", "assistant"}:
+        if message.compressed or message.message_type == "compaction":
             continue
-        if message.compressed or (not message.content.strip() and not message.images):
+        if not message.content.strip() and not message.images and not message.tool_calls:
             continue
         rows.append(
             {
                 "role": message.role,
                 "content": message.content,
                 "time": message.created_at,
+                "agent_name": message.agent_name,
+                "message_id": message.message_id,
+                "message_type": message.message_type,
                 "metadata": dict(message.metadata),
+                "tool_call_id": message.tool_call_id,
+                "tool_name": message.tool_name,
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "name": tool_call.name,
+                        "arguments": dict(tool_call.arguments),
+                    }
+                    for tool_call in message.tool_calls
+                ],
                 "images": [
                     {"source": image.source, "media_type": image.media_type, "detail": image.detail}
                     for image in message.images

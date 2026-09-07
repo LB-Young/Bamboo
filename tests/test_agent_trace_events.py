@@ -6,11 +6,12 @@ import anyio
 
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
-from bamboo.helpers.constant import LLMRequestEvent, LLMResponseEvent, ToolCallEvent
+from bamboo.helpers.constant import LLMRequestEvent, LLMResponseEvent, TextDeltaEvent, TextFinishEvent, ToolCallEvent
 from bamboo.helpers.requests_params import RunParams
-from bamboo.llms import LLMClient, LLMFactory, LLMRequest, LLMResponse
+from bamboo.llms import LLMClient, LLMFactory, LLMRequest, LLMResponse, LLMToolCall
 from bamboo.runtime.agent_runtime import AgentRuntime
 from bamboo.runtime.runtime_context import RuntimeContextBuilder
+from bamboo.runtime.state_machine import AgentState
 
 
 def test_base_event_includes_parent_event_id() -> None:
@@ -69,6 +70,37 @@ def test_agent_runtime_emits_full_prompt_llm_trace_events() -> None:
     assert llm_response.success is True
     assert llm_response.output_chars == len("trace answer")
     assert "trace answer" not in str(llm_response.to_dict())
+
+
+def test_agent_runtime_emits_intermediate_text_before_tool_calls() -> None:
+    event_bus = EventBus()
+    events: list[object] = []
+    event_bus.subscribe(events.append, patterns="text.*")
+    task = TaskFactory().create(RunParams(message="read first"))
+
+    async def run_test() -> None:
+        runtime_context = RuntimeContextBuilder(event_bus=event_bus, llm_factory=LLMFactory.from_mapping(_model_document())).build(task)
+        runtime = AgentRuntime(runtime_context=runtime_context)
+        runtime.state_machine.state = AgentState.ACTING
+
+        async def skip_tool_call(task, tool_call) -> None:
+            return None
+
+        runtime._execute_tool_call = skip_tool_call  # type: ignore[method-assign]
+        await runtime._act(
+            task,
+            LLMResponse(
+                content="我先读取文件。",
+                model="test-model",
+                provider="test-provider",
+                tool_calls=[LLMToolCall(id="call-1", name="read", arguments={"path": "a.txt"})],
+            ),
+        )
+
+    anyio.run(run_test)
+
+    assert any(isinstance(event, TextDeltaEvent) and event.delta == "我先读取文件。" for event in events)
+    assert any(isinstance(event, TextFinishEvent) and event.content == "我先读取文件。" for event in events)
 
 
 def test_trace_recorder_persists_llm_prompt_events(tmp_path, monkeypatch) -> None:
