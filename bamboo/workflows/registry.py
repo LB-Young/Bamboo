@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from bamboo.helpers.config import builtin_workflow_config_paths, load_builtin_workflow_config
 from bamboo.userspace.userspace import get_userspace_dir
 from bamboo.workflows.models import WorkflowDefinition, WorkflowRunSpec
 
@@ -16,11 +17,17 @@ PACKAGE_BUILTIN_WORKFLOWS_DIR = Path(__file__).resolve().parent / "buildin"
 class WorkflowRegistry:
     """Scans builtin, user, and project workflow packages."""
 
-    def __init__(self, *, workflow_dirs: list[tuple[str, Path]] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        workflow_dirs: list[tuple[str, Path]] | None = None,
+        builtin_config_paths: list[Path] | None = None,
+    ) -> None:
         self.workflow_dirs = workflow_dirs or [
             ("builtin", PACKAGE_BUILTIN_WORKFLOWS_DIR),
             ("user", get_userspace_dir() / "workflows"),
         ]
+        self.builtin_config_paths = builtin_config_paths or builtin_workflow_config_paths()
         self._workflows: dict[str, WorkflowDefinition] = {}
 
     @classmethod
@@ -42,6 +49,13 @@ class WorkflowRegistry:
                 continue
             for entry_path in sorted(root.glob("*/WORKFLOW.md")):
                 definition = load_workflow_definition(entry_path, source=source)
+                if source == "builtin":
+                    definition = apply_builtin_workflow_config(
+                        definition,
+                        config_paths=self.builtin_config_paths,
+                    )
+                    if not _workflow_enabled(definition.name, config_paths=self.builtin_config_paths):
+                        continue
                 workflows[definition.name] = definition
         self._workflows = workflows
 
@@ -88,6 +102,32 @@ def load_workflow_definition(path: Path, *, source: str) -> WorkflowDefinition:
     )
 
 
+def apply_builtin_workflow_config(
+    definition: WorkflowDefinition,
+    *,
+    config_paths: list[Path] | None = None,
+) -> WorkflowDefinition:
+    """Apply central built-in workflow config overrides."""
+    config = load_builtin_workflow_config(definition.name, config_paths=config_paths)
+    if not config:
+        return definition
+    run_config = config.get("run") if isinstance(config.get("run"), dict) else {}
+    return WorkflowDefinition(
+        name=definition.name,
+        description=str(config.get("description") or definition.description).strip(),
+        source=definition.source,
+        source_dir=definition.source_dir,
+        entry_path=definition.entry_path,
+        body=definition.body,
+        dependencies=_string_list(
+            config.get("dependencies", definition.dependencies),
+            f"workflows.{definition.name}.dependencies",
+        ),
+        usage=str(config.get("usage") or definition.usage).strip(),
+        run=_parse_run_spec(_merge_run_spec(definition.run, run_config), definition.name),
+    )
+
+
 def _parse_run_spec(value: Any, workflow_name: str) -> WorkflowRunSpec:
     if value in (None, ""):
         return WorkflowRunSpec()
@@ -108,6 +148,25 @@ def _parse_run_spec(value: Any, workflow_name: str) -> WorkflowRunSpec:
         timeout=timeout,
         risk=risk,  # type: ignore[arg-type]
     )
+
+
+def _workflow_enabled(workflow_name: str, *, config_paths: list[Path] | None = None) -> bool:
+    config = load_builtin_workflow_config(workflow_name, config_paths=config_paths)
+    enabled = config.get("enabled")
+    return enabled if isinstance(enabled, bool) else True
+
+
+def _merge_run_spec(run: WorkflowRunSpec, override: Any) -> dict[str, Any]:
+    merged: dict[str, Any] = {
+        "command": run.command,
+        "script": run.script,
+        "cwd": run.cwd,
+        "timeout": run.timeout,
+        "risk": run.risk,
+    }
+    if isinstance(override, dict):
+        merged.update(override)
+    return merged
 
 
 def _parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:

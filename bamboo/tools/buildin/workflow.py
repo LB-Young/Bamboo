@@ -70,7 +70,7 @@ class WorkflowRunTool(Tool):
     risk_level = "execute"
     tags = ("workflow", "execute")
 
-    def __init__(self, *, workflow_registry: WorkflowRegistry | None = None, default_timeout: int = 120) -> None:
+    def __init__(self, *, workflow_registry: WorkflowRegistry | None = None, default_timeout: int = 1800) -> None:
         self.workflow_registry = workflow_registry
         self.default_timeout = default_timeout
         self.runtime_context = None

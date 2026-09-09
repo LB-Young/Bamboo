@@ -17,6 +17,7 @@ from bamboo.memory.manager import MemoryManager
 from bamboo.prompts import PromptSection, read_provider_prompt_section_objects, render_prompt_sections
 from bamboo.skills import SkillRegistry
 from bamboo.tools import ToolRegistry, get_tool_registry
+from bamboo.workflows import WorkflowRegistry, create_workflow_registry
 
 MAX_BKN_DOC_CHARS = 1600
 
@@ -29,6 +30,7 @@ class AgentPrompt:
     messages: list[LLMMessage]
     tool_catalog: str
     skill_catalog: str
+    workflow_catalog: str
     tools: list[dict]
     memory_context: str = ""
     provider_context: str = ""
@@ -54,6 +56,8 @@ class AgentPrompt:
             self.tool_catalog or "(none)",
             "# Available Skills",
             self.skill_catalog or "(none)",
+            "# Available Workflows",
+            self.workflow_catalog or "(none)",
         ]
         if self.provider_context:
             sections.extend(["# Provider Prompt", self.provider_context])
@@ -81,6 +85,8 @@ class AgentPrompt:
             system_sections.extend(["# Available Tools", self.tool_catalog])
         if self.skill_catalog:
             system_sections.extend(["# Available Skills", self.skill_catalog])
+        if self.workflow_catalog:
+            system_sections.extend(["# Available Workflows", self.workflow_catalog])
         if self.error_history:
             system_sections.extend(["# Recoverable Errors", "\n".join(self.error_history)])
         return LLMRequest(
@@ -112,6 +118,7 @@ class AgentPromptBuilder:
         *,
         tool_registry: ToolRegistry | None = None,
         skill_registry: SkillRegistry | None = None,
+        workflow_registry: WorkflowRegistry | None = None,
         memory_manager: MemoryManager | None = None,
         bkn_registry: BKNRegistry | None = None,
         model_config: ModelConfig | None = None,
@@ -119,6 +126,7 @@ class AgentPromptBuilder:
         """初始化 Prompt Builder，并固定当前 Agent 可见的工具注册表。"""
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry
+        self.workflow_registry = workflow_registry
         self.memory_manager = memory_manager
         self.bkn_registry = bkn_registry
         self.model_config = model_config
@@ -143,6 +151,7 @@ class AgentPromptBuilder:
         tools = self._get_tool_schemas()
         tool_catalog = self._build_tool_catalog()
         skill_catalog = self._build_skill_catalog()
+        workflow_catalog = self._build_workflow_catalog(session)
         bkn_catalog = self._build_bkn_catalog()
         memory_context = self._build_memory_context(session)
         provider_context = self._build_provider_context()
@@ -152,12 +161,14 @@ class AgentPromptBuilder:
             messages=messages,
             tool_catalog=tool_catalog,
             skill_catalog=skill_catalog,
+            workflow_catalog=workflow_catalog,
             memory_context=memory_context,
             provider_context=provider_context,
             prompt_sections=self._build_prompt_sections(
                 session=session,
                 tool_catalog=tool_catalog,
                 skill_catalog=skill_catalog,
+                workflow_catalog=workflow_catalog,
                 bkn_catalog=bkn_catalog,
                 memory_context=memory_context,
                 provider_context=provider_context,
@@ -188,6 +199,31 @@ class AgentPromptBuilder:
         if self.skill_registry is None:
             return ""
         return self.skill_registry.render_catalog()
+
+    def _build_workflow_catalog(self, session: Session) -> str:
+        """Render available Workflow summaries for prompt discovery."""
+        registry = self.workflow_registry or create_workflow_registry(session.context.project_root)
+        try:
+            workflows = registry.list()
+        except OSError:
+            return ""
+        rows = []
+        for definition in workflows:
+            detail_parts = [f"{definition.source}"]
+            if definition.run.risk:
+                detail_parts.append(f"risk={definition.run.risk}")
+            if definition.usage:
+                detail_parts.append(f"usage={definition.usage.replace(chr(10), ' ')}")
+            rows.append(f"- `{definition.name}` ({', '.join(detail_parts)}): {definition.description}")
+        if not rows:
+            return ""
+        return "\n".join(
+            [
+                "Use the `workflow_load` tool to load a workflow's `WORKFLOW.md` before running it.",
+                "Then call `workflow_run` with the workflow name and the documented arguments.",
+                *rows,
+            ]
+        )
 
     def _build_bkn_catalog(self) -> str:
         """Render committed BKN.md files as a compact BKN directory."""
@@ -249,6 +285,7 @@ class AgentPromptBuilder:
         session: Session,
         tool_catalog: str,
         skill_catalog: str,
+        workflow_catalog: str,
         bkn_catalog: str,
         memory_context: str,
         provider_context: str,
@@ -302,6 +339,16 @@ class AgentPromptBuilder:
                     priority=600,
                     cacheable=False,
                     content=f"# Available Skills\n\n{skill_catalog}",
+                )
+            )
+        if workflow_catalog:
+            sections.append(
+                PromptSection(
+                    name="available-workflows",
+                    source="workflow-registry",
+                    priority=620,
+                    cacheable=False,
+                    content=f"# Available Workflows\n\n{workflow_catalog}",
                 )
             )
         if bkn_catalog:

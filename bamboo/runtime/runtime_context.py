@@ -23,6 +23,7 @@ from bamboo.skills import SkillRegistry, create_skill_registry
 from bamboo.subagents import SubagentRegistry, create_subagent_registry
 from bamboo.tools import ToolRegistry, get_tool_registry
 from bamboo.tools.mcp import MCPManager
+from bamboo.workflows import WorkflowRegistry, create_workflow_registry
 
 
 @dataclass(slots=True)
@@ -49,6 +50,7 @@ class RuntimeContext:
     bkn_registry: BKNRegistry | None = None
     memory_manager: object | None = None
     skill_registry: SkillRegistry | None = None
+    workflow_registry: WorkflowRegistry | None = None
     subagent_registry: SubagentRegistry | None = None
     mcp_manager: MCPManager | None = None
     permission_policy: PermissionPolicy | None = None
@@ -107,6 +109,7 @@ class RuntimeContextBuilder:
         prompt_builder: AgentPromptBuilder | None = None,
         context_compactor: ContextCompactor | None = None,
         skill_registry: SkillRegistry | None = None,
+        workflow_registry: WorkflowRegistry | None = None,
         subagent_registry: SubagentRegistry | None = None,
         memory_manager: MemoryManager | None = None,
         bkn_registry: BKNRegistry | None = None,
@@ -124,12 +127,14 @@ class RuntimeContextBuilder:
         self.llm_factory = llm_factory
         self.tool_registry = tool_registry or get_tool_registry()
         self.skill_registry = skill_registry or create_skill_registry()
+        self.workflow_registry = workflow_registry
         self.subagent_registry = subagent_registry
         self.memory_manager = memory_manager or MemoryManager()
         self.bkn_registry = bkn_registry or create_bkn_registry()
         self.prompt_builder = prompt_builder or AgentPromptBuilder(
             tool_registry=self.tool_registry,
             skill_registry=self.skill_registry,
+            workflow_registry=self.workflow_registry,
             memory_manager=self.memory_manager,
             bkn_registry=self.bkn_registry,
         )
@@ -137,6 +142,8 @@ class RuntimeContextBuilder:
             prompt_builder.memory_manager = self.memory_manager
         if prompt_builder is not None and getattr(prompt_builder, "bkn_registry", None) is None:
             prompt_builder.bkn_registry = self.bkn_registry
+        if prompt_builder is not None and getattr(prompt_builder, "workflow_registry", None) is None:
+            prompt_builder.workflow_registry = self.workflow_registry
         self.context_compactor = context_compactor
         self.compaction_policy = compaction_policy
         self.token_counter = token_counter
@@ -153,6 +160,8 @@ class RuntimeContextBuilder:
     def build(self, task: Task) -> RuntimeContext:
         """根据 Task 配置创建 AgentRuntime 可直接使用的上下文。"""
         self._ensure_mcp_tools(task)
+        workflow_registry = self.workflow_registry or create_workflow_registry(task.run_params.project)
+        self.prompt_builder.workflow_registry = workflow_registry
         model_name = self.model_name or self._resolve_agent_model_name(task)
         llm_router = LLMRouter(self.llm_factory, config=task.config)
         main_route = llm_router.main_route(
@@ -199,6 +208,7 @@ class RuntimeContextBuilder:
             bkn_registry=self.bkn_registry,
             memory_manager=self.memory_manager,
             skill_registry=self.skill_registry,
+            workflow_registry=workflow_registry,
             subagent_registry=self.subagent_registry or create_subagent_registry(task.run_params.project),
             mcp_manager=self.mcp_manager,
             permission_policy=self.permission_policy,

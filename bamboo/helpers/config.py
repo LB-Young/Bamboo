@@ -90,14 +90,7 @@ def load_builtin_skill_config(skill_name: str, *, config_paths: list[Path] | Non
     """Load merged package and user config for one built-in skill."""
     merged: dict[str, Any] = {}
     for path in config_paths or builtin_skill_config_paths():
-        if not path.is_file():
-            continue
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError):
-            continue
-        if not isinstance(data, dict):
-            continue
+        data = _read_yaml_mapping(path)
         skills = data.get("skills")
         if not isinstance(skills, dict):
             continue
@@ -121,6 +114,37 @@ def builtin_skill_config_paths() -> list[Path]:
     return [
         PACKAGE_CONFIGS_DIR / "skills_buildin.yaml",
         BambooConfig.get_configs_dir() / "skills_buildin.yaml",
+    ]
+
+
+def load_builtin_workflow_config(workflow_name: str, *, config_paths: list[Path] | None = None) -> dict[str, Any]:
+    """Load merged package and user config for one built-in workflow."""
+    merged: dict[str, Any] = {}
+    for path in config_paths or builtin_workflow_config_paths():
+        data = _read_yaml_mapping(path)
+        workflows = data.get("workflows")
+        if not isinstance(workflows, dict):
+            continue
+        raw_config = workflows.get(workflow_name)
+        if isinstance(raw_config, dict):
+            merged = _deep_merge(merged, raw_config)
+    return merged
+
+
+def load_builtin_workflow_variables(workflow_name: str, *, config_paths: list[Path] | None = None) -> dict[str, Any]:
+    """Load resolved variables for one built-in workflow."""
+    config = load_builtin_workflow_config(workflow_name, config_paths=config_paths)
+    variables = config.get("variables")
+    if not isinstance(variables, dict):
+        return {}
+    return {str(key): _resolve_config_value(value) for key, value in variables.items()}
+
+
+def builtin_workflow_config_paths() -> list[Path]:
+    """Return package defaults and user overrides for built-in workflow config."""
+    return [
+        PACKAGE_CONFIGS_DIR / "workflows_buildin.yaml",
+        BambooConfig.get_configs_dir() / "workflows_buildin.yaml",
     ]
 
 
@@ -171,6 +195,16 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
         else:
             result[key] = value
     return result
+
+
+def _read_yaml_mapping(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _resolve_config_value(value: Any) -> Any:

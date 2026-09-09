@@ -151,6 +151,18 @@ def test_build_prompt_includes_committed_bkn_docs(tmp_path: Path) -> None:
     assert runtime_context.prompt_builder.bkn_registry is runtime_context.bkn_registry
 
 
+def test_agent_prompt_includes_workflow_catalog(tmp_path: Path) -> None:
+    task_runtime = TaskRuntime(llm_factory=LLMFactory.from_mapping(_model_document()))
+    task = task_runtime.create_task(RunParams(message="hello", project=str(tmp_path), session_mode=SessionMode.chat))
+    runtime_context = task_runtime.runtime_context_builder.build(task)
+
+    prompt = runtime_context.prompt_builder.build(task.session).to_llm_request().system_prompt
+
+    assert "# Available Workflows" in prompt
+    assert "Use the `workflow_load` tool" in prompt
+    assert "`local-pdf-to-markdown`" in prompt
+
+
 def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     """验证 init 用户空间时会复制可编辑 prompt 模板。"""
     layout = ensure_userspace()
@@ -167,6 +179,7 @@ def test_ensure_userspace_copies_prompt_templates(tmp_path: Path) -> None:
     assert get_user_bkn_dir() == layout.root / "bkn"
     assert get_bkn_storage_dir() == layout.root / "storage" / "bkn"
     assert (layout.root / "buildin_skills" / "skill-creator" / "SKILL.md").is_file()
+    assert (layout.root / "buildin_workflows" / "local-pdf-to-markdown" / "WORKFLOW.md").is_file()
     assert (layout.root / "buildin_subagents" / "knowledge-curator.yaml").is_file()
     assert (layout.root / "memory" / "dates" / "chat" / "knowledge" / "profile.md").is_file()
     assert (layout.root / "memory" / "projects" / "knowledge" / "overview.md").is_file()

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import anyio
 import pytest
+import yaml
 
 from bamboo.factory.event_bus import EventBus
 from bamboo.factory.task_factory import TaskFactory
@@ -148,6 +149,81 @@ def test_builtin_tool_registry_exposes_workflow_tools() -> None:
     assert registry.get("workflow_run") is not None
 
 
+def test_builtin_registry_exposes_local_pdf_to_markdown_workflow() -> None:
+    registry = WorkflowRegistry(workflow_dirs=[("builtin", Path("bamboo/workflows/buildin"))])
+    workflow = registry.get("local-pdf-to-markdown")
+
+    assert workflow is not None
+    assert workflow.run.script == "scripts/run.sh"
+    assert workflow.run.timeout == 1800
+    assert "PDF" in workflow.description
+
+
+def test_builtin_workflow_registry_honors_central_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "workflows_buildin.yaml"
+    config_path.write_text(
+        "schema_version: 1\n"
+        "workflows:\n"
+        "  local-pdf-to-markdown:\n"
+        "    enabled: true\n"
+        "    usage: central usage\n"
+        "    dependencies:\n"
+        "      - central dependency\n"
+        "    run:\n"
+        "      script: scripts/run.sh\n"
+        "      timeout: 77\n",
+        encoding="utf-8",
+    )
+    registry = WorkflowRegistry(
+        workflow_dirs=[("builtin", Path("bamboo/workflows/buildin"))],
+        builtin_config_paths=[config_path],
+    )
+
+    workflow = registry.get("local-pdf-to-markdown")
+
+    assert workflow is not None
+    assert workflow.usage == "central usage"
+    assert workflow.dependencies == ["central dependency"]
+    assert workflow.run.script == "scripts/run.sh"
+    assert workflow.run.timeout == 77
+
+
+def test_builtin_workflow_registry_honors_central_disabled_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "workflows_buildin.yaml"
+    config_path.write_text(
+        "schema_version: 1\n"
+        "workflows:\n"
+        "  local-pdf-to-markdown:\n"
+        "    enabled: false\n",
+        encoding="utf-8",
+    )
+    registry = WorkflowRegistry(
+        workflow_dirs=[("builtin", Path("bamboo/workflows/buildin"))],
+        builtin_config_paths=[config_path],
+    )
+
+    assert registry.get("local-pdf-to-markdown") is None
+
+
+def test_builtin_workflows_config_lists_local_pdf_to_markdown() -> None:
+    config = yaml.safe_load(Path("bamboo/configs/workflows_buildin.yaml").read_text(encoding="utf-8")) or {}
+    workflow = config["workflows"]["local-pdf-to-markdown"]
+
+    assert workflow["enabled"] is True
+    assert workflow["user_invocable"] is True
+    assert workflow["variables"]["PDF2MD_LAYOUT_MODEL"].endswith("doclayout_yolo_docstructbench_imgsz1024.pt")
+    assert workflow["variables"]["PDF2MD_DPI"] == "180"
+    assert workflow["variables"]["PDF2MD_OCR_DETECTION_MODEL_NAME"] == "PP-OCRv5_mobile_det"
+    assert workflow["variables"]["PDF2MD_OCR_RECOGNITION_MODEL_NAME"] == "PP-OCRv5_mobile_rec"
+    assert workflow["variables"]["PDF2MD_OCR_DETECTION_MODEL_DIR"].endswith("PP-OCRv5_mobile_det")
+    assert workflow["variables"]["PDF2MD_OCR_RECOGNITION_MODEL_DIR"].endswith("PP-OCRv5_mobile_rec")
+    assert workflow["requirements"]["bins"] == ["python"]
+    assert "PyMuPDF" in workflow["requirements"]["python_packages"]
+    assert "doclayout-yolo" in workflow["requirements"]["optional_python_packages"]
+    assert workflow["run"]["script"] == "scripts/run.sh"
+    assert workflow["run"]["timeout"] == 1800
+
+
 def _workflow_dir(root: Path, name: str) -> Path:
     workflow_dir = root / name
     workflow_dir.mkdir(parents=True, exist_ok=True)
@@ -167,4 +243,3 @@ def _model_document() -> dict:
             }
         },
     }
-

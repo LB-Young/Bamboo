@@ -1,8 +1,54 @@
-# 内置 workflow 会在 `bamboo init` 时复制到：
-#   ~/.bamboo/buildin_workflows/
-#
-# 包内来源：
-#   bamboo/workflows/buildin/
-#
-# 当前内置：
-#   - daily-review
+schema_version: 1
+
+# Central defaults for Bamboo built-in workflows.
+# WorkflowRegistry reads `enabled`, `description`, `usage`, `dependencies`, and `run`.
+# Other entries are read by the corresponding workflow implementation when needed.
+workflows:
+  daily-review:
+    enabled: true
+    user_invocable: true
+    dependencies:
+      - bash tool
+    run:
+      script: scripts/project_snapshot.sh
+      cwd: .
+      timeout: 60
+      risk: read
+
+  local-pdf-to-markdown:
+    enabled: true
+    user_invocable: true
+    description: Convert a local PDF file into a structured Markdown document with a retained JSON IR and extracted assets.
+    usage: |
+      1. Call `workflow_load` with `name="local-pdf-to-markdown"` before running this workflow.
+      2. Call `workflow_run` with `name="local-pdf-to-markdown"` and arguments containing a local PDF path.
+      3. Arguments may be either `"/absolute/input.pdf"` or `"/absolute/input.pdf /absolute/output.md"`.
+      4. The workflow returns the generated Markdown file path in stdout as `Markdown: ...`.
+    variables:
+      PDF2MD_MODELS_DIR: /Users/liubaoyang/Documents/YoungL/models
+      PDF2MD_LAYOUT_MODEL: /Users/liubaoyang/Documents/YoungL/models/DocLayout-YOLO-DocStructBench/doclayout_yolo_docstructbench_imgsz1024.pt
+      PDF2MD_DPI: "180"
+      PDF2MD_LAYOUT_DEVICE: cpu
+      PDF2MD_ENABLE_OCR: "auto"
+      PDF2MD_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
+      PDF2MD_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
+      PDF2MD_OCR_DETECTION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_det
+      PDF2MD_OCR_RECOGNITION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_rec
+    requirements:
+      bins:
+        - python
+      python_packages:
+        - PyMuPDF
+        - Pillow
+      optional_python_packages:
+        - doclayout-yolo
+        - paddleocr
+    permissions:
+      can_run_commands: true
+      can_edit_files: true
+      can_access_network: false
+    run:
+      script: scripts/run.sh
+      cwd: .
+      timeout: 1800
+      risk: write
