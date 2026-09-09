@@ -45,6 +45,8 @@ const MATH_ENVIRONMENTS = [
   "multline*",
   "split",
 ];
+const COMPOSER_INPUT_MIN_HEIGHT = 44;
+const COMPOSER_INPUT_MAX_HEIGHT = COMPOSER_INPUT_MIN_HEIGHT * 3;
 
 applyTheme(state.theme);
 
@@ -70,6 +72,7 @@ const els = {
   runBadge: document.getElementById("runBadge"),
   chatHistory: document.getElementById("chatHistory"),
   permissionDock: document.getElementById("permissionDock"),
+  composerResizeHandle: document.getElementById("composerResizeHandle"),
   messageInput: document.getElementById("messageInput"),
   stopButton: document.getElementById("stopButton"),
   sendButton: document.getElementById("sendButton"),
@@ -1933,6 +1936,58 @@ function logSummary(event) {
 function isComposingInput(event) {
   return Boolean(event.isComposing || event.keyCode === 229);
 }
+
+function installComposerResize() {
+  const handle = els.composerResizeHandle;
+  const input = els.messageInput;
+  const composer = handle?.closest?.(".composer");
+  if (!handle || !input || !composer) return;
+
+  let resizing = false;
+  let startY = 0;
+  let startHeight = COMPOSER_INPUT_MIN_HEIGHT;
+  let activePointerId = null;
+
+  const clampHeight = (height) => Math.max(COMPOSER_INPUT_MIN_HEIGHT, Math.min(COMPOSER_INPUT_MAX_HEIGHT, height));
+  const setInputHeight = (height) => {
+    input.style.height = `${clampHeight(height)}px`;
+  };
+
+  setInputHeight(input.getBoundingClientRect().height || COMPOSER_INPUT_MIN_HEIGHT);
+
+  handle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    resizing = true;
+    activePointerId = event.pointerId;
+    startY = event.clientY;
+    startHeight = input.getBoundingClientRect().height || COMPOSER_INPUT_MIN_HEIGHT;
+    composer.classList.add("resizing");
+    handle.setPointerCapture?.(event.pointerId);
+  });
+
+  handle.addEventListener("pointermove", (event) => {
+    if (!resizing || event.pointerId !== activePointerId) return;
+    event.preventDefault();
+    setInputHeight(startHeight + (startY - event.clientY));
+  });
+
+  const finishResize = (event) => {
+    if (!resizing || event.pointerId !== activePointerId) return;
+    resizing = false;
+    activePointerId = null;
+    composer.classList.remove("resizing");
+    if (handle.hasPointerCapture?.(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+    input.focus();
+  };
+
+  handle.addEventListener("pointerup", finishResize);
+  handle.addEventListener("pointercancel", finishResize);
+  handle.addEventListener("dblclick", () => setInputHeight(COMPOSER_INPUT_MIN_HEIGHT));
+}
+
+installComposerResize();
 
 els.applyProject.addEventListener("click", async () => {
   await applyProjectPath();
