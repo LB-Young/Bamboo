@@ -26,7 +26,8 @@ workflows:
       4. The workflow returns the generated Markdown file path in stdout as `Markdown: ...`.
     variables:
       PDF2MD_MODELS_DIR: /Users/liubaoyang/Documents/YoungL/models
-      PDF2MD_LAYOUT_MODEL: /Users/liubaoyang/Documents/YoungL/models/DocLayout-YOLO-DocStructBench/doclayout_yolo_docstructbench_imgsz1024.pt
+      PDF2MD_LAYOUT_MODEL_NAME: PP-DocLayout_plus-L
+      PDF2MD_LAYOUT_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-DocLayout/PP-DocLayout_plus-L
       PDF2MD_DPI: "180"
       PDF2MD_LAYOUT_DEVICE: cpu
       PDF2MD_ENABLE_OCR: "auto"
@@ -40,9 +41,9 @@ workflows:
       python_packages:
         - PyMuPDF
         - Pillow
-      optional_python_packages:
-        - doclayout-yolo
         - paddleocr
+        - paddlepaddle
+      optional_python_packages: []
     permissions:
       can_run_commands: true
       can_edit_files: true

@@ -5,6 +5,7 @@ import argparse
 import json
 import re
 import shlex
+import shutil
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -24,13 +25,14 @@ except ImportError as exc:  # pragma: no cover - exercised only in missing local
 
 
 DEFAULT_MODELS_DIR = Path("/Users/liubaoyang/Documents/YoungL/models")
-DEFAULT_LAYOUT_MODEL = DEFAULT_MODELS_DIR / "DocLayout-YOLO-DocStructBench" / "doclayout_yolo_docstructbench_imgsz1024.pt"
+DEFAULT_LAYOUT_MODEL_NAME = "PP-DocLayout_plus-L"
+DEFAULT_LAYOUT_MODEL_DIR = DEFAULT_MODELS_DIR / "PP-DocLayout" / DEFAULT_LAYOUT_MODEL_NAME
 WORKFLOW_NAME = "local-pdf-to-markdown"
 TEXT_TYPES = {"title", "plain text", "text", "abandon", "figure_caption", "table_caption", "caption", "section"}
 FIGURE_TYPES = {"figure", "figure_body", "image"}
 TABLE_TYPES = {"table"}
 CAPTION_TYPES = {"figure_caption", "table_caption", "caption"}
-DROP_TYPES = {"header", "footer", "page_number", "page-footer", "page-header"}
+DROP_TYPES = {"header", "footer", "page_number", "page-footer", "page-header", "footnote", "number"}
 
 
 @dataclass
@@ -52,8 +54,9 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     config = load_workflow_variables()
     dpi = args.dpi or positive_int(config.get("PDF2MD_DPI"), 180)
-    layout_model = args.layout_model or Path(
-        str(config.get("PDF2MD_LAYOUT_MODEL") or DEFAULT_LAYOUT_MODEL)
+    layout_model_name = str(config.get("PDF2MD_LAYOUT_MODEL_NAME") or DEFAULT_LAYOUT_MODEL_NAME)
+    layout_model_dir = args.layout_model or Path(
+        str(config.get("PDF2MD_LAYOUT_MODEL_DIR") or config.get("PDF2MD_LAYOUT_MODEL") or DEFAULT_LAYOUT_MODEL_DIR)
     )
     layout_device = args.layout_device or str(config.get("PDF2MD_LAYOUT_DEVICE") or "cpu")
     enable_ocr = str(config.get("PDF2MD_ENABLE_OCR") or "auto").strip().lower()
@@ -69,6 +72,7 @@ def main(argv: list[str]) -> int:
     layout_dir = output_dir / "layout"
     figures_dir = output_dir / "assets" / "figures"
     tables_dir = output_dir / "assets" / "tables"
+    clean_generated_dirs(pages_dir, layout_dir, figures_dir, tables_dir)
     for directory in (output_dir, pages_dir, layout_dir, figures_dir, tables_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -81,7 +85,8 @@ def main(argv: list[str]) -> int:
         figures_dir=figures_dir,
         tables_dir=tables_dir,
         dpi=dpi,
-        layout_model=layout_model.expanduser().resolve(),
+        layout_model_name=layout_model_name,
+        layout_model_dir=layout_model_dir.expanduser().resolve(),
         layout_device=layout_device,
         enable_ocr=enable_ocr,
         config=config,
@@ -106,9 +111,12 @@ def main(argv: list[str]) -> int:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    tokens: list[str] = []
-    for item in argv:
-        tokens.extend(shlex.split(item))
+    tokens = argv
+    if len(argv) == 1:
+        raw_arg = argv[0]
+        candidate = Path(raw_arg).expanduser()
+        if not candidate.exists() and not raw_arg.lower().endswith(".pdf"):
+            tokens = shlex.split(raw_arg)
     parser = argparse.ArgumentParser(description="Convert a local PDF to structured Markdown.")
     parser.add_argument("pdf", type=Path)
     parser.add_argument("output", type=Path, nargs="?")
@@ -169,6 +177,12 @@ def resolve_output_path(pdf_path: Path, output: Path | None) -> Path:
     return (pdf_path.parent / pdf_path.stem / f"{pdf_path.stem}.md").resolve()
 
 
+def clean_generated_dirs(*directories: Path) -> None:
+    for directory in directories:
+        if directory.is_dir():
+            shutil.rmtree(directory)
+
+
 def convert_pdf(
     *,
     pdf_path: Path,
@@ -179,13 +193,14 @@ def convert_pdf(
     figures_dir: Path,
     tables_dir: Path,
     dpi: int,
-    layout_model: Path,
+    layout_model_name: str,
+    layout_model_dir: Path,
     layout_device: str,
     enable_ocr: str,
     config: dict[str, Any],
 ) -> dict[str, Any]:
     doc = fitz.open(pdf_path)
-    layout_detector, layout_warning = load_layout_detector(layout_model, layout_device)
+    layout_detector, layout_warning = load_layout_detector(layout_model_name, layout_model_dir, layout_device)
     ocr_engine, ocr_warning = load_ocr_engine(enable_ocr, config)
     warnings = [warning for warning in (layout_warning, ocr_warning) if warning]
     all_blocks: list[Block] = []
@@ -236,7 +251,8 @@ def convert_pdf(
             "pages": len(doc),
             "mode": mode,
             "dpi": dpi,
-            "layout_model": str(layout_model) if layout_detector else "",
+            "layout_model": layout_model_name if layout_detector else "",
+            "layout_model_dir": str(layout_model_dir) if layout_detector else "",
             "ocr_enabled": ocr_engine is not None,
             "assets": {"layout_crops": layout_assets, "pdf_images": image_assets},
             "warnings": warnings,
@@ -317,17 +333,21 @@ def text_from_block(raw: dict[str, Any]) -> tuple[str, float, int]:
     return "\n".join(lines), max_size, flags
 
 
-def load_layout_detector(model_path: Path, device: str) -> tuple[Any | None, str]:
-    if not model_path.is_file():
-        return None, f"DocLayout-YOLO model not found: {model_path}; using PyMuPDF fallback."
+def load_layout_detector(model_name: str, model_dir: Path, device: str) -> tuple[Any | None, str]:
     try:
-        from doclayout_yolo import YOLOv10  # type: ignore
+        from paddleocr import LayoutDetection  # type: ignore
     except ImportError:
-        return None, "doclayout_yolo package is not installed; using PyMuPDF fallback."
+        return None, "paddleocr is not installed; using PyMuPDF fallback."
+    kwargs: dict[str, Any] = {"model_name": model_name, "device": device}
+    if model_dir.is_dir():
+        kwargs["model_dir"] = str(model_dir)
     try:
-        return YOLOv10(str(model_path)), ""
+        return LayoutDetection(**kwargs), ""
+    except ValueError:
+        kwargs.pop("model_dir", None)
+        return LayoutDetection(**kwargs), ""
     except Exception as exc:  # pragma: no cover - model/runtime dependent.
-        return None, f"DocLayout-YOLO failed to load: {exc}; using PyMuPDF fallback."
+        return None, f"PP layout detector failed to load: {exc}; using PyMuPDF fallback."
 
 
 def detect_layout(detector: Any | None, page_png: Path, page_index: int, layout_dir: Path, dpi: int, device: str) -> list[Block]:
@@ -336,36 +356,30 @@ def detect_layout(detector: Any | None, page_png: Path, page_index: int, layout_
         return []
     result_blocks: list[Block] = []
     try:
-        results = detector.predict(str(page_png), imgsz=1024, conf=0.2, device=device, verbose=False)
+        results = detector.predict(str(page_png), batch_size=1, layout_nms=True)
     except TypeError:
-        results = detector.predict(str(page_png), imgsz=1024, conf=0.2, device=device)
+        results = detector.predict(str(page_png))
     except Exception:
         results = []
     if not results:
         (layout_dir / f"page_{page_index:03d}.json").write_text("[]\n", encoding="utf-8")
         return []
     image_width, image_height = Image.open(page_png).size
-    page_blocks = []
-    result = results[0]
-    names = getattr(result, "names", {}) or {}
-    boxes = getattr(result, "boxes", None)
-    if boxes is not None:
-        for block_index, box in enumerate(boxes, start=1):
-            xyxy = [float(v) for v in box.xyxy[0].tolist()]
-            cls_id = int(box.cls[0].item()) if getattr(box, "cls", None) is not None else -1
-            score = float(box.conf[0].item()) if getattr(box, "conf", None) is not None else None
-            raw_type = str(names.get(cls_id, cls_id)).lower().replace(" ", "_")
-            block = Block(
-                id=f"p{page_index:03d}_l{block_index:03d}",
-                page=page_index,
-                type=map_layout_type(raw_type),
-                bbox=image_bbox_to_pdf_bbox(xyxy, image_width, image_height, result, dpi),
-                score=score,
-                source="layout",
-                meta={"raw_type": raw_type, "image_bbox": xyxy},
-            )
-            result_blocks.append(block)
-            page_blocks.append(asdict(block))
+    for block_index, box in enumerate(layout_boxes(results[0]), start=1):
+        xyxy = [float(v) for v in box.get("coordinate", [0, 0, 0, 0])]
+        raw_type = str(box.get("label") or box.get("cls_id") or "other").lower().replace(" ", "_")
+        block = Block(
+            id=f"p{page_index:03d}_l{block_index:03d}",
+            page=page_index,
+            type=map_layout_type(raw_type),
+            bbox=image_bbox_to_pdf_bbox(xyxy, image_width, image_height, dpi),
+            score=float(box["score"]) if box.get("score") is not None else None,
+            source="layout",
+            meta={"raw_type": raw_type, "image_bbox": xyxy},
+        )
+        result_blocks.append(block)
+    result_blocks = dedupe_layout_blocks([block for block in result_blocks if block.type not in DROP_TYPES])
+    page_blocks = [asdict(block) for block in result_blocks]
     (layout_dir / f"page_{page_index:03d}.json").write_text(
         json.dumps(page_blocks, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -373,11 +387,39 @@ def detect_layout(detector: Any | None, page_png: Path, page_index: int, layout_
     return result_blocks
 
 
-def image_bbox_to_pdf_bbox(image_bbox: list[float], image_width: int, image_height: int, result: Any, dpi: int) -> list[float]:
-    orig_shape = getattr(result, "orig_shape", None)
-    if orig_shape and len(orig_shape) >= 2:
-        image_height = int(orig_shape[0])
-        image_width = int(orig_shape[1])
+def dedupe_layout_blocks(blocks: list[Block]) -> list[Block]:
+    kept: list[Block] = []
+    for block in sorted(blocks, key=lambda item: (item.score or 0.0), reverse=True):
+        if any(is_duplicate_layout_block(block, existing) for existing in kept):
+            continue
+        kept.append(block)
+    return sorted(kept, key=lambda item: (item.bbox[1], item.bbox[0]))
+
+
+def is_duplicate_layout_block(a: Block, b: Block) -> bool:
+    if a.type != b.type:
+        return False
+    return max(overlap_ratio(a.bbox, b.bbox), overlap_ratio(b.bbox, a.bbox)) > 0.68
+
+
+def layout_boxes(result: Any) -> list[dict[str, Any]]:
+    if isinstance(result, dict):
+        payload = result.get("res", result)
+        boxes = payload.get("boxes", [])
+        return boxes if isinstance(boxes, list) else []
+    payload = getattr(result, "res", None)
+    if isinstance(payload, dict):
+        boxes = payload.get("boxes", [])
+        return boxes if isinstance(boxes, list) else []
+    json_payload = getattr(result, "json", None)
+    if isinstance(json_payload, dict):
+        payload = json_payload.get("res", json_payload)
+        boxes = payload.get("boxes", [])
+        return boxes if isinstance(boxes, list) else []
+    return []
+
+
+def image_bbox_to_pdf_bbox(image_bbox: list[float], image_width: int, image_height: int, dpi: int) -> list[float]:
     # PyMuPDF rendered pages use a uniform scale. Recovering exact PDF coords happens later by overlap;
     # layout crop code keeps the original image bbox in metadata for pixel-accurate crops.
     scale_x = 72.0 / dpi
@@ -419,14 +461,14 @@ def load_ocr_engine(enable_ocr: str, config: dict[str, Any]) -> tuple[Any | None
     }
     detection_dir = configured_model_dir(config.get("PDF2MD_OCR_DETECTION_MODEL_DIR"))
     recognition_dir = configured_model_dir(config.get("PDF2MD_OCR_RECOGNITION_MODEL_DIR"))
+    if config.get("PDF2MD_OCR_DETECTION_MODEL_NAME"):
+        kwargs["text_detection_model_name"] = str(config["PDF2MD_OCR_DETECTION_MODEL_NAME"])
     if detection_dir:
         kwargs["text_detection_model_dir"] = str(detection_dir)
-    elif config.get("PDF2MD_OCR_DETECTION_MODEL_NAME"):
-        kwargs["text_detection_model_name"] = str(config["PDF2MD_OCR_DETECTION_MODEL_NAME"])
+    if config.get("PDF2MD_OCR_RECOGNITION_MODEL_NAME"):
+        kwargs["text_recognition_model_name"] = str(config["PDF2MD_OCR_RECOGNITION_MODEL_NAME"])
     if recognition_dir:
         kwargs["text_recognition_model_dir"] = str(recognition_dir)
-    elif config.get("PDF2MD_OCR_RECOGNITION_MODEL_NAME"):
-        kwargs["text_recognition_model_name"] = str(config["PDF2MD_OCR_RECOGNITION_MODEL_NAME"])
     try:
         return PaddleOCR(**kwargs), ""
     except ValueError:
@@ -644,18 +686,36 @@ def heading_level(text: str, block_type: str) -> int | None:
 def map_layout_type(raw_type: str) -> str:
     value = raw_type.lower().replace(" ", "_").replace("-", "_")
     mapping = {
+        "document_title": "title",
+        "doc_title": "title",
         "title": "title",
+        "paragraph_title": "section_title",
         "plain_text": "text",
         "text": "text",
+        "abstract": "section_title",
         "abandon": "other",
+        "image": "figure",
+        "chart": "figure",
         "figure": "figure",
         "figure_caption": "caption",
         "table": "table",
         "table_caption": "caption",
         "isolate_formula": "formula",
         "formula": "formula",
+        "formula_number": "formula",
         "header": "header",
         "footer": "footer",
+        "footnote": "footnote",
+        "page_number": "page_number",
+        "number": "number",
+        "references": "section_title",
+        "algorithm": "figure",
+        "figure_title": "caption",
+        "table_of_contents": "other",
+        "header_image": "figure",
+        "footer_image": "figure",
+        "aside_text": "text",
+        "sidebar_text": "text",
     }
     return mapping.get(value, value)
 

@@ -211,7 +211,8 @@ def test_builtin_workflows_config_lists_local_pdf_to_markdown() -> None:
 
     assert workflow["enabled"] is True
     assert workflow["user_invocable"] is True
-    assert workflow["variables"]["PDF2MD_LAYOUT_MODEL"].endswith("doclayout_yolo_docstructbench_imgsz1024.pt")
+    assert workflow["variables"]["PDF2MD_LAYOUT_MODEL_NAME"] == "PP-DocLayout_plus-L"
+    assert workflow["variables"]["PDF2MD_LAYOUT_MODEL_DIR"].endswith("PP-DocLayout_plus-L")
     assert workflow["variables"]["PDF2MD_DPI"] == "180"
     assert workflow["variables"]["PDF2MD_OCR_DETECTION_MODEL_NAME"] == "PP-OCRv5_mobile_det"
     assert workflow["variables"]["PDF2MD_OCR_RECOGNITION_MODEL_NAME"] == "PP-OCRv5_mobile_rec"
@@ -219,7 +220,8 @@ def test_builtin_workflows_config_lists_local_pdf_to_markdown() -> None:
     assert workflow["variables"]["PDF2MD_OCR_RECOGNITION_MODEL_DIR"].endswith("PP-OCRv5_mobile_rec")
     assert workflow["requirements"]["bins"] == ["python"]
     assert "PyMuPDF" in workflow["requirements"]["python_packages"]
-    assert "doclayout-yolo" in workflow["requirements"]["optional_python_packages"]
+    assert "paddleocr" in workflow["requirements"]["python_packages"]
+    assert "paddlepaddle" in workflow["requirements"]["python_packages"]
     assert workflow["run"]["script"] == "scripts/run.sh"
     assert workflow["run"]["timeout"] == 1800
 
