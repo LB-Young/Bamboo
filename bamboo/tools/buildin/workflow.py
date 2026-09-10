@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import shlex
+import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -15,6 +17,15 @@ from bamboo.tools.buildin.base import Tool, ToolResult
 from bamboo.workflows import WorkflowDefinition, WorkflowRegistry, create_workflow_registry
 
 MAX_OUTPUT_BYTES = 512 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowInvocation:
+    """Concrete process invocation for a workflow run."""
+
+    command: str
+    argv: list[str] | None = None
+    shell: bool = False
 
 
 class WorkflowLoadTool(Tool):
@@ -103,20 +114,20 @@ class WorkflowRunTool(Tool):
                 metadata={"available_workflows": registry.available_names()},
             )
         try:
-            command = _workflow_command(workflow, arguments)
+            invocation = _workflow_invocation(workflow, arguments)
         except ValueError as exc:
             return ToolResult(
                 content=f"Workflow `{name}` is invalid: {exc}",
                 success=False,
                 error="workflow_invalid",
             )
-        if not command:
+        if not invocation.command:
             return ToolResult(
                 content=f"Workflow `{name}` does not declare run.command or run.script.",
                 success=False,
                 error="workflow_not_runnable",
             )
-        security = inspect_command(command)
+        security = inspect_command(invocation.command)
         if not security.allowed:
             return ToolResult(
                 content=f"Workflow command blocked: {security.reason}",
@@ -130,14 +141,14 @@ class WorkflowRunTool(Tool):
         await _emit_workflow_start(self.runtime_context, self.task, workflow, run_id)
         cwd = _workflow_cwd(workflow)
         exec_timeout = min(timeout or workflow.run.timeout or self.default_timeout, self.default_timeout)
-        result = await _run_shell_command(command, cwd=cwd, timeout=exec_timeout)
+        result = await _run_invocation(invocation, cwd=cwd, timeout=exec_timeout)
         duration = time.perf_counter() - started_at
         status = "completed" if result["returncode"] == 0 else "failed"
         await _emit_workflow_complete(self.runtime_context, self.task, workflow, run_id, status, duration)
         metadata = {
             "workflow_name": workflow.name,
             "run_id": run_id,
-            "command": command,
+            "command": invocation.command,
             "cwd": str(cwd),
             "declared_risk": workflow.run.risk,
             "risk": security.risk.value,
@@ -172,9 +183,9 @@ def _render_workflow_document(workflow: WorkflowDefinition) -> str:
     return "\n\n".join(sections)
 
 
-def _workflow_command(workflow: WorkflowDefinition, arguments: str) -> str:
+def _workflow_invocation(workflow: WorkflowDefinition, arguments: str) -> WorkflowInvocation:
     if workflow.run.command:
-        return _render_text(workflow.run.command, arguments)
+        return WorkflowInvocation(command=_render_text(workflow.run.command, arguments), shell=True)
     if workflow.run.script:
         script_path = (workflow.source_dir / workflow.run.script).resolve()
         source_dir = workflow.source_dir.resolve()
@@ -182,11 +193,17 @@ def _workflow_command(workflow: WorkflowDefinition, arguments: str) -> str:
             raise ValueError("workflow script must stay inside workflow directory")
         if not script_path.is_file():
             raise ValueError(f"workflow script not found: {workflow.run.script}")
-        command = f"bash {shlex.quote(str(script_path))}"
+        if script_path.suffix.lower() == ".py":
+            argv = [sys.executable, str(script_path)]
+            command = f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))}"
+        else:
+            argv = ["bash", str(script_path)]
+            command = f"bash {shlex.quote(str(script_path))}"
         if arguments.strip():
+            argv.append(arguments.strip())
             command = f"{command} {shlex.quote(arguments.strip())}"
-        return command
-    return ""
+        return WorkflowInvocation(command=command, argv=argv, shell=False)
+    return WorkflowInvocation(command="")
 
 
 def _workflow_cwd(workflow: WorkflowDefinition) -> Path:
@@ -200,15 +217,24 @@ def _render_text(text: str, arguments: str) -> str:
     return text.replace("$ARGUMENTS", arguments.strip()).replace("{{arguments}}", arguments.strip())
 
 
-async def _run_shell_command(command: str, *, cwd: Path, timeout: int) -> dict[str, Any]:
+async def _run_invocation(invocation: WorkflowInvocation, *, cwd: Path, timeout: int) -> dict[str, Any]:
     if not cwd.exists() or not cwd.is_dir():
         return {"returncode": 1, "stdout": "", "stderr": f"Invalid cwd: {cwd}", "content": f"Invalid cwd: {cwd}"}
-    process = await asyncio.create_subprocess_shell(
-        command,
-        cwd=str(cwd),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    if invocation.shell:
+        process = await asyncio.create_subprocess_shell(
+            invocation.command,
+            cwd=str(cwd),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    else:
+        argv = invocation.argv or shlex.split(invocation.command)
+        process = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(cwd),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:

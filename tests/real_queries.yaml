@@ -1,0 +1,91 @@
+cases:
+  - id: file_roundtrip
+    query: |
+      这是 Bamboo 真实端到端测试：文件读写链路。
+
+      请真实调用 Bamboo 工具完成：
+      1. 调用 todo_write 写入两项测试计划。
+      2. 调用 write 在项目目录下的 .bamboo/e2e-real/file-roundtrip.txt 写入 bamboo-real-file-token。
+      3. 调用 read 读取刚才写入的文件。
+      4. 最终回答包含 bamboo-real-file-token 和文件路径。
+
+      不要只口头说明，请真的调用工具。
+    expect_tools:
+      - todo_write
+      - write
+      - read
+    expect_output: bamboo-real-file-token
+
+  - id: read_only_repo_context
+    query: |
+      这是 Bamboo 真实端到端测试：只读代码上下文。
+
+      请真实调用 Bamboo 工具完成：
+      1. 调用 grep 查找 Bamboo workflow_run 工具的定义位置。
+      2. 调用 read 读取相关文件的关键片段。
+      3. 最终回答包含 workflow_run 和 WorkflowRunTool。
+
+      不要只口头说明，请真的调用工具。
+    expect_tools:
+      - grep
+      - read
+    expect_output: WorkflowRunTool
+
+  - id: skill_load_writing_plans
+    query: |
+      这是 Bamboo 真实端到端测试：Skill 加载链路。
+
+      请真实调用 skill_load 加载 writing-plans skill，然后根据该 skill 的说明给出一个 3 步实现计划。
+      最终回答必须包含 writing-plans。
+
+      不要跳过 skill_load。
+    expect_tools:
+      - skill_load
+    expect_output: writing-plans
+
+  - id: workflow_daily_review
+    query: |
+      这是 Bamboo 真实端到端测试：Workflow 加载和运行链路。
+
+      请真实调用 workflow_load 加载 daily-review，然后真实调用 workflow_run 运行 daily-review。
+      最终回答请总结 workflow 输出，并包含 daily-review。
+
+      不要只描述 workflow，请真的运行它。
+    expect_tools:
+      - workflow_load
+      - workflow_run
+    expect_output: daily-review
+
+  - id: multiagent_explorer
+    query: |
+      这是 Bamboo 真实端到端测试：Multiagent 委托链路。
+
+      请真实调用 subagent_run，把任务委托给 explorer 子 agent：
+      让 explorer 读取项目目录下的 .bamboo/e2e-real/subagent-context.txt，并返回里面的 token。
+
+      最终回答必须包含 bamboo-real-subagent-token。
+      不要自己直接回答，请真的调用 subagent_run。
+    fixture_files:
+      .bamboo/e2e-real/subagent-context.txt: "bamboo-real-subagent-token\n"
+    expect_tools:
+      - subagent_run
+    expect_output: bamboo-real-subagent-token
+
+  - id: workflow_pdf_to_markdown_small
+    query: |
+      这是 Bamboo 真实端到端测试：PDF 转 Markdown workflow。
+
+      请真实调用 workflow_load 加载 local-pdf-to-markdown，然后真实调用 workflow_run：
+      输入 PDF 路径是 {project}/.bamboo/e2e-real/sample.pdf
+      输出 Markdown 路径是 {project}/.bamboo/e2e-real/sample-output/sample.md
+
+      最终回答必须包含 sample.md 和 Markdown 文件路径。
+      不要只描述 workflow，请真的运行它。
+    fixture_pdf:
+      path: .bamboo/e2e-real/sample.pdf
+      title: Bamboo Real E2E PDF
+      body: bamboo-real-pdf-token
+    expect_tools:
+      - workflow_load
+      - workflow_run
+    expect_output: sample.md

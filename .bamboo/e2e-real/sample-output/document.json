@@ -1,0 +1,89 @@
+{
+  "metadata": {
+    "source": "/Users/liubaoyang/Documents/YoungL/agents/Bamboo/.bamboo/e2e-real/sample.pdf",
+    "output": "/Users/liubaoyang/Documents/YoungL/agents/Bamboo/.bamboo/e2e-real/sample-output/sample.md",
+    "pages": 1,
+    "mode": "scanned",
+    "dpi": 180,
+    "layout_model": "PP-DocLayout_plus-L",
+    "layout_model_dir": "/Users/liubaoyang/Documents/YoungL/models/PP-DocLayout/PP-DocLayout_plus-L",
+    "ocr_enabled": true,
+    "assets": {
+      "layout_crops": 0,
+      "pdf_images": 0
+    },
+    "warnings": []
+  },
+  "content": [
+    {
+      "id": "p001_ocr001",
+      "page": 1,
+      "type": "text",
+      "bbox": [
+        0,
+        0,
+        595.0,
+        842.0
+      ],
+      "text": "Bamboo Real E2E PDF\nbamboo-real-pdf-token",
+      "source": "ocr",
+      "score": null,
+      "asset_path": "",
+      "caption": "",
+      "level": null,
+      "meta": {}
+    },
+    {
+      "id": "p001_l002",
+      "page": 1,
+      "type": "text",
+      "bbox": [
+        71.09185180664063,
+        81.014453125,
+        260.22060546875,
+        96.84463500976562
+      ],
+      "text": "Bamboo Real E2E PDF",
+      "source": "layout+native_pdf",
+      "score": 0.5539233684539795,
+      "asset_path": "",
+      "caption": "",
+      "level": null,
+      "meta": {
+        "raw_type": "text",
+        "image_bbox": [
+          177.72962951660156,
+          202.5361328125,
+          650.551513671875,
+          242.11158752441406
+        ]
+      }
+    },
+    {
+      "id": "p001_l001",
+      "page": 1,
+      "type": "text",
+      "bbox": [
+        70.13180541992188,
+        130.05491943359377,
+        193.37661132812502,
+        141.63983154296875
+      ],
+      "text": "bamboo-real-pdf-token",
+      "source": "layout+native_pdf",
+      "score": 0.886538565158844,
+      "asset_path": "",
+      "caption": "",
+      "level": null,
+      "meta": {
+        "raw_type": "text",
+        "image_bbox": [
+          175.3295135498047,
+          325.1372985839844,
+          483.4415283203125,
+          354.0995788574219
+        ]
+      }
+    }
+  ]
+}

@@ -49,7 +49,7 @@ workflows:
       can_edit_files: true
       can_access_network: false
     run:
-      script: scripts/run.sh
+      script: scripts/pdf_to_markdown.py
       cwd: .
       timeout: 1800
       risk: write
