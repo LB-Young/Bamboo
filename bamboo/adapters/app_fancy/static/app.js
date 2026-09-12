@@ -31,7 +31,7 @@ const state = {
   projectMenuOpen: false,
 };
 
-window.BambooFancyVersion = "latex-v1";
+window.BambooFancyVersion = "local-images-v2";
 
 const MATH_ENVIRONMENTS = [
   "equation",
@@ -577,13 +577,17 @@ function appendRestoredMessage(message) {
     startReasoning();
     finishReasoning(reasoning);
   }
+  let article = null;
   if (message.role === "assistant" && message.content) {
-    appendMessage("assistant", message.content || "");
+    article = appendMessage("assistant", message.content || "");
   } else if (message.role === "tool") {
-    appendMessage("tool", formatRestoredToolResult(message));
+    article = appendMessage("tool", formatRestoredToolResult(message));
   } else if (message.role !== "assistant") {
-    appendMessage(message.role, message.content || "");
+    article = appendMessage(message.role, message.content || "");
+  } else if ((message.images || []).length) {
+    article = appendMessage("assistant", "");
   }
+  if (article) appendMessageImages(article, message.images || []);
   for (const toolCall of message.tool_calls || []) {
     appendMessage("tool", formatToolCallMessage({ name: toolCall.name, input: toolCall.arguments || {}, id: toolCall.id }, restoredToolResultFor(toolCall.id)));
   }
@@ -948,7 +952,7 @@ function renderExplicitMathBlocks(root) {
 
 function inlineMarkdown(text) {
   return escapeHtml(text)
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => renderInlineImage(src, alt))
+    .replace(markdownImagePattern(), (_, alt, src) => renderInlineImage(normalizeMarkdownImageSrc(src), decodeHtmlEntities(alt)))
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
@@ -964,11 +968,22 @@ function appendBareOutputImageGallery(root, text) {
   root.appendChild(gallery);
 }
 
+function appendMessageImages(article, images) {
+  const sources = (images || []).map((image) => image?.source || "").filter(Boolean);
+  if (!sources.length) return;
+  const body = article.querySelector(".message-body") || article;
+  const gallery = document.createElement("div");
+  gallery.className = "output-image-gallery";
+  gallery.innerHTML = sources.map((src) => renderInlineImage(src, "image")).join("");
+  body.appendChild(gallery);
+  hydrateLocalImages(body);
+}
+
 function extractBareOutputImageRefs(text) {
   const occupied = [];
   const refs = [];
   const seen = new Set();
-  const markdownPattern = /!\[[^\]]*]\(([^)\s]+)\)/g;
+  const markdownPattern = markdownImagePattern();
   for (const match of String(text || "").matchAll(markdownPattern)) {
     occupied.push([match.index, match.index + match[0].length]);
   }
@@ -1001,11 +1016,38 @@ function displayImageSrc(src) {
 
 function isLocalImageSrc(src) {
   const value = String(src || "").trim();
-  return value.startsWith("/") || value.startsWith("~/");
+  return (
+    value.startsWith("/") ||
+    value.startsWith("~/") ||
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    /^[^:/?#]+\.(?:png|jpe?g|webp|gif|bmp|tiff?)$/i.test(value)
+  );
 }
 
 function cleanImageSrc(src) {
   return String(src || "").trim().replace(/[.,;:!?)]}，。；：！？）】]+$/g, "");
+}
+
+function markdownImagePattern() {
+  return /!\[([^\]]*)\]\(((?:&lt;[\s\S]*?&gt;)|(?:<[\s\S]*?>)|[^)\n]+)\)/g;
+}
+
+function normalizeMarkdownImageSrc(src) {
+  let value = decodeHtmlEntities(src).trim();
+  if ((value.startsWith("<") && value.endsWith(">")) || (value.startsWith("&lt;") && value.endsWith("&gt;"))) {
+    value = decodeHtmlEntities(value).slice(1, -1).trim();
+  }
+  return cleanImageSrc(value);
+}
+
+function decodeHtmlEntities(value) {
+  return String(value ?? "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 async function hydrateLocalImages(root) {

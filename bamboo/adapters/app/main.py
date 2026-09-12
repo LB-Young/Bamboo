@@ -196,7 +196,7 @@ class BambooAppBridge:
 
     def local_image_data_url(self, path: str) -> dict[str, Any]:
         """Return a local image as a data URL for the embedded desktop webview."""
-        image_path = Path(path or "").expanduser().resolve(strict=False)
+        image_path = self._resolve_local_image_path(path)
         if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
             return {"ok": False, "error": "only image files can be displayed"}
         if not image_path.is_file():
@@ -207,6 +207,84 @@ class BambooAppBridge:
         media_type = mimetypes.guess_type(str(image_path))[0] or "image/png"
         encoded = base64.b64encode(data).decode("ascii")
         return {"ok": True, "data_url": f"data:{media_type};base64,{encoded}"}
+
+    def _resolve_local_image_path(self, path: str) -> Path:
+        raw = (path or "").strip().strip("<>")
+        image_path = Path(raw).expanduser()
+        if image_path.is_absolute() and image_path.is_file():
+            return image_path.resolve(strict=False)
+        bases = [
+            self.active_project,
+            self.current_task.session.context.project_root if self.current_task is not None else None,
+            self.default_project,
+            Path.home() / "Desktop",
+            Path.home() / "Documents",
+        ]
+        relative_forms = self._local_image_relative_forms(raw, image_path)
+        for base in bases:
+            if base is None:
+                continue
+            for relative in relative_forms:
+                candidate = (base / relative).expanduser().resolve(strict=False)
+                if candidate.is_file():
+                    return candidate
+        found = self._find_local_image_by_name(image_path.name, bases)
+        if found is not None:
+            return found
+        if image_path.is_absolute():
+            return image_path.resolve(strict=False)
+        return (self.active_project / image_path).expanduser().resolve(strict=False)
+
+    def _local_image_relative_forms(self, raw: str, image_path: Path) -> list[Path]:
+        stripped = raw.lstrip("/")
+        forms = [image_path]
+        if stripped and stripped != raw:
+            forms.append(Path(stripped))
+        name = image_path.name
+        parent = image_path.parent.name
+        if name:
+            forms.append(Path(name))
+            if parent in {"figures", "tables", "pages"}:
+                forms.append(Path("assets") / parent / name)
+            elif parent == ".":
+                forms.extend(
+                    [
+                        Path("assets") / "figures" / name,
+                        Path("assets") / "tables" / name,
+                        Path("pages") / name,
+                    ]
+                )
+        unique: list[Path] = []
+        seen: set[str] = set()
+        for form in forms:
+            key = str(form)
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(form)
+        return unique
+
+    def _find_local_image_by_name(self, name: str, bases: list[Path | None]) -> Path | None:
+        if not name or Path(name).suffix.lower() not in IMAGE_EXTENSIONS:
+            return None
+        if any(char in name for char in "*?[]"):
+            return None
+        for base in bases:
+            if base is None or not base.is_dir():
+                continue
+            direct_patterns = [
+                f"*/assets/figures/{name}",
+                f"*/assets/tables/{name}",
+                f"*/pages/{name}",
+                f"**/{name}",
+            ]
+            for pattern in direct_patterns:
+                try:
+                    for candidate in base.glob(pattern):
+                        if candidate.is_file():
+                            return candidate.resolve(strict=False)
+                except OSError:
+                    continue
+        return None
 
     def get_initial_state(self) -> dict[str, Any]:
         """Return initial app state to the frontend."""
