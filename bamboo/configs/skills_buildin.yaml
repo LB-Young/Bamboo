@@ -66,6 +66,24 @@ skills:
       can_edit_files: false
       can_access_network: true
 
+  wechat-paper-push:
+    enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 4500
+    requirements:
+      bins:
+        - python
+      env: []
+      python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: true
+      can_access_network: true
+
   douyin-reach:
     enabled: true
     user_invocable: true
