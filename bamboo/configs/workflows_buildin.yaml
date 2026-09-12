@@ -53,3 +53,32 @@ workflows:
       cwd: .
       timeout: 1800
       risk: write
+
+  extracted-content-to-wechat-article:
+    enabled: true
+    user_invocable: true
+    description: Build a WeChat public-account article package from an extracted content directory and an article Markdown draft.
+    usage: |
+      1. Extract source material first. The extractor can be a workflow, skill, or tool for PDFs, web pages, videos, social posts, or WeChat articles.
+      2. Put the extracted Markdown and local assets under one content directory, then draft the WeChat article as Markdown.
+      3. Call `workflow_load` with `name="extracted-content-to-wechat-article"`.
+      4. Call `workflow_run` with arguments:
+         `"<content-dir> <article-draft.md> <output-dir> [--title TITLE] [--cover COVER_PATH] [--verify-links]"`
+      5. Review the generated DOCX, normalized Markdown, asset manifest, link report, and quality report.
+    requirements:
+      bins:
+        - python
+      python_packages:
+        - python-docx
+        - Pillow
+      optional_python_packages:
+        - matplotlib
+    permissions:
+      can_run_commands: true
+      can_edit_files: true
+      can_access_network: true
+    run:
+      script: scripts/build_wechat_article.py
+      cwd: .
+      timeout: 1800
+      risk: network
