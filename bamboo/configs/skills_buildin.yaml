@@ -83,6 +83,23 @@ skills:
       can_edit_files: true
       can_access_network: false
 
+  article-quality-review:
+    enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 4500
+    requirements:
+      bins: []
+      env: []
+      python_packages: []
+    permissions:
+      can_run_commands: false
+      can_edit_files: true
+      can_access_network: false
+
   douyin-reach:
     enabled: true
     user_invocable: true
