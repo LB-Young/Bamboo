@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bamboo</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
-    <link rel="stylesheet" href="./styles.css?v=local-images-v2" />
+    <link rel="stylesheet" href="./styles.css?v=messages-json-v1" />
   </head>
   <body>
     <div id="app">
@@ -91,6 +91,7 @@
             <button type="button" data-view="diff">Diff</button>
             <button class="selected" type="button" data-view="chat">Chat</button>
             <button type="button" data-view="logs">Logs</button>
+            <button type="button" data-view="messages">Messages</button>
           </div>
         </section>
 
@@ -128,6 +129,13 @@
         <section id="chatViewPane" class="view-pane chat-pane" hidden></section>
         <section id="logsViewPane" class="view-pane logs-pane" hidden>
           <div id="logList" class="log-list"></div>
+        </section>
+        <section id="messagesViewPane" class="view-pane messages-pane" hidden>
+          <div class="messages-toolbar">
+            <span id="messagesJsonlMeta">No messages loaded</span>
+            <button id="refreshMessagesJsonl" type="button">Refresh</button>
+          </div>
+          <div id="messagesJsonlContent" class="messages-jsonl">Open a session to view messages.jsonl.</div>
         </section>
         <section id="chatHistory" class="chat-history"></section>
         <section id="permissionDock" class="permission-dock" hidden></section>
@@ -189,6 +197,6 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-    <script defer src="./app.js?v=local-images-v2"></script>
+    <script defer src="./app.js?v=messages-json-v1"></script>
   </body>
 </html>

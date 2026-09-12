@@ -15,6 +15,7 @@ const state = {
   models: { selected: "", configured: "", options: [] },
   activeView: "chat",
   logs: [],
+  messagesJsonl: { loading: false, path: "", content: "", error: "", bytes: 0 },
   localImageCache: new Map(),
   runningSessions: new Set(),
   pendingPermissions: new Map(),
@@ -31,7 +32,7 @@ const state = {
   projectMenuOpen: false,
 };
 
-window.BambooFancyVersion = "local-images-v2";
+window.BambooFancyVersion = "messages-json-v1";
 
 const MATH_ENVIRONMENTS = [
   "equation",
@@ -92,6 +93,10 @@ const els = {
   diffViewPane: document.getElementById("diffViewPane"),
   chatViewPane: document.getElementById("chatViewPane"),
   logsViewPane: document.getElementById("logsViewPane"),
+  messagesViewPane: document.getElementById("messagesViewPane"),
+  refreshMessagesJsonl: document.getElementById("refreshMessagesJsonl"),
+  messagesJsonlMeta: document.getElementById("messagesJsonlMeta"),
+  messagesJsonlContent: document.getElementById("messagesJsonlContent"),
   diffChatSlot: document.getElementById("diffChatSlot"),
   logList: document.getElementById("logList"),
   tabs: Array.from(document.querySelectorAll("[data-view]")),
@@ -1698,6 +1703,8 @@ function renderPermissionState(permissionState, options = {}) {
 
 function setSessionMessagesPath(path) {
   state.sessionMessagesPath = path || "";
+  state.messagesJsonl = { loading: false, path: state.sessionMessagesPath, content: "", error: "", bytes: 0 };
+  renderMessagesJsonl();
   if (!els.copySessionPath) return;
   els.copySessionPath.disabled = !state.sessionMessagesPath;
   els.copySessionPath.title = state.sessionMessagesPath
@@ -1872,15 +1879,137 @@ function setActiveView(view) {
   els.diffViewPane.hidden = view !== "diff";
   els.chatViewPane.hidden = view !== "chat";
   els.logsViewPane.hidden = view !== "logs";
+  els.messagesViewPane.hidden = view !== "messages";
   if (view === "chat") {
     els.chatViewPane.appendChild(els.chatHistory);
     els.chatTitle.textContent = "Chat";
   } else {
     els.diffChatSlot.appendChild(els.chatHistory);
-    els.chatTitle.textContent = view === "logs" ? "Logs" : "Review Diff";
+    els.chatTitle.textContent = view === "logs" ? "Logs" : view === "messages" ? "Messages" : "Review Diff";
   }
   els.chatHistory.classList.toggle("chat-full", view === "chat");
+  if (view === "messages" && !state.messagesJsonl.content && !state.messagesJsonl.loading) {
+    void loadMessagesJsonl();
+  }
   scrollToBottom();
+}
+
+async function loadMessagesJsonl() {
+  state.messagesJsonl = { ...state.messagesJsonl, loading: true, error: "" };
+  renderMessagesJsonl();
+  try {
+    const result = await apiCall("get_session_messages_jsonl");
+    state.messagesJsonl = {
+      loading: false,
+      path: result?.path || state.sessionMessagesPath || "",
+      content: result?.content || "",
+      error: result?.ok ? "" : result?.error || "messages.jsonl is not available",
+      bytes: Number(result?.bytes || 0),
+    };
+  } catch (error) {
+    state.messagesJsonl = {
+      ...state.messagesJsonl,
+      loading: false,
+      error: String(error),
+    };
+  }
+  renderMessagesJsonl();
+}
+
+function renderMessagesJsonl() {
+  if (!els.messagesJsonlMeta || !els.messagesJsonlContent) return;
+  const path = state.messagesJsonl.path || state.sessionMessagesPath || "";
+  if (state.messagesJsonl.loading) {
+    els.messagesJsonlMeta.textContent = path ? `Loading ${path}` : "Loading messages.jsonl";
+    els.messagesJsonlContent.textContent = "Loading...";
+    return;
+  }
+  if (state.messagesJsonl.error) {
+    els.messagesJsonlMeta.textContent = path || "messages.jsonl";
+    els.messagesJsonlContent.textContent = state.messagesJsonl.error;
+    return;
+  }
+  els.messagesJsonlMeta.textContent = path
+    ? `${path}${state.messagesJsonl.bytes ? ` · ${formatBytes(state.messagesJsonl.bytes)}` : ""}`
+    : "No messages loaded";
+  renderMessagesJsonlRows(state.messagesJsonl.content || "");
+}
+
+function renderMessagesJsonlRows(content) {
+  els.messagesJsonlContent.innerHTML = "";
+  const lines = String(content || "").split("\n").filter((line) => line.trim());
+  if (!lines.length) {
+    els.messagesJsonlContent.textContent = "Open a session to view messages.jsonl.";
+    return;
+  }
+  lines.forEach((line, index) => {
+    const details = document.createElement("details");
+    details.className = "message-json-row";
+    if (index === lines.length - 1) details.open = true;
+    const summary = document.createElement("summary");
+    const pre = document.createElement("pre");
+    try {
+      const payload = JSON.parse(line);
+      summary.append(...messageJsonSummaryParts(payload, index + 1));
+      pre.textContent = JSON.stringify(payload, null, 2);
+    } catch {
+      summary.append(messageJsonBadge("line", String(index + 1)), messageJsonSummaryText("Invalid JSONL row"));
+      pre.textContent = line;
+    }
+    details.append(summary, pre);
+    els.messagesJsonlContent.appendChild(details);
+  });
+}
+
+function messageJsonSummaryParts(payload, lineNumber) {
+  const role = payload?.role || payload?.type || "message";
+  const agent = payload?.tool_name || payload?.agent_name || "";
+  const time = payload?.time || payload?.created_at || "";
+  const content = String(payload?.content || "").replace(/\s+/g, " ").trim();
+  const id = payload?.message_id || payload?.tool_call_id || payload?.task_id || "";
+  const parts = [
+    messageJsonBadge("line", String(lineNumber)),
+    messageJsonBadge("role", role),
+  ];
+  if (agent) parts.push(messageJsonBadge("agent", agent));
+  if (time) parts.push(messageJsonBadge("time", shortTimestamp(time)));
+  if (id) parts.push(messageJsonBadge("id", String(id).slice(0, 8)));
+  parts.push(messageJsonSummaryText(content || "(empty content)"));
+  return parts;
+}
+
+function messageJsonBadge(label, value) {
+  const span = document.createElement("span");
+  span.className = `message-json-badge ${label}`;
+  span.textContent = value;
+  span.title = value;
+  return span;
+}
+
+function messageJsonSummaryText(value) {
+  const span = document.createElement("span");
+  span.className = "message-json-summary-text";
+  span.textContent = value;
+  return span;
+}
+
+function shortTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function resetRunTimeline() {
@@ -2097,6 +2226,12 @@ if (els.copySessionPath) {
   els.copySessionPath.addEventListener("click", (event) => {
     event.preventDefault();
     void copySessionMessagesPath();
+  });
+}
+if (els.refreshMessagesJsonl) {
+  els.refreshMessagesJsonl.addEventListener("click", (event) => {
+    event.preventDefault();
+    void loadMessagesJsonl();
   });
 }
 els.messageInput.addEventListener("keydown", (event) => {

@@ -790,12 +790,114 @@ textarea {
   display: block;
 }
 
-.logs-pane {
+.logs-pane,
+.messages-pane {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--soft-bg);
   padding: 10px;
+}
+
+.messages-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.messages-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.messages-toolbar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.messages-toolbar button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 6px 10px;
+}
+
+.messages-jsonl {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--canvas-bg);
+  color: var(--canvas-text);
+  padding: 8px;
+}
+
+.message-json-row {
+  border: 1px solid rgba(134, 153, 171, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.message-json-row + .message-json-row {
+  margin-top: 8px;
+}
+
+.message-json-row summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.message-json-row[open] summary {
+  border-bottom: 1px solid rgba(134, 153, 171, 0.18);
+}
+
+.message-json-badge {
+  min-width: 0;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 2px 6px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.message-json-badge.role {
+  color: var(--accent);
+}
+
+.message-json-summary-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-json-row pre {
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .view-pane[hidden] {

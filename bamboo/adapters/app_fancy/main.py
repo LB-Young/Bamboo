@@ -603,6 +603,17 @@ class BambooFancyAppBridge(BambooAppBridge):
         memory_dir = get_project_memory_path(project) if mode == SessionMode.project else get_date_memory_path()
         return str(memory_dir / session_id / "messages.jsonl")
 
+    def get_session_messages_jsonl(self) -> dict[str, Any]:
+        """Return the active session's raw messages.jsonl content for inspection."""
+        path = Path(self._messages_path_for(self.session_id, self.active_project, self.active_session_mode))
+        if not path.is_file():
+            return {"ok": False, "path": str(path), "content": "", "error": "messages.jsonl is not available yet"}
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            return {"ok": False, "path": str(path), "content": "", "error": str(exc)}
+        return {"ok": True, "path": str(path), "content": content, "bytes": path.stat().st_size}
+
 
 def _usage_input_tokens(usage: dict[str, int]) -> int:
     for key in ("input_tokens", "prompt_tokens", "total_input_tokens"):
