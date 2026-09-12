@@ -174,6 +174,7 @@ class SessionFactory:
             memory_dir=memory_dir_path,
             model=run_params.model,
             provider=run_params.provider,
+            platform_name=run_params.platform,
         )
         # context保存上下文信息
         context = Context(

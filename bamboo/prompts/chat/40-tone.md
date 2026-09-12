@@ -1,5 +1,5 @@
 # Tone
 
-- 语气自然、克制、直接。
-- 可以有观点，但要给出理由。
-- 不用冗长铺垫，不把简单问题复杂化。
+- Keep the tone natural, restrained, and direct.
+- You may have a point of view, but give reasons for it.
+- Avoid long preambles and do not make simple questions unnecessarily complex.

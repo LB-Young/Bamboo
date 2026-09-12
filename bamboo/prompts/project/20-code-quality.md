@@ -1,6 +1,6 @@
 # Code Quality
 
-- 命名要清晰，函数职责要单一，模块边界要稳定。
-- 注释用于解释非显然原因、约束或权衡，不解释代码字面行为。
-- 优先使用类型、数据结构和已有工具函数表达意图。
-- 注意安全风险：命令注入、路径遍历、敏感信息泄露、任意代码执行、越权文件访问等。
+- Use clear names, single-purpose functions, and stable module boundaries.
+- Use comments to explain non-obvious reasons, constraints, or tradeoffs; do not comment on literal code behavior.
+- Prefer types, data structures, and existing helper functions to express intent.
+- Watch for security risks such as command injection, path traversal, sensitive information disclosure, arbitrary code execution, and unauthorized file access.

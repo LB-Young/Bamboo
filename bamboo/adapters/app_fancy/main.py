@@ -7,6 +7,7 @@ This adapter intentionally keeps its frontend separate from
 from __future__ import annotations
 
 import asyncio
+import json
 import platform
 import subprocess
 import threading
@@ -583,6 +584,7 @@ class BambooFancyAppBridge(BambooAppBridge):
             memory_dir=self.current_task.memory_dir,
             model=model_name,
             provider=config.provider,
+            platform_name=self.current_task.platform,
         )
         if self.current_task.session.memory_store is not None:
             self.current_task.session.memory_store.save_session(
@@ -604,15 +606,37 @@ class BambooFancyAppBridge(BambooAppBridge):
         return str(memory_dir / session_id / "messages.jsonl")
 
     def get_session_messages_jsonl(self) -> dict[str, Any]:
-        """Return the active session's raw messages.jsonl content for inspection."""
+        """Return the active session's messages with the full system prompt first."""
         path = Path(self._messages_path_for(self.session_id, self.active_project, self.active_session_mode))
+        system_prompt_path = path.with_name("system_prompt.md")
         if not path.is_file():
             return {"ok": False, "path": str(path), "content": "", "error": "messages.jsonl is not available yet"}
         try:
             content = path.read_text(encoding="utf-8")
+            system_prompt = system_prompt_path.read_text(encoding="utf-8") if system_prompt_path.is_file() else ""
         except OSError as exc:
             return {"ok": False, "path": str(path), "content": "", "error": str(exc)}
-        return {"ok": True, "path": str(path), "content": content, "bytes": path.stat().st_size}
+        if system_prompt:
+            system_message = {
+                "role": "system",
+                "content": system_prompt,
+                "message_type": "system_prompt",
+                "agent_name": "runtime",
+                "metadata": {
+                    "synthetic": True,
+                    "source": str(system_prompt_path),
+                    "session_id": self.session_id,
+                },
+            }
+            content = f"{json.dumps(system_message, ensure_ascii=False)}\n{content}"
+        total_bytes = path.stat().st_size + (system_prompt_path.stat().st_size if system_prompt_path.is_file() else 0)
+        return {
+            "ok": True,
+            "path": str(path),
+            "system_prompt_path": str(system_prompt_path),
+            "content": content,
+            "bytes": total_bytes,
+        }
 
 
 def _usage_input_tokens(usage: dict[str, int]) -> int:

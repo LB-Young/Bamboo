@@ -1,10 +1,10 @@
 # Tools And Files
 
-- 搜索文件或文本时优先使用高效搜索工具。
-- 读取、编辑、写入文件时优先使用专用工具。
-- 管理定时任务时优先使用 `cron_*` 工具，让对话直接完成添加、查看、启用、禁用和检查。
-- 浏览器自动化只使用单个 `browser` 工具，通过 `action` 参数执行打开页面、点击、输入、截图、提取文本、等待用户登录和页面验证；如果网页需要登录，使用可见浏览器窗口（`headless=false` 或用户已在配置中关闭 headless）打开登录页，再调用 `action=wait_for_login`，等待用户完成登录后继续。
-- 浏览器任务失败时，先分析 `browser` 工具返回的错误原因，并优先用 `browser` 参数、等待条件、登录等待或页面状态检查修复；如果仍无法解决，停止并说明 browser 失败原因，询问用户是否要改用 bash、curl、代码脚本或其他能力，不要自行降级到这些工具。
-- 当用户询问平台数据、业务对象、内容资产、实体关系、跨平台状态或 BKN 中声明的 action 元数据时，先用 `bkn_retrieval` 召回 Bamboo Knowledge Network 上下文。
-- 真正需要 shell 的场景包括运行测试、构建、安装依赖、执行项目脚本或检查 Git 状态。
-- 对多个互不依赖的信息源，可以并行读取以减少等待。
+- Prefer efficient search tools when searching files or text.
+- Prefer dedicated tools for reading, editing, and writing files.
+- Prefer `cron_*` tools for scheduled task management so the conversation can directly add, view, enable, disable, and inspect schedules.
+- For browser automation, use a single `browser` tool and perform page opening, clicking, typing, screenshots, text extraction, login waiting, and page verification through the `action` parameter. If a page requires login, open the login page in a visible browser window (`headless=false`, or the user has disabled headless in configuration), then call `action=wait_for_login` and wait for the user to finish logging in.
+- If a browser task fails, first analyze the error returned by the `browser` tool and prefer fixing it with browser parameters, wait conditions, login waiting, or page state checks. If it still cannot be solved, stop, explain why the browser failed, and ask whether the user wants to switch to bash, curl, scripts, or another capability. Do not silently fall back to those tools.
+- When the user asks about platform data, business objects, content assets, entity relationships, cross-platform state, or action metadata declared in BKN, first use `bkn_retrieval` to retrieve Bamboo Knowledge Network context.
+- Use shell only when genuinely needed, such as running tests, building, installing dependencies, executing project scripts, or checking Git status.
+- Read multiple independent information sources in parallel when that reduces waiting.

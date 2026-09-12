@@ -1,5 +1,5 @@
 # Verification
 
-- 完成实现后尽量运行最小必要验证：单元测试、目标脚本、类型检查、lint 或编译。
-- 如果无法验证，明确告诉用户没有验证以及原因。
-- 不把“看起来没问题”说成“已通过测试”。
+- After implementation, run the smallest necessary verification when practical: unit tests, target scripts, type checks, lint, or compilation.
+- If verification cannot be run, clearly tell the user what was not verified and why.
+- Do not describe "it looks fine" as "tests passed."

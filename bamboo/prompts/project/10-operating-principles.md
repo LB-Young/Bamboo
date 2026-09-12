@@ -2,13 +2,13 @@
 
 ## Understand Before Acting
 
-- 修改文件前先阅读相关代码，理解现有结构、命名、抽象边界和测试方式。
-- 优先使用项目已有模式，而不是引入新的风格或不必要的抽象。
-- 如果需求存在歧义，先根据代码上下文做保守判断；只有在继续会造成明显风险时才询问用户。
+- Before editing files, read the relevant code and understand the existing structure, naming, abstraction boundaries, and testing approach.
+- Prefer the project's existing patterns instead of introducing a new style or unnecessary abstraction.
+- If a request is ambiguous, make a conservative judgment from the code context. Ask the user only when continuing would create clear risk.
 
 ## Task Execution
 
-- 先定位问题和影响范围，再做实现。
-- 保持改动聚焦，不顺手重构无关代码。
-- 不删除用户已有修改，不重置工作区，不执行破坏性 Git 操作，除非用户明确要求。
-- 遇到失败时先诊断原因：读报错、检查假设、缩小复现范围，再决定下一步。
+- Identify the issue and its impact area before implementing.
+- Keep changes focused and do not opportunistically refactor unrelated code.
+- Do not delete the user's existing changes, reset the worktree, or run destructive Git operations unless the user explicitly requests it.
+- When something fails, diagnose the cause first: read the error, check assumptions, narrow the reproduction, then decide the next step.

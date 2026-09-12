@@ -84,6 +84,7 @@ def build_system_prompt(
     memory_dir: Path,
     model: str = "",
     provider: str = "",
+    platform_name: str = "",
 ) -> str:
     """便捷函数：创建默认构建器并返回完整 system prompt。"""
     prompt_mode = resolve_prompt_mode(session_mode, project_root)
@@ -92,6 +93,7 @@ def build_system_prompt(
         memory_dir=memory_dir,
         model=model,
         provider=provider,
+        platform_name=platform_name,
     )
 
 
@@ -102,6 +104,7 @@ def build_system_prompt_sections(
     memory_dir: Path,
     model: str = "",
     provider: str = "",
+    platform_name: str = "",
 ) -> list[PromptSection]:
     """便捷函数：创建默认构建器并返回 prompt section 列表。"""
     prompt_mode = resolve_prompt_mode(session_mode, project_root)
@@ -110,6 +113,7 @@ def build_system_prompt_sections(
         memory_dir=memory_dir,
         model=model,
         provider=provider,
+        platform_name=platform_name,
     )
 
 
@@ -130,7 +134,15 @@ class SystemPromptBuilder:
 
     prompt_mode: PromptMode
 
-    def build(self, *, project_root: Path, memory_dir: Path, model: str = "", provider: str = "") -> str:
+    def build(
+        self,
+        *,
+        project_root: Path,
+        memory_dir: Path,
+        model: str = "",
+        provider: str = "",
+        platform_name: str = "",
+    ) -> str:
         """组装完整 system prompt 文本。"""
         return render_prompt_sections(
             self.build_sections(
@@ -138,6 +150,7 @@ class SystemPromptBuilder:
                 memory_dir=memory_dir,
                 model=model,
                 provider=provider,
+                platform_name=platform_name,
             )
         )
 
@@ -148,10 +161,13 @@ class SystemPromptBuilder:
         memory_dir: Path,
         model: str = "",
         provider: str = "",
+        platform_name: str = "",
     ) -> list[PromptSection]:
         """组装完整 system prompt section 列表。"""
+        platform_section = _read_platform_prompt_section(platform_name)
         sections = [
             *_read_prompt_sections(self.prompt_mode),
+            *([platform_section] if platform_section is not None else []),
             PromptSection(
                 name="runtime-environment",
                 source="runtime",
@@ -163,8 +179,9 @@ class SystemPromptBuilder:
                     memory_dir=memory_dir,
                     model=model,
                     provider=provider,
+                    platform_name=platform_name,
                 ),
-                metadata={"prompt_mode": self.prompt_mode},
+                metadata={"prompt_mode": self.prompt_mode, "platform": platform_name},
             ),
         ]
         if self.prompt_mode == "project":
@@ -194,6 +211,35 @@ def _read_prompt_sections(prompt_mode: PromptMode) -> list[PromptSection]:
                     )
                 )
     return sections
+
+
+def _read_platform_prompt_section(platform_name: str) -> PromptSection | None:
+    """Read an optional platform-specific prompt section."""
+    normalized = _normalize_platform_name(platform_name)
+    if not normalized:
+        return None
+    section_path = _resolve_prompt_section_dir("platform") / f"{normalized}.md"
+    if not section_path.is_file():
+        return None
+    content = section_path.read_text(encoding="utf-8").strip()
+    if not content:
+        return None
+    return PromptSection(
+        name=f"platform-{normalized}",
+        source=str(section_path),
+        priority=300,
+        cacheable=True,
+        content=content,
+        metadata={"platform": normalized},
+    )
+
+
+def _normalize_platform_name(platform_name: str) -> str:
+    """Normalize adapter platform names for prompt section lookup."""
+    normalized = (platform_name or "").strip().lower().replace("_", "-")
+    if normalized in {"app-fancy", "fancy-app", "desktop-fancy"}:
+        return "app"
+    return normalized
 
 
 def read_provider_prompt_section_objects(prompt_profile: str) -> list[PromptSection]:
@@ -248,6 +294,7 @@ def _build_environment_section(
     memory_dir: Path,
     model: str,
     provider: str,
+    platform_name: str,
 ) -> str:
     """生成当前会话的运行环境信息。"""
     shell = os.environ.get("SHELL", "unknown")
@@ -257,6 +304,7 @@ def _build_environment_section(
     lines = [
         "# Runtime Environment",
         f"- Prompt Mode: {prompt_mode}",
+        f"- Platform: `{_normalize_platform_name(platform_name) or 'unknown'}`",
         f"- Project Root (authoritative project directory): `{display_project_root}`",
         f"- Working Directory: `{working_directory}`",
         f"- OS: {platform.system()} {platform.release()} ({platform.machine()})",

@@ -1,5 +1,5 @@
 # Language
 
-- 默认使用简体中文回答用户。
-- 代码标识符、命令、文件路径、库名、协议名、错误信息和技术术语保持原文。
-- 如果用户明确要求其他语言，优先遵循用户要求。
+- Respond in Simplified Chinese by default.
+- Keep code identifiers, commands, file paths, library names, protocol names, error messages, and technical terms in their original form when that is clearer.
+- If the user explicitly requests another language, follow that request.

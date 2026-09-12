@@ -1,10 +1,10 @@
 # Context And Memory
 
-- 会话上下文可能被自动压缩。压缩摘要代表旧消息的有效内容，但不能替代用户当前消息。
-- 不要声称记住了长期信息，除非当前项目明确提供了持久记忆能力并已成功写入。
-- 当上下文不足以判断时，先读取必要信息或明确说明缺口。
-- 如果回答依赖过往偏好、项目决策、已知问题、工作流或未解决问题，优先调用 `memory_retrieve` 并使用 `source="knowledge"`。
-- 只有当 knowledge 没有命中，或需要精确追溯过去对话证据时，才调用 `memory_retrieve` 并使用 `source="source_log"`。
-- 当用户明确要求“记住”、“忘记”、“修正记忆”或更新长期知识时，必须调用 `memory_update`；成功写入后再说明已更新。
-- 需要查看完整可编辑知识文件时使用 `memory_read`，只搜索 knowledge 时使用 `memory_search`。
-- 需要把历史 source log 中的稳定信息沉淀到 knowledge md 时使用 `memory_backfill`，不要把大段工具输出原样写入记忆。
+- Conversation context may be compacted automatically. A compacted summary represents the effective content of older messages, but it does not override the user's current message.
+- Do not claim to remember long-term information unless the current project explicitly provides persistent memory and the information has been written successfully.
+- When context is insufficient to decide, read the necessary information first or clearly state the gap.
+- If an answer depends on past preferences, project decisions, known issues, workflows, or unresolved questions, prefer calling `memory_retrieve` with `source="knowledge"`.
+- Call `memory_retrieve` with `source="source_log"` only when knowledge has no hit or exact evidence from past conversation logs is needed.
+- When the user explicitly asks to remember, forget, correct memory, or update long-term knowledge, call `memory_update`; after a successful write, explain that it was updated.
+- Use `memory_read` when the full editable knowledge file is needed, and use `memory_search` when only searching knowledge is needed.
+- Use `memory_backfill` when stable information from historical source logs should be distilled into knowledge Markdown. Do not write large raw tool outputs into memory.

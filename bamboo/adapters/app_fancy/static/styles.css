@@ -900,6 +900,51 @@ textarea {
   white-space: pre-wrap;
 }
 
+.system-prompt-markdown {
+  max-width: 980px;
+  padding: 14px 16px;
+  color: var(--text);
+}
+
+.system-prompt-markdown h1,
+.system-prompt-markdown h2,
+.system-prompt-markdown h3,
+.system-prompt-markdown h4,
+.system-prompt-markdown p,
+.system-prompt-markdown ul,
+.system-prompt-markdown pre,
+.system-prompt-markdown .md-table-wrap,
+.system-prompt-markdown .math-wrap {
+  margin: 0 0 10px;
+}
+
+.system-prompt-markdown h1 {
+  font-size: 20px;
+}
+
+.system-prompt-markdown h2 {
+  font-size: 17px;
+}
+
+.system-prompt-markdown h3,
+.system-prompt-markdown h4 {
+  font-size: 14px;
+}
+
+.system-prompt-markdown code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.message-json-raw {
+  border-top: 1px solid rgba(134, 153, 171, 0.18);
+}
+
+.message-json-raw summary {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .view-pane[hidden] {
   display: none;
 }

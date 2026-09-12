@@ -32,7 +32,7 @@ const state = {
   projectMenuOpen: false,
 };
 
-window.BambooFancyVersion = "messages-json-v1";
+window.BambooFancyVersion = "messages-md-v1";
 
 const MATH_ENVIRONMENTS = [
   "equation",
@@ -1951,6 +1951,11 @@ function renderMessagesJsonlRows(content) {
     try {
       const payload = JSON.parse(line);
       summary.append(...messageJsonSummaryParts(payload, index + 1));
+      if (isSystemPromptMessage(payload)) {
+        details.append(summary, renderSystemPromptMarkdown(payload), renderRawJsonDetails(payload));
+        els.messagesJsonlContent.appendChild(details);
+        return;
+      }
       pre.textContent = JSON.stringify(payload, null, 2);
     } catch {
       summary.append(messageJsonBadge("line", String(index + 1)), messageJsonSummaryText("Invalid JSONL row"));
@@ -1961,9 +1966,34 @@ function renderMessagesJsonlRows(content) {
   });
 }
 
+function isSystemPromptMessage(payload) {
+  return payload?.role === "system" && payload?.message_type === "system_prompt" && payload?.metadata?.synthetic;
+}
+
+function renderSystemPromptMarkdown(payload) {
+  const body = document.createElement("div");
+  body.className = "system-prompt-markdown";
+  body.innerHTML = markdownToHtml(payload?.content || "");
+  renderMermaidBlocks(body);
+  renderMathBlocks(body);
+  hydrateLocalImages(body);
+  return body;
+}
+
+function renderRawJsonDetails(payload) {
+  const details = document.createElement("details");
+  details.className = "message-json-raw";
+  const summary = document.createElement("summary");
+  summary.textContent = "Raw JSON";
+  const pre = document.createElement("pre");
+  pre.textContent = JSON.stringify(payload, null, 2);
+  details.append(summary, pre);
+  return details;
+}
+
 function messageJsonSummaryParts(payload, lineNumber) {
   const role = payload?.role || payload?.type || "message";
-  const agent = payload?.tool_name || payload?.agent_name || "";
+  const agent = payload?.metadata?.synthetic ? "synthetic" : payload?.tool_name || payload?.agent_name || "";
   const time = payload?.time || payload?.created_at || "";
   const content = String(payload?.content || "").replace(/\s+/g, " ").trim();
   const id = payload?.message_id || payload?.tool_call_id || payload?.task_id || "";
