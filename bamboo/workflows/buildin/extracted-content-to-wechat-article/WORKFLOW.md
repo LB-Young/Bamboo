@@ -1,14 +1,14 @@
 ---
 name: extracted-content-to-wechat-article
-description: Build a WeChat public-account article package from an extracted content directory and an article Markdown draft.
+description: Build a WeChat public-account article package from one or more extracted content directories and an article Markdown draft.
 usage: |
   1. Extract source material first. The extractor can be a workflow, skill, or tool for PDFs, web pages, videos, social posts, or WeChat articles.
-  2. Put the extracted Markdown and local assets under one content directory, then draft the WeChat article as Markdown.
+  2. Put each extracted source's Markdown and local assets under one content directory, then draft the WeChat article as Markdown.
   3. Use LaTeX for formulas (`$...$` or `$$...$$`) and Markdown image links for selected local images/tables.
   4. Call `workflow_load` with `name="extracted-content-to-wechat-article"`.
   5. Generate or choose a local cover image before building the package.
   6. Call `workflow_run` with arguments:
-     `"<content-dir> <article-draft.md> <output-dir> [--title TITLE] --cover <cover.png> [--verify-links]"`
+     `"<content-dir-1> [<content-dir-2> ...] <article-draft.md> <output-dir> [--title TITLE] --cover <cover.png> [--verify-links]"`
      Use `--no-cover` only when the user explicitly says no cover is needed.
   7. The workflow returns paths for the DOCX, normalized Markdown, asset manifest, link report, and quality report.
 dependencies:
@@ -21,9 +21,9 @@ dependencies:
 
 ## 功能
 
-基于任意上游内容提取结果和一份公众号文章 Markdown 草稿，构建一套可发布前审阅的文章包。
+基于一个或多个上游内容提取结果和一份公众号文章 Markdown 草稿，构建一套可发布前审阅的文章包。
 
-这个 workflow 不负责“下载/抓取/转写/凭空写文章”。上游可以是论文 PDF、网页、B 站/抖音视频、知乎内容、其他公众号文章或后续新增的数据源；你应先用合适的 tool、skill 或 workflow 把源材料提取成 Markdown、本地图片、本地表格等文件，再把这些提取结果交给本 workflow。
+这个 workflow 不负责“下载/抓取/转写/凭空写文章”。上游可以是论文 PDF、网页、B 站/抖音视频、知乎内容、其他公众号文章或后续新增的数据源；你应先用合适的 tool、skill 或 workflow 把每份源材料提取成 Markdown、本地图片、本地表格等文件，再把一个或多个提取结果目录一起交给本 workflow。
 
 写作仍由 Agent 根据提取后的 Markdown、资产和用户要求完成。本 workflow 负责把容易出错、需要一致执行的工程环节标准化：
 
@@ -38,10 +38,10 @@ dependencies:
 ## 输入约定
 
 ```text
-<content-dir> <article-draft.md> <output-dir> [--title TITLE] --cover <cover.png> [--verify-links]
+<content-dir-1> [<content-dir-2> ...] <article-draft.md> <output-dir> [--title TITLE] --cover <cover.png> [--verify-links]
 ```
 
-- `<content-dir>`：上游提取结果目录。推荐包含一个或多个 Markdown 文件，以及 `assets/` 下的图片、表格截图、视频关键帧、网页截图等。
+- `<content-dir-*>`：一个或多个上游提取结果目录。每个目录可以来自不同源材料，例如论文、网页文章、B 站/抖音视频、知乎回答、公众号文章等。推荐每个目录包含一个或多个 Markdown 文件，以及 `assets/` 下的图片、表格截图、视频关键帧、网页截图等。
 - `<article-draft.md>`：Agent 写好的公众号文章 Markdown。
 - `<output-dir>`：文章包输出目录。
 - `--title`：可选，覆盖 DOCX 标题；默认取 Markdown 第一个一级标题。
@@ -50,6 +50,7 @@ dependencies:
 - `--verify-links`：可选，联网校验 Markdown 中的 `http(s)` 链接。
 
 > 由于 Bamboo 当前 `workflow_run` 将参数作为一个字符串传给脚本，路径包含空格时请使用 shell 风格引号。
+> 多个内容目录会按传入顺序标记为 `source-01-*`、`source-02-*` 等；`asset_manifest.md` 和 `quality_report.md` 会保留来源，方便追踪图片、表格和关键帧来自哪份材料。
 
 ## Markdown 写作约定
 

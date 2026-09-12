@@ -36,6 +36,8 @@ class Asset:
     kind: str
     path: Path
     rel_path: str
+    source_id: str
+    source_dir: Path
     page: int | None = None
     caption: str = ""
     width: int = 0
@@ -43,7 +45,7 @@ class Asset:
 
     @property
     def key(self) -> str:
-        return self.rel_path.replace("\\", "/")
+        return f"{self.source_id}/{self.rel_path}".replace("\\", "/")
 
     @property
     def important(self) -> bool:
@@ -82,20 +84,22 @@ class BuildStats:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-    content_dir = args.content_dir.expanduser().resolve()
+    content_dirs = [path.expanduser().resolve() for path in args.content_dirs]
     article_md = args.article_md.expanduser().resolve()
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if not content_dir.is_dir():
-        raise SystemExit(f"content dir not found: {content_dir}")
+    for content_dir in content_dirs:
+        if not content_dir.is_dir():
+            raise SystemExit(f"content dir not found: {content_dir}")
     if not article_md.is_file():
         raise SystemExit(f"article Markdown not found: {article_md}")
 
-    assets = discover_assets(content_dir)
+    sources = [Source(id=source_id(index, path), path=path) for index, path in enumerate(content_dirs, start=1)]
+    assets = discover_assets(sources)
     markdown = article_md.read_text(encoding="utf-8")
     title = args.title or first_heading(markdown) or article_md.stem
-    image_uses = find_image_uses(markdown, article_md.parent, content_dir)
+    image_uses = find_image_uses(markdown, article_md.parent, sources)
     links = find_links(markdown)
     link_statuses = verify_links(links) if args.verify_links else [
         LinkStatus(label=label, url=url, status="not_checked", detail="run with --verify-links to verify")
@@ -155,7 +159,12 @@ def main(argv: list[str] | None = None) -> int:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     tokens = shlex.split(argv[0]) if len(argv) == 1 else argv
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("content_dir", type=Path)
+    parser.add_argument(
+        "content_dirs",
+        type=Path,
+        nargs="+",
+        help="One or more extracted content directories. The final two positional arguments are article_md and output_dir.",
+    )
     parser.add_argument("article_md", type=Path)
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--title", default="")
@@ -170,53 +179,81 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return args
 
 
-def discover_assets(content_dir: Path) -> list[Asset]:
-    by_rel: dict[str, Asset] = {}
-    document_json = content_dir / "document.json"
-    if document_json.is_file():
-        data = json.loads(document_json.read_text(encoding="utf-8"))
-        for item in data.get("content", []):
-            kind = item.get("type")
-            asset_path = item.get("asset_path")
-            if kind not in {"figure", "table"} or not asset_path:
-                continue
-            path = (content_dir / asset_path).resolve()
-            asset = make_asset(kind, path, rel_to(path, content_dir), item.get("page"), item.get("caption") or "")
-            if asset:
-                by_rel[asset.key] = asset
+@dataclass(frozen=True)
+class Source:
+    id: str
+    path: Path
 
-    asset_dirs = (
-        ("figure", "figures"),
-        ("table", "tables"),
-        ("image", "images"),
-        ("image", "frames"),
-        ("image", "screenshots"),
-    )
-    for kind, dirname in asset_dirs:
-        for path in sorted((content_dir / "assets" / dirname).glob("*")):
-            if not is_supported_image(path):
-                continue
-            key = rel_to(path, content_dir)
-            if key not in by_rel:
-                asset = make_asset(kind, path.resolve(), key, None, "")
+
+def source_id(index: int, path: Path) -> str:
+    return f"source-{index:02d}-{slugify(path.name)[:32]}"
+
+
+def discover_assets(sources: list[Source]) -> list[Asset]:
+    by_rel: dict[str, Asset] = {}
+    for source in sources:
+        content_dir = source.path
+        document_json = content_dir / "document.json"
+        if document_json.is_file():
+            data = json.loads(document_json.read_text(encoding="utf-8"))
+            for item in data.get("content", []):
+                kind = item.get("type")
+                asset_path = item.get("asset_path")
+                if kind not in {"figure", "table"} or not asset_path:
+                    continue
+                path = (content_dir / asset_path).resolve()
+                asset = make_asset(
+                    kind,
+                    path,
+                    rel_to(path, content_dir),
+                    source.id,
+                    content_dir,
+                    item.get("page"),
+                    item.get("caption") or "",
+                )
                 if asset:
                     by_rel[asset.key] = asset
-    for path in sorted((content_dir / "assets").glob("*")):
-        if not is_supported_image(path):
-            continue
-        key = rel_to(path, content_dir)
-        if key not in by_rel:
-            asset = make_asset("image", path.resolve(), key, None, "")
-            if asset:
-                by_rel[asset.key] = asset
-    return sorted(by_rel.values(), key=lambda item: (item.kind, item.page or 9999, item.key))
+
+        asset_dirs = (
+            ("figure", "figures"),
+            ("table", "tables"),
+            ("image", "images"),
+            ("image", "frames"),
+            ("image", "screenshots"),
+        )
+        for kind, dirname in asset_dirs:
+            for path in sorted((content_dir / "assets" / dirname).glob("*")):
+                if not is_supported_image(path):
+                    continue
+                key = f"{source.id}/{rel_to(path, content_dir)}".replace("\\", "/")
+                if key not in by_rel:
+                    asset = make_asset(kind, path.resolve(), rel_to(path, content_dir), source.id, content_dir, None, "")
+                    if asset:
+                        by_rel[asset.key] = asset
+        for path in sorted((content_dir / "assets").glob("*")):
+            if not is_supported_image(path):
+                continue
+            key = f"{source.id}/{rel_to(path, content_dir)}".replace("\\", "/")
+            if key not in by_rel:
+                asset = make_asset("image", path.resolve(), rel_to(path, content_dir), source.id, content_dir, None, "")
+                if asset:
+                    by_rel[asset.key] = asset
+    return sorted(by_rel.values(), key=lambda item: (item.source_id, item.kind, item.page or 9999, item.rel_path))
 
 
 def is_supported_image(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
 
 
-def make_asset(kind: str, path: Path, rel_path: str, page: int | None, caption: str) -> Asset | None:
+def make_asset(
+    kind: str,
+    path: Path,
+    rel_path: str,
+    source_id_value: str,
+    source_dir: Path,
+    page: int | None,
+    caption: str,
+) -> Asset | None:
     if not path.is_file():
         return None
     try:
@@ -224,26 +261,49 @@ def make_asset(kind: str, path: Path, rel_path: str, page: int | None, caption: 
             width, height = img.size
     except Exception:
         width, height = 0, 0
-    return Asset(kind=kind, path=path, rel_path=rel_path, page=page, caption=caption, width=width, height=height)
+    return Asset(
+        kind=kind,
+        path=path,
+        rel_path=rel_path,
+        source_id=source_id_value,
+        source_dir=source_dir,
+        page=page,
+        caption=caption,
+        width=width,
+        height=height,
+    )
 
 
-def find_image_uses(markdown: str, article_dir: Path, content_dir: Path) -> list[ImageUse]:
+def find_image_uses(markdown: str, article_dir: Path, sources: list[Source]) -> list[ImageUse]:
     uses: list[ImageUse] = []
     for alt, raw in IMAGE_RE.findall(markdown):
         target = raw.strip().split()[0]
-        resolved = resolve_image_path(target, article_dir, content_dir)
-        key = rel_to(resolved, content_dir) if resolved and is_relative_to(resolved, content_dir) else target
+        resolved, source = resolve_image_path(target, article_dir, sources)
+        key = f"{source.id}/{rel_to(resolved, source.path)}" if resolved and source else target
         uses.append(ImageUse(alt=alt.strip(), raw_path=target, resolved_path=resolved, key=key.replace("\\", "/")))
     return uses
 
 
-def resolve_image_path(raw: str, article_dir: Path, content_dir: Path) -> Path | None:
+def resolve_image_path(raw: str, article_dir: Path, sources: list[Source]) -> tuple[Path | None, Source | None]:
     path = Path(raw).expanduser()
-    candidates = [path] if path.is_absolute() else [article_dir / path, content_dir / path]
+    if path.is_absolute():
+        candidates: list[tuple[Path, Source | None]] = [(path, source_for_absolute(path, sources))]
+    else:
+        candidates = [(article_dir / path, None)]
+        candidates.extend((source.path / path, source) for source in sources)
     for candidate in candidates:
-        resolved = candidate.resolve()
+        candidate_path, source = candidate
+        resolved = candidate_path.resolve()
         if resolved.is_file():
-            return resolved
+            return resolved, source or source_for_absolute(resolved, sources)
+    return None, None
+
+
+def source_for_absolute(path: Path, sources: list[Source]) -> Source | None:
+    resolved = path.expanduser().resolve()
+    for source in sources:
+        if is_relative_to(resolved, source.path):
+            return source
     return None
 
 
@@ -454,18 +514,19 @@ def render_asset_manifest(assets: list[Asset], used_keys: set[str]) -> str:
     rows = [
         "# Asset Manifest",
         "",
-        "| Used | Important | Type | Page | Size | Path | Caption |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| Used | Important | Source | Type | Page | Size | Path | Caption |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for asset in assets:
         rows.append(
-            "| {used} | {important} | {kind} | {page} | {size} | `{path}` | {caption} |".format(
+            "| {used} | {important} | `{source}` | {kind} | {page} | {size} | `{path}` | {caption} |".format(
                 used="yes" if asset.key in used_keys else "no",
                 important="yes" if asset.important else "no",
+                source=asset.source_id,
                 kind=asset.kind,
                 page=asset.page or "",
                 size=f"{asset.width}x{asset.height}",
-                path=asset.key,
+                path=asset.rel_path,
                 caption=(asset.caption or "").replace("|", "\\|")[:220],
             )
         )
