@@ -1,6 +1,6 @@
 ---
 name: douyin-reach
-description: "Work with Douyin as one integrated browser-first skill: visible-login search/video/creator/collection/publish workflows, plus public CLI helpers for link parsing and metadata fallback."
+description: Query Douyin works, accounts, account works, ranks, and transcript tasks through RedFoxHub APIs.
 user-invocable: true
 load-experiences: false
 metadata:
@@ -9,141 +9,58 @@ metadata:
       - douyin
       - short-video
       - creator-analysis
-      - publishing
       - retrieval
+      - redfoxhub
 ---
 
 # Douyin Reach
 
 ## When to Use
 
-Use this skill when the task is about Douyin videos, share links, short links, video explanation, visible browser extraction, creator/account analysis, collection analysis, Douyin search, or guarded content publishing.
+Use this skill when the task needs Douyin work search, account search, account details, work details, account work lists, hot ranks, hot accounts, or RedFoxHub transcript extraction.
 
-Do not use this skill for Bilibili, YouTube, Xiaohongshu, Zhihu, or generic web search tasks.
+Do not use this skill for direct Douyin browser automation, publishing, liking, following, downloading media, or login-only creator-center data.
 
-## Capability Map
+## Authentication
 
-This is one Bamboo skill with multiple internal modules. Browser workflows are the primary path for login-dependent or dynamic pages; CLI commands remain a public-data fallback.
-
-| Module | Commands | Use for |
-| --- | --- | --- |
-| Public reach | `parse`, `resolve`, `page`, `search-url` | Share text parsing, short-link resolution, public HTML metadata, safe search links |
-| Video understanding | `video-info`, `download`, `extract-audio`, `transcript`, `explain-file` | Single video explanation, public media download, local file inspection, transcript sidecar reading |
-| Creator and collection analysis | `creator-profile`, `collection-list`, `creator-analyze` | Public account profile, visible video links, collection metadata, analysis plan |
-| Publishing workflow | `publish-plan` | Title/body/tag/media checklist and guarded upload plan |
-| Capability routing | `capability` | Decide whether a request is safe, media-download, browser-guarded, or state-changing |
-
-## Safety Levels
-
-- `safe_public`: `parse`, `resolve`, `page`, `search-url`, `video-info`, `capability`.
-- `media_download`: `download`, `extract-audio`, `transcript`, `explain-file`. Ask before saving large files or writing outside the current workspace.
-- `browser_guarded`: creator pages, collection pages, logged-in search, or any flow that needs a visible browser.
-- `state_changing`: publish, like, favorite, share, account switch. Never perform silently.
-
-Use public URLs and public HTML for quick link parsing, but use Bamboo's `browser` tool as the primary execution path for logged-in search, video pages that hide content, creator pages, collections, comments, or publish/upload workflows.
-
-Do not read browser cookies, local storage, QR-login state, account tokens, private APIs, creator-center analytics, or private account data directly. Login must happen only through a visible browser window opened by `browser action=open` with `headless=false`; the user completes QR/SMS/CAPTCHA manually. Do not bypass CAPTCHA, login walls, rate limits, or risk-control pages.
-
-For every Douyin browser action that opens or waits on a page, set `headless=false`. If transcript or speech-to-text capability is unavailable, report that the actual spoken content cannot be summarized from the available evidence; do not install Python packages, create ad hoc speech-recognition scripts, or replace video-content analysis with unrelated web research unless the user explicitly asks for that fallback.
-
-State-changing actions such as publish, upload, like, favorite, follow, comment, share, delete, or account switch require an explicit final user confirmation after showing the exact account, target, text, media, cover, tags, and schedule.
-
-## Browser Workflows
-
-### Login
-
-1. Open `https://www.douyin.com/` or the target Douyin URL with `browser action=open`, `headless=false`.
-2. Ask the user to complete QR/SMS/CAPTCHA in the visible browser.
-3. Use `browser action=wait_for_login` with a selector or URL pattern that indicates login has completed.
-4. Continue in the same browser session; never copy cookies or tokens into prompts, files, or command arguments.
-
-### Shared Link or Single Video
-
-1. Use `parse` for pasted share text and `resolve` for short links when possible.
-2. Open the final URL in the visible browser.
-3. Wait for the video page to render.
-4. Use `browser action=extract_text` on the body or stable content container.
-5. Use `browser action=eval` only for DOM-visible fields such as title, author, description, visible stats, visible comments, and subtitle text. Do not inspect storage or cookies.
-6. If the user asks to explain the actual spoken/visual content and no subtitle/transcript is visible, ask for a media file or an approved download/transcription path.
-
-### Search
-
-1. Open the Douyin search URL generated by `search-url` or navigate to the search page in the visible browser.
-2. Let the user handle login or risk-control challenges.
-3. Extract visible result cards, authors, snippets, and links.
-4. Do not infinite-scroll aggressively; sample a bounded number of visible results and report the sample size.
-
-### Creator or Collection Analysis
-
-1. Open the creator home page or collection page in the visible browser.
-2. Extract visible profile fields, tabs, video cards, titles, publish times, and visible metrics.
-3. Sample a bounded number of visible videos and summarize topics, hooks, formats, posting rhythm, and recurring calls to action.
-4. Clearly mark gaps when data is hidden behind pagination, login, risk control, or creator-center permissions.
-
-## Commands
-
-Run all subcommands through the single bundled entrypoint:
+All scripts call RedFoxHub and require `REDFOX_API_KEY`.
 
 ```bash
-python <skill_dir>/scripts/douyin_cli.py parse "share text or Douyin URL"
-python <skill_dir>/scripts/douyin_cli.py resolve "https://v.douyin.com/..."
-python <skill_dir>/scripts/douyin_cli.py page "https://www.douyin.com/video/..."
-python <skill_dir>/scripts/douyin_cli.py search-url "keyword"
-
-python <skill_dir>/scripts/douyin_cli.py video-info "https://www.douyin.com/video/..."
-python <skill_dir>/scripts/douyin_cli.py download "https://www.douyin.com/video/..." --output-dir ./downloads
-python <skill_dir>/scripts/douyin_cli.py extract-audio ./video.mp4
-python <skill_dir>/scripts/douyin_cli.py transcript ./video.mp4
-python <skill_dir>/scripts/douyin_cli.py explain-file ./video.mp4
-
-python <skill_dir>/scripts/douyin_cli.py creator-profile "https://www.douyin.com/user/..."
-python <skill_dir>/scripts/douyin_cli.py collection-list "https://www.douyin.com/collection/..."
-python <skill_dir>/scripts/douyin_cli.py creator-analyze "https://www.douyin.com/user/..."
-
-python <skill_dir>/scripts/douyin_cli.py publish-plan --title "..." --body "..." --media ./video.mp4 --tag topic
-python <skill_dir>/scripts/douyin_cli.py capability
+export REDFOX_API_KEY="ak_xxxx"
 ```
 
-Use the same `python` environment that runs Bamboo.
+The optional `REDFOX_BASE_URL` overrides the default host `https://redfox.hk`.
 
-## Single Video Workflow
+## Scripts
 
-1. Use `parse` for pasted share text or short links.
-2. Use `resolve` for short links before deeper analysis.
-3. Use `video-info` for public title, description, cover, canonical URL, and media candidates.
-4. If a public media candidate exists and the user wants a local copy, use `download`.
-5. For explanation:
-   - Prefer explicit subtitles or sidecar transcript when available.
-   - Use `extract-audio` and Bamboo's speech-to-text capability when transcript is unavailable.
-   - Use `explain-file` to collect local file size, MIME type, transcript availability, and analysis guidance.
-6. State clearly when Douyin public pages do not expose subtitles, full video URLs, comments, or metrics.
+```bash
+python <skill_dir>/scripts/search_works.py "AI" --offset 0
+python <skill_dir>/scripts/search_works.py "AI" --wide --page-num 1 --page-size 10 --start-date 2026-09-01 --end-date 2026-09-14
+python <skill_dir>/scripts/search_accounts.py "科技" --offset 0
+python <skill_dir>/scripts/search_accounts.py "科技" --wide --page-num 1 --page-size 10
+python <skill_dir>/scripts/get_work.py --work-id 7654143095876898089
+python <skill_dir>/scripts/get_work.py --work-url "https://www.douyin.com/video/7654143095876898089"
+python <skill_dir>/scripts/get_account.py nxpt260212
+python <skill_dir>/scripts/list_account_works.py --account-id nxpt260212 --offset 0 --sort-type 2
+python <skill_dir>/scripts/list_account_works.py --wide --unique-name luoyonghao --page-num 1 --page-size 10
+python <skill_dir>/scripts/hot_rank.py --kind daily-hot --type 美食
+python <skill_dir>/scripts/hot_rank.py --kind hot-accounts --date-type days --rank-date 2026-09-13 --type 全部
+python <skill_dir>/scripts/transcript.py submit "https://www.douyin.com/video/..."
+python <skill_dir>/scripts/transcript.py result "task_id_from_submit"
+```
 
-## Creator and Collection Workflow
+## Capability Notes
 
-1. Use `creator-profile` for public account metadata and visible video links.
-2. Use `collection-list` for public collection metadata and visible video links.
-3. Use `creator-analyze` to generate a structured analysis plan from visible public data.
-4. For deeper creator analysis, sample recent visible videos, run `video-info` or local transcript workflows for each, then aggregate topics, hooks, formats, update rhythm, and recurring calls to action.
-5. If public pages hide the video list, metrics, or creator-center analytics, stop and explain that a guarded browser workflow is required.
+- `search_works.py` supports RedFoxHub premium and wide work-search endpoints.
+- `search_accounts.py` supports premium and wide account-search endpoints.
+- `get_work.py` fetches work details by id or URL.
+- `get_account.py` fetches one account profile.
+- `list_account_works.py` lists one account's works.
+- `hot_rank.py` fetches daily hot works, daily/weekly surge ranks, or hot account recommendations.
+- `transcript.py` submits and polls RedFoxHub video transcript extraction.
 
-## Search Workflow
-
-Use `search-url` by default to produce a Douyin search URL. Logged-in search result scraping is a browser-guarded workflow and must use a visible browser when login, CAPTCHA, or risk control appears.
-
-## Publishing Workflow
-
-Use `publish-plan` to prepare a publish checklist. The helper does not click publish.
-
-Before any publish/upload action:
-
-1. Confirm target account, title, body, tags, media, cover, and schedule with the user.
-2. Use a visible browser for creator center.
-3. Let the user complete login, SMS, QR, CAPTCHA, or risk-control checks manually.
-4. Fill a draft and show final preview.
-5. Click publish only after explicit final user confirmation.
+Outputs are JSON. For analysis, cite the returned `workUrl`, `opusUrl`, `authorLink`, or equivalent URL fields when available.
 
 ## Failure Handling
 
-If public pages fail, redirect to login, return risk-control content, or hide data, report the status and ask for a public URL, uploaded file, transcript, or visible-browser approval. Do not bypass platform protections.
-
-If the user explicitly says not to try other methods after this skill fails, stop after the bundled CLI/browser workflow fails and report the exact failure. Do not fall back to generic `web_fetch`, raw `curl`, generic search, or unrelated tools.
+If RedFoxHub returns auth, quota, unsupported endpoint, or rate-limit errors, report that status. Do not bypass Douyin protections, inspect browser storage, extract cookies, or use private platform endpoints.
