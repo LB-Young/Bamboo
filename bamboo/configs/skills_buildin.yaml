@@ -113,12 +113,9 @@ skills:
       auto_select: true
       max_references: 0
       max_tokens: 3500
-    variables:
-      YOUTUBE_REACH_LANGUAGES: "en,zh-Hans,zh-Hant,zh-CN,zh-TW"
     requirements:
       bins:
         - python
-        - yt-dlp
       env: []
       python_packages: []
     permissions:
@@ -184,6 +181,25 @@ skills:
         - python
       env: []
       python_packages: []
+    permissions:
+      can_run_commands: true
+      can_edit_files: false
+      can_access_network: true
+
+  gzh-reach:
+    enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 3500
+    requirements:
+      bins:
+        - python
+      env: []
+      python_packages:
+        - requests
     permissions:
       can_run_commands: true
       can_edit_files: false

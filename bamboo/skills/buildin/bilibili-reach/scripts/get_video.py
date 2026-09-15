@@ -1,134 +1,219 @@
 #!/usr/bin/env python3
+"""
+Official RedFoxHub API document for this script:
+
+# 获取哔哩哔哩作品内容详情 (优质库)
+
+获取哔哩哔哩作品内容详情 (优质库)
+
+**`POST`** `https://redfox.hk/story/api/bili/data/workDetail`
+
+---
+
+## API 说明
+
+**Method**: `POST`
+**Host**: `https://redfox.hk`
+**Path**: `/story/api/bili/data/workDetail`
+
+---
+
+## 请求头
+
+| 名称 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| REDFOX_API_KEY | string | 是 | 平台鉴权令牌，每次请求必填 | ak_xxxxxx |
+| Content-Type | string | 是 | 请求体数据类型 | application/json |
+
+---
+
+## 请求参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| bvId | String | 否 | BV号（非必填，与workUrl二选一） | BV1ghJg6hEWV |
+| workUrl | String | 否 | 作品链接（非必填，与bvId二选一，支持 https://www.bilibili.com/video/BV1xxx 或 https://b23.tv/xxx 格式） | https://www.bilibili.com/video/BV1ghJg6hEWV/?spm_id_from=333.1007.tianma.1-1-1.click |
+
+---
+
+## 返回值与结构
+
+统一包装一般为 `code`、`message`/`msg`、`data`（以实际服务为准）。
+
+---
+
+## 响应字段
+
+| 字段 | 类型 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| code | Integer | 状态码，2000=成功 | 2000 |
+| msg | String | 提示信息 | 成功 |
+| data | Object |  | — |
+| author | String | 作者昵称 | 影视飓风 |
+| authorId | String | 作者ID | 946974 |
+| bvId | String | BV号 | BV1ghJg6hEWV |
+| coinCount | Integer | 投币数 | 19138 |
+| commentCount | Integer | 评论数 | 4950 |
+| created | String | 发布时间 | 2026-06-15 20:00:00 |
+| description | String | 视频描述 | 大疆的Pocket 4P终于来了！这次我们想和你一起看看…… |
+| duration | Integer | 时长，单位：秒 | 762 |
+| favoriteCount | Integer | 收藏数 | 13589 |
+| firstType | String | 一级分类 | 科技 |
+| interactionQuantity | Integer | 互动数 | 125413 |
+| likeCount | Integer | 点赞数 | 66946 |
+| missionId | Integer | 视频关联活动ID | 4064796 |
+| picUrl | String | 封面图URL | http://i0.hdslb.com/bfs/archive/c17d5325015b38eaf777198e9dd7f82a443ec1d1.jpg |
+| playCount | Integer | 播放数 | 1330732 |
+| secondType | String | 二级分类 | 数码 |
+| shareCount | Integer | 分享数 | 14863 |
+| tags | Array | 作品标签列表 | — |
+| title | String | 作品标题 | 大疆Pocket 4P，到底 Pro 在哪？ |
+| titleWords | Array | 内容词云/标题分词 | — |
+| videoReview | Integer | 弹幕数 | 5927 |
+
+---
+
+## 请求示例
+
+```bash
+请求参数：
+{
+  "bvId": "BV1ghJg6hEWV",
+  "workUrl": "https://www.bilibili.com/video/BV1ghJg6hEWV/?spm_id_from=333.1007.tianma.1-1-1.click"
+}
+```
+
+---
+
+## 响应示例
+
+```json
+{
+  "code": 2000,
+  "msg": "成功",
+  "data": {
+    "bvId": "BV1ghJg6hEWV",
+    "title": "大疆Pocket 4P，到底 Pro 在哪？",
+    "duration": 762,
+    "created": "2026-06-15 20:00:00",
+    "firstType": "科技",
+    "secondType": "数码",
+    "tags": [
+      "科技猎手",
+      "数码",
+      "科技",
+      "摄影",
+      "Pocket 4P",
+      "大疆",
+      "摄像",
+      "DJI",
+      "摄影器材",
+      "拍摄"
+    ],
+    "titleWords": [
+      "大疆"
+    ],
+    "interactionQuantity": 125413,
+    "likeCount": 66946,
+    "favoriteCount": 13589,
+    "commentCount": 4950,
+    "shareCount": 14863,
+    "playCount": 1330732,
+    "videoReview": 5927,
+    "coinCount": 19138,
+    "missionId": 4064796,
+    "authorId": "946974",
+    "author": "影视飓风",
+    "description": "大疆的Pocket 4P终于来了！这次我们想和你一起看看……",
+    "picUrl": "http://i0.hdslb.com/bfs/archive/c17d5325015b38eaf777198e9dd7f82a443ec1d1.jpg"
+  }
+}
+```
+
+---
+
+## 密钥获取与安全说明
+
+- 本API需要使用API密钥 `REDFOX_API_KEY`。
+- API密钥由 [红狐 hub](https://redfox.hk/settings/api-keys?source=redfox_api_md) (`https://redfox.hk`)提供。
+- 请前往 [红狐 hub](https://redfox.hk?source=redfox_api_md) 注册并登录账号，在密钥管理模块创建 API密钥。
+- 复制并仅在请求头中使用API密钥。
+- 在提供密钥前，请先确认密钥来源、可用范围、有效期及是否支持重置/撤销。
+- 禁止在代码、提示词、日志或输出文件中硬编码/明文暴露密钥。
+
+"""
+
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
+from typing import Any
+
+import requests
 
 from bamboo.helpers.config import load_builtin_skill_variables
 
-DEFAULT_BASE_URL = "https://redfox.hk"
+SKILL_NAME = 'bilibili-reach'
+API_URL = 'https://redfox.hk/story/api/bili/data/workDetail'
 
 
 class RedFoxHubError(RuntimeError):
     """Raised when RedFoxHub cannot complete a request."""
 
 
-def load_api_key(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
-    if not api_key:
-        raise RedFoxHubError("missing REDFOX_API_KEY; set it in the environment or the built-in skill variables")
-    return api_key
-
-
-def base_url(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    return (
-        os.environ.get("REDFOX_BASE_URL")
-        or str(variables.get("REDFOX_BASE_URL") or DEFAULT_BASE_URL)
-    ).rstrip("/")
-
-
-def post(skill_name: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "POST", path, payload=payload)
-
-
-def get(skill_name: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "GET", path, params=params)
-
-
-def print_json(value: Any) -> None:
-    print(json.dumps(value, ensure_ascii=False, indent=2))
-
-
-def handle_cli(func) -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description='获取哔哩哔哩作品内容详情 (优质库)')
+    parser.add_argument('--bv-id', default=None)
+    parser.add_argument('--work-url', default=None)
+    args = parser.parse_args(argv)
     try:
-        print_json(func())
-        return 0
+        data = call_api(build_payload(args))
     except RedFoxHubError as exc:
         print(f"RedFoxHub error: {exc}", file=sys.stderr)
         return 1
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
 
 
-def compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def build_payload(args: argparse.Namespace) -> dict[str, Any]:
+    payload = {
+        'bvId': args.bv_id,
+        'workUrl': args.work_url,
+    }
     return {key: value for key, value in payload.items() if value not in (None, "")}
 
 
-def _request(
-    skill_name: str,
-    method: str,
-    path: str,
-    *,
-    payload: dict[str, Any] | None = None,
-    params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    api_key = load_api_key(skill_name)
-    url = f"{base_url(skill_name)}{path}"
-    data = None
-    if method == "POST":
-        data = json.dumps(compact_payload(payload or {}), ensure_ascii=False).encode("utf-8")
-    elif params:
-        query = urllib.parse.urlencode(compact_payload(params), doseq=True)
-        url = f"{url}?{query}"
-
-    request = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "Bamboo RedFoxHub Reach/1",
-            "REDFOX_API_KEY": api_key,
-            "X-API-KEY": api_key,
-            "X-API-Key": api_key,
-            "REDFOX-API-KEY": api_key,
-        },
-    )
+def call_api(payload: dict[str, Any]) -> dict[str, Any]:
+    api_key = load_api_key()
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            status = response.status
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1000]
-        raise RedFoxHubError(f"HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
+        response = requests.post(
+            API_URL,
+            json=payload,
+            headers={
+                "REDFOX_API_KEY": api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
         raise RedFoxHubError(f"network failure: {exc}") from exc
-
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RedFoxHubError(f"invalid JSON response from HTTP {status}: {raw[:500]}") from exc
-
-    code = parsed.get("code") if isinstance(parsed, dict) else None
-    if code not in (None, 0, 2000, "0", "2000"):
-        message = parsed.get("msg") or parsed.get("message") or "unknown RedFoxHub error"
-        raise RedFoxHubError(f"code={code}: {message}")
-    return {
-        "source": "RedFoxHub",
-        "method": method,
-        "path": path,
-        "data": parsed.get("data", parsed) if isinstance(parsed, dict) else parsed,
-    }
-
-import argparse
+        data = response.json()
+    except ValueError as exc:
+        raise RedFoxHubError(f"invalid JSON response from HTTP {response.status_code}: {response.text[:500]}") from exc
+    if response.status_code >= 400:
+        raise RedFoxHubError(f"HTTP {response.status_code}: {response.text[:1000]}")
+    return data
 
 
-SKILL = "bilibili-reach"
-PATH = "/story/api/bili/data/workDetail"
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Fetch Bilibili video details through RedFoxHub.")
-    parser.add_argument("bvid_or_url")
-    args = parser.parse_args()
-    value = args.bvid_or_url
-    payload = {"workUrl": value} if value.startswith("http") else {"bvid": value}
-    return handle_cli(lambda: post(SKILL, PATH, payload))
+def load_api_key() -> str:
+    variables = load_builtin_skill_variables(SKILL_NAME)
+    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
+    if not api_key:
+        raise RedFoxHubError("missing REDFOX_API_KEY; set it in ~/.bamboo/.env or built-in skill variables")
+    return api_key
 
 
 if __name__ == "__main__":

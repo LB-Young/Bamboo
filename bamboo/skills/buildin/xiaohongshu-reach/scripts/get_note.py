@@ -1,133 +1,191 @@
 #!/usr/bin/env python3
+"""
+Official RedFoxHub API document for this script:
+
+# 获取小红书作品内容详情 (优质库)
+
+查询作品信息
+
+**`POST`** `https://redfox.hk/story/api/xhsUser/queryWorkDetail`
+
+---
+
+## API 说明
+
+**Method**: `POST`
+**Host**: `https://redfox.hk`
+**Path**: `/story/api/xhsUser/queryWorkDetail`
+
+---
+
+## 请求头
+
+| 名称 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| REDFOX_API_KEY | string | 是 | 平台鉴权令牌，每次请求必填 | ak_xxxxxx |
+| Content-Type | string | 是 | 请求体数据类型 | application/json |
+
+---
+
+## 请求参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| workId | String | 否 | 作品id（二选一必填） | 6a03be1b0000000035033163 |
+| workLink | String | 否 | 作品链接（二选一必填） | https://www.xiaohongshu.com/explore/6a2ac3020000000035022d8e |
+
+---
+
+## 返回值与结构
+
+统一包装一般为 `code`、`message`/`msg`、`data`（以实际服务为准）。
+
+---
+
+## 响应字段
+
+| 字段 | 类型 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| code | Integer | 状态码（2000=成功） | 2000 |
+| msg | String | 提示信息 | 成功 |
+| data | Object | 返回数据 | — |
+| accountNickname | String | 作者昵称 | 大白萝不怪 |
+| accountUserid | String | 作者小红书id | 565b17dc0bf90c754d6615b4 |
+| coverUrl | String | 封面地址 | https://sns-i10.rednotecdn.com/notes_pre_post/1040g3k031k6lpmg43q2043gri3bto5dk2u1p6eg?imageView2/2/w/576/format/webp/q/87%7CimageMogr2/strip&redImage/frame/0&ap=1&sc=PREVIEW&sign=b670a0755ba8943337e700df1b2f702d&t=6a05685d&src=A |
+| workCollectedCount | Integer | 收藏数 | 175 |
+| workCommentsCount | Integer | 评论数 | 45 |
+| workDesc | String | 作品内容 | 做了十多年建筑设计 标准化设计是硬性要求\n难得自己当甲方 不想把设计模版套在自己的家\n自己的房子总算能随心所欲\n家里的布置随着时间调整 越住越舒适~\n以舒适健康为居 是我们理想中高智感的家\n\t\n特别满意我的开放式厨房 洗切炒一气呵成\n要说不满意 就是用水问题\n武汉自来水氯味重得吓人\n做饭都闻到异味 污染事件更是频发\n拖了很久决定装净水器\n闺蜜家装的RO反渗透净水器虽然过滤效果好\n但每次制水要产生大量废水\n在业主群里咨询 |
+| workId | String | 作品id | 687df3a1000000000d0184a4 |
+| workLikedCount | Integer | 点赞数 | 210 |
+| workPublishTime | String | 发布时间 | 2025-07-21 17:09:42 |
+| workSharedCount | Integer | 转发数 | 28 |
+| workTitle | String | 作品标题 | 建筑师的选择｜厨下净水器终于装好了！ |
+| workType | String | 分类（视频/图文） | 主要描述：视频 or 图文 等 {"normal": "normal", "video": "video"} |
+| workUrl | String | 作品链接 | https://www.xiaohongshu.com/explore/687df3a1000000000d0184a4 |
+
+---
+
+## 请求示例
+
+```bash
+curl -X POST "https://redfox.hk/story/api/xhsUser/queryWorkDetail"
+  -H "Content-Type: application/json"
+  -H "REDFOX_API_KEY: your_api_key"
+  -d '{"workId": "6a03be1b0000000035033163", "workLink": "https://example.com/example"}'
+```
+
+---
+
+## 响应示例
+
+```json
+{
+  "code": 2000,
+  "msg": "成功",
+  "data": {
+    "workId": "687df3a1000000000d0184a4",
+    "workPublishTime": "2025-07-21 17:09:42",
+    "workTitle": "建筑师的选择｜厨下净水器终于装好了！",
+    "workDesc": "做了十多年建筑设计 标准化设计是硬性要求\n难得自己当甲方 不想把设计模版套在自己的家\n自己的房子总算能随心所欲\n家里的布置随着时间调整 越住越舒适~\n以舒适健康为居 是我们理想中高智感的家\n\t\n特别满意我的开放式厨房 洗切炒一气呵成\n要说不满意 就是用水问题\n武汉自来水氯味重得吓人\n做饭都闻到异味 污染事件更是频发\n拖了很久决定装净水器\n闺蜜家装的RO反渗透净水器虽然过滤效果好\n但每次制水要产生大量废水\n在业主群里咨询",
+    "coverUrl": "https://sns-i10.rednotecdn.com/notes_pre_post/1040g3k031k6lpmg43q2043gri3bto5dk2u1p6eg?imageView2/2/w/576/format/webp/q/87%7CimageMogr2/strip&redImage/frame/0&ap=1&sc=PREVIEW&sign=b670a0755ba8943337e700df1b2f702d&t=6a05685d&src=A",
+    "accountNickname": "大白萝不怪",
+    "accountUserid": "565b17dc0bf90c754d6615b4",
+    "workCommentsCount": 45,
+    "workLikedCount": 210,
+    "workCollectedCount": 175,
+    "workReadedCount": 980,
+    "workSharedCount": 28,
+    "workUpdateTime": "2026-01-01 00:00:00",
+    "workUrl": "https://www.xiaohongshu.com/explore/687df3a1000000000d0184a4",
+    "workType": "主要描述：视频 or 图文 等 {"normal": "normal", "video": "video"}"
+  }
+}
+```
+
+---
+
+## 密钥获取与安全说明
+
+- 本API需要使用API密钥 `REDFOX_API_KEY`。
+- API密钥由 [红狐 hub](https://redfox.hk/settings/api-keys?source=redfox_api_md) (`https://redfox.hk`)提供。
+- 请前往 [红狐 hub](https://redfox.hk?source=redfox_api_md) 注册并登录账号，在密钥管理模块创建 API密钥。
+- 复制并仅在请求头中使用API密钥。
+- 在提供密钥前，请先确认密钥来源、可用范围、有效期及是否支持重置/撤销。
+- 禁止在代码、提示词、日志或输出文件中硬编码/明文暴露密钥。
+
+"""
+
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
+from typing import Any
+
+import requests
 
 from bamboo.helpers.config import load_builtin_skill_variables
 
-DEFAULT_BASE_URL = "https://redfox.hk"
+SKILL_NAME = 'xiaohongshu-reach'
+API_URL = 'https://redfox.hk/story/api/xhsUser/queryWorkDetail'
 
 
 class RedFoxHubError(RuntimeError):
     """Raised when RedFoxHub cannot complete a request."""
 
 
-def load_api_key(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
-    if not api_key:
-        raise RedFoxHubError("missing REDFOX_API_KEY; set it in the environment or the built-in skill variables")
-    return api_key
-
-
-def base_url(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    return (
-        os.environ.get("REDFOX_BASE_URL")
-        or str(variables.get("REDFOX_BASE_URL") or DEFAULT_BASE_URL)
-    ).rstrip("/")
-
-
-def post(skill_name: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "POST", path, payload=payload)
-
-
-def get(skill_name: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "GET", path, params=params)
-
-
-def print_json(value: Any) -> None:
-    print(json.dumps(value, ensure_ascii=False, indent=2))
-
-
-def handle_cli(func) -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description='获取小红书作品内容详情 (优质库)')
+    parser.add_argument('--work-id', default=None)
+    parser.add_argument('--work-link', default=None)
+    args = parser.parse_args(argv)
     try:
-        print_json(func())
-        return 0
+        data = call_api(build_payload(args))
     except RedFoxHubError as exc:
         print(f"RedFoxHub error: {exc}", file=sys.stderr)
         return 1
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
 
 
-def compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def build_payload(args: argparse.Namespace) -> dict[str, Any]:
+    payload = {
+        'workId': args.work_id,
+        'workLink': args.work_link,
+    }
     return {key: value for key, value in payload.items() if value not in (None, "")}
 
 
-def _request(
-    skill_name: str,
-    method: str,
-    path: str,
-    *,
-    payload: dict[str, Any] | None = None,
-    params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    api_key = load_api_key(skill_name)
-    url = f"{base_url(skill_name)}{path}"
-    data = None
-    if method == "POST":
-        data = json.dumps(compact_payload(payload or {}), ensure_ascii=False).encode("utf-8")
-    elif params:
-        query = urllib.parse.urlencode(compact_payload(params), doseq=True)
-        url = f"{url}?{query}"
-
-    request = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "Bamboo RedFoxHub Reach/1",
-            "REDFOX_API_KEY": api_key,
-            "X-API-KEY": api_key,
-            "X-API-Key": api_key,
-            "REDFOX-API-KEY": api_key,
-        },
-    )
+def call_api(payload: dict[str, Any]) -> dict[str, Any]:
+    api_key = load_api_key()
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            status = response.status
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1000]
-        raise RedFoxHubError(f"HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
+        response = requests.post(
+            API_URL,
+            json=payload,
+            headers={
+                "REDFOX_API_KEY": api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
         raise RedFoxHubError(f"network failure: {exc}") from exc
-
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RedFoxHubError(f"invalid JSON response from HTTP {status}: {raw[:500]}") from exc
-
-    code = parsed.get("code") if isinstance(parsed, dict) else None
-    if code not in (None, 0, 2000, "0", "2000"):
-        message = parsed.get("msg") or parsed.get("message") or "unknown RedFoxHub error"
-        raise RedFoxHubError(f"code={code}: {message}")
-    return {
-        "source": "RedFoxHub",
-        "method": method,
-        "path": path,
-        "data": parsed.get("data", parsed) if isinstance(parsed, dict) else parsed,
-    }
-
-import argparse
+        data = response.json()
+    except ValueError as exc:
+        raise RedFoxHubError(f"invalid JSON response from HTTP {response.status_code}: {response.text[:500]}") from exc
+    if response.status_code >= 400:
+        raise RedFoxHubError(f"HTTP {response.status_code}: {response.text[:1000]}")
+    return data
 
 
-SKILL = "xiaohongshu-reach"
-PATH = "/story/api/xhsUser/queryWorkDetail"
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Fetch Xiaohongshu note details through RedFoxHub.")
-    parser.add_argument("--work-id")
-    parser.add_argument("--work-link")
-    args = parser.parse_args()
-    return handle_cli(lambda: post(SKILL, PATH, {"workId": args.work_id, "workLink": args.work_link}))
+def load_api_key() -> str:
+    variables = load_builtin_skill_variables(SKILL_NAME)
+    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
+    if not api_key:
+        raise RedFoxHubError("missing REDFOX_API_KEY; set it in ~/.bamboo/.env or built-in skill variables")
+    return api_key
 
 
 if __name__ == "__main__":

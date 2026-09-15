@@ -2,11 +2,11 @@
 """
 Official RedFoxHub API document for this script:
 
-# 搜索关键词获取哔哩哔哩账号 (优质库)
+# 搜索关键词获取公众号作品 (广域库)
 
-搜索关键词获取哔哩哔哩账号 (优质库)
+通过关键词搜索微信公众号文章，支持按默认/最新/最热排序。搜索范围包括文章标题、摘要和作者。
 
-**`POST`** `https://redfox.hk/story/api/bili/data/accountSearch`
+**`POST`** `https://redfox.hk/story/api/gzh/data/searchArticle`
 
 ---
 
@@ -14,7 +14,7 @@ Official RedFoxHub API document for this script:
 
 **Method**: `POST`
 **Host**: `https://redfox.hk`
-**Path**: `/story/api/bili/data/accountSearch`
+**Path**: `/story/api/gzh/data/searchArticle`
 
 ---
 
@@ -31,10 +31,10 @@ Official RedFoxHub API document for this script:
 
 | 参数 | 类型 | 必填 | 说明 | 示例 |
 | --- | --- | --- | --- | --- |
-| keyword | String | 是 | （必填，搜索关键词） | 影视飓风 |
-| page | String | 是 | （必填，页码，从1开始） | 1 |
-| pageSize | Integer | 否 | 非必填，每页条数，默认10，最大50） | 10 |
-| order | String | 否 | （非必填，排序：follower=粉丝数/like=获赞数，默认相关性） | follower |
+| keyword | String | 是 | 搜索关键词 | 人工智能 |
+| exactMatch | boolean | 否 | 是否精准匹配（默认false） false: 模糊匹配，关键词分词后部分匹配即可召回 true: 精准匹配，关键词作为完整短语必须包含在文章标题、摘要或作者中 | false |
+| offset | Integer | 否 | 偏移量，从0开始，每页+20 | 0 |
+| sortType | String | 否 | 排序方式，0: 默认，2: 最新，4: 最热 | 0 |
 
 ---
 
@@ -48,41 +48,38 @@ Official RedFoxHub API document for this script:
 
 | 字段 | 类型 | 说明 | 示例 |
 | --- | --- | --- | --- |
-| code | Integer | 状态码，2000=成功 | 2000 |
-| msg | String | 提示信息 | 成功 |
-| data | Object |  | — |
-| accountList | Array | 账号列表 | — |
-| face | String | 头像链接 | https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg |
-| follower | Integer | 粉丝数 | 16543755 |
-| lastCreated | String | 最近发文时间 | 2026-06-22 17:00:00 |
-| likeCount | Integer | 总点赞数 | 116559842 |
-| mid | String | 账号MID | 946974 |
-| name | String | 账号名 | 影视飓风 |
-| officialTitle | String | 认证信息 | 2025百大UP主、2023年度最高人气奖UP主、课堂优质讲师 |
-| playCount | Integer | 总播放数 | 251236875 |
-| redFoxIndex | Integer | 红狐指数-日 | 0 |
-| regionDesc | String | 地域-省 | 浙江 |
-| sex | String | 性别 | 男 |
-| sign | String | 账号简介 | 无限进步！商务合作请联系邮箱：bd@ysjf.com（邮件中麻烦备注公司、咨询内容）店铺名：影视飓风 |
-| type | String | 一级分类 | 科技 |
-| typeV2 | String | 二级分类 | 数码 |
-| videoCount | Integer | 总发布作品数 | 908 |
-| page | Integer | 当前页码 | 1 |
-| pageSize | Integer | 每页条数 | 10 |
-| total | Integer | 总条数 | 3540 |
+| code | Integer | 接口响应状态码，例如 2000 表示成功 | 2000 |
+| msg | String | 接口响应的提示或错误信息 | 成功 |
+| data | Object | 接口返回的主要数据内容 | — |
+| list | Array | 搜索结果列表 | — |
+| author | String | 账号昵称 | 科技日报 |
+| authorAvatarUrl | String | 作者头像链接 | http://... |
+| bizInfo | String | 公众号采集用ID | MjM5MjUzNTgzNg== |
+| collectCount | Integer | 收藏数 | 50 |
+| commentCount | Integer | 评论数 | 100 |
+| content | String | 作品正文 | 文章正文HTML内容 |
+| coverUrl | String | 作品封面链接 | http://... |
+| isOriginal | Integer | 原创标识，1 为原创 | 1 |
+| likeCount | Integer | 点赞数 | 500 |
+| orderNum | Integer | 发文位置，0 为头条 | 0 |
+| originalAuthor | String | 原创作者 | 原创作者 |
+| publishTime | String | 发布时间 | 2026-07-20 |
+| readCount | Integer | 阅读数 | 10000 |
+| shareCount | Integer | 分享数 | 30 |
+| sourceUrl | String | 阅读原文链接 | http://... |
+| summary | String | 作品简介 | 文章摘要 |
+| title | String | 作品标题 | 人工智能的未来 |
+| watchCount | Integer | 在看数 | 200 |
+| workUrl | String | 作品链接 | http://mp.weixin.qq.com/s?... |
+| workUuid | String | 作品ID | abc123def456 |
+| total | Integer | 搜索结果总数 | 200 |
 
 ---
 
 ## 请求示例
 
 ```bash
-请求参数：
-{
-  "keyword": "影视飓风",
-  "page": "1",
-  "pageSize": 10,
-  "order": "follower"
-}
+
 ```
 
 ---
@@ -92,31 +89,35 @@ Official RedFoxHub API document for this script:
 ```json
 {
   "code": 2000,
-  "msg": "成功",
   "data": {
-    "accountList": [
+    "total": 200,
+    "list": [
       {
-        "name": "影视飓风",
-        "mid": "946974",
-        "sex": "男",
-        "face": "https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg",
-        "follower": 16543755,
-        "officialTitle": "2025百大UP主、2023年度最高人气奖UP主、课堂优质讲师",
-        "sign": "无限进步！商务合作请联系邮箱：bd@ysjf.com（邮件中麻烦备注公司、咨询内容）店铺名：影视飓风",
-        "type": "科技",
-        "typeV2": "数码",
-        "videoCount": 908,
-        "likeCount": 116559842,
-        "playCount": 251236875,
-        "redFoxIndex": 0,
-        "lastCreated": "2026-06-22 17:00:00",
-        "regionDesc": "浙江"
+        "title": "人工智能的未来",
+        "summary": "文章摘要",
+        "content": "文章正文HTML内容",
+        "workUrl": "http://mp.weixin.qq.com/s?...",
+        "coverUrl": "http://...",
+        "publishTime": "2026-07-20",
+        "readCount": 10000,
+        "likeCount": 500,
+        "watchCount": 200,
+        "author": "科技日报",
+        "isOriginal": 1,
+        "orderNum": 0,
+        "commentCount": 100,
+        "collectCount": 50,
+        "shareCount": 30,
+        "sourceUrl": "http://...",
+        "syncTime": "2026-07-20",
+        "originalAuthor": "原创作者",
+        "authorAvatarUrl": "http://...",
+        "bizInfo": "MjM5MjUzNTgzNg==",
+        "workUuid": "abc123def456"
       }
-    ],
-    "page": 1,
-    "pageSize": 10,
-    "total": 3540
-  }
+    ]
+  },
+  "msg": "成功"
 }
 ```
 
@@ -145,8 +146,8 @@ import requests
 
 from bamboo.helpers.config import load_builtin_skill_variables
 
-SKILL_NAME = 'bilibili-reach'
-API_URL = 'https://redfox.hk/story/api/bili/data/accountSearch'
+SKILL_NAME = "gzh-reach"
+API_URL = 'https://redfox.hk/story/api/gzh/data/searchArticle'
 
 
 class RedFoxHubError(RuntimeError):
@@ -154,11 +155,11 @@ class RedFoxHubError(RuntimeError):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='搜索关键词获取哔哩哔哩账号 (优质库)')
+    parser = argparse.ArgumentParser(description='搜索关键词获取公众号作品 (广域库)')
     parser.add_argument('keyword')
-    parser.add_argument('--page', default='1')
-    parser.add_argument('--page-size', type=int, default=10)
-    parser.add_argument('--order', default=None)
+    parser.add_argument('--exact-match', action='store_true')
+    parser.add_argument('--offset', type=int, default=0)
+    parser.add_argument('--sort-type', default='0')
     args = parser.parse_args(argv)
     try:
         data = call_api(build_payload(args))
@@ -172,9 +173,9 @@ def main(argv: list[str] | None = None) -> int:
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     payload = {
         'keyword': args.keyword,
-        'page': args.page,
-        'pageSize': args.page_size,
-        'order': args.order,
+        'exactMatch': args.exact_match,
+        'offset': args.offset,
+        'sortType': args.sort_type,
     }
     return {key: value for key, value in payload.items() if value not in (None, "")}
 

@@ -1,6 +1,6 @@
 ---
 name: bilibili-reach
-description: Query Bilibili videos, UP accounts, account videos, and video details through RedFoxHub APIs.
+description: Query and download Bilibili content through documented RedFoxHub APIs.
 user-invocable: true
 load-experiences: false
 metadata:
@@ -16,47 +16,24 @@ metadata:
 
 ## When to Use
 
-Use this skill when the task needs Bilibili video search, UP account search, UP account details, a creator's video list, a single video detail, or video download parsing from RedFoxHub.
+Use this skill for Bilibili capabilities covered by the local RedFoxHub API documents in `docs/`: video download, keyword video search, keyword account search, video detail, and account video list.
 
-Do not use this skill for direct Bilibili browser automation, login-only data, or state-changing actions.
+Do not use this skill for undocumented Bilibili APIs, browser automation, login-only data, comments, danmaku, favorites, or state-changing actions.
 
 ## Authentication
 
-All scripts call RedFoxHub and require `REDFOX_API_KEY`.
-
-```bash
-export REDFOX_API_KEY="ak_xxxx"
-```
-
-The optional `REDFOX_BASE_URL` overrides the default host `https://redfox.hk`.
+All scripts require `REDFOX_API_KEY`, usually loaded from `~/.bamboo/.env`.
 
 ## Scripts
 
-Run scripts with the same Python environment that runs Bamboo.
-
 ```bash
-python <skill_dir>/scripts/search_videos.py "AI" --page 1 --page-size 10 --order time
+python <skill_dir>/scripts/download_video.py "https://www.bilibili.com/video/BV1AmSSBMEqo/"
+python <skill_dir>/scripts/search_videos.py "羽绒服" --page 1 --page-size 10 --order time
 python <skill_dir>/scripts/search_accounts.py "影视飓风" --page 1 --page-size 10 --order follower
-python <skill_dir>/scripts/get_video.py BV1ghJg6hEWV
-python <skill_dir>/scripts/get_video.py "https://www.bilibili.com/video/BV1ghJg6hEWV"
-python <skill_dir>/scripts/get_account.py 946974
+python <skill_dir>/scripts/get_video.py --bv-id BV1ghJg6hEWV
+python <skill_dir>/scripts/get_video.py --work-url "https://www.bilibili.com/video/BV1ghJg6hEWV/"
 python <skill_dir>/scripts/list_account_videos.py --mid 946974 --page 1 --page-size 10 --order time
 python <skill_dir>/scripts/list_account_videos.py --account-url "https://space.bilibili.com/946974"
-python <skill_dir>/scripts/download_video.py "https://www.bilibili.com/video/BV1ghJg6hEWV"
-python <skill_dir>/scripts/download_video.py "https://www.bilibili.com/video/BV1ghJg6hEWV" --output-dir ./downloads
 ```
 
-## Capability Notes
-
-- `search_videos.py` calls RedFoxHub Bilibili video search.
-- `search_accounts.py` calls RedFoxHub Bilibili UP search.
-- `get_video.py` fetches one video by `bvid` or URL.
-- `get_account.py` fetches one UP account by `mid`.
-- `list_account_videos.py` lists videos for one UP account by `mid` or account URL.
-- `download_video.py` calls RedFoxHub's short-video parser and optionally saves the first detected video URL when `--output-dir` is provided.
-
-Outputs are JSON. Keep final answers grounded in returned fields and URLs.
-
-## Failure Handling
-
-If RedFoxHub returns an auth, quota, unsupported endpoint, or rate-limit error, report the error and ask the user to verify `REDFOX_API_KEY`, quota, and endpoint availability. Do not fall back to Bilibili cookies, private APIs, or browser token extraction.
+Each script has the official request and response example copied at the top of the file. Keep behavior aligned with the corresponding document in `docs/`.

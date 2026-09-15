@@ -1,132 +1,190 @@
 #!/usr/bin/env python3
+"""
+Official RedFoxHub API document for this script:
+
+#  获取抖音账号信息  (优质库)
+
+查询用户信息
+
+**`POST`** `https://redfox.hk/story/api/dyData/queryUser`
+
+---
+
+## API 说明
+
+**Method**: `POST`
+**Host**: `https://redfox.hk`
+**Path**: `/story/api/dyData/queryUser`
+
+---
+
+## 请求头
+
+| 名称 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| REDFOX_API_KEY | string | 是 | 平台鉴权令牌，每次请求必填 | ak_xxxxxx |
+| Content-Type | string | 是 | 请求体数据类型 | application/json |
+
+---
+
+## 请求参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| accountId | String | 是 | 抖音账号id（支持unique_id、short_id、uid任一匹配查询） | dy_user123 |
+
+---
+
+## 返回值与结构
+
+统一包装一般为 `code`、`message`/`msg`、`data`（以实际服务为准）。
+
+---
+
+## 响应字段
+
+| 字段 | 类型 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| code | Integer | 状态码（2000=成功） | 2000 |
+| msg | String | 提示信息 | 成功 |
+| data | Object | 返回数据 | — |
+| age | Integer | 年龄 | 25 |
+| avatarUrl | String | 头像链接 | https://example.com/avatar.jpg |
+| awemeCount | Integer | 作品数 | 200 |
+| city | String | 城市 | 深圳 |
+| country | String | 国家 | 中国 |
+| crawlTime | String | 数据更新时间 | 2026-05-20 12:00:00 |
+| displayId | String | 账号平台展示id（unique_id优先，备选short_id） | dy_user123 |
+| followerCount | Integer | 粉丝数 | 100000 |
+| gender | String | 性别 | 男 |
+| ipLocation | String | IP归属地 | 广东 |
+| nickname | String | 账号名 | 抖音用户昵称 |
+| province | String | 省份 | 广东 |
+| signature | String | 账号简介 | 这是抖音账号简介 |
+| totalFavorited | Long | 总获赞数 | 5000000 |
+| uid | String | 用户uid | 1234567890 |
+
+---
+
+## 请求示例
+
+```bash
+curl -X POST "https://redfox.hk/story/api/dyData/queryUser"
+  -H "Content-Type: application/json"
+  -H "REDFOX_API_KEY: your_api_key"
+  -d '{"accountId": "dy_user123"}'
+```
+
+---
+
+## 响应示例
+
+```json
+{
+  "code": 2000,
+  "msg": "成功",
+  "data": {
+    "nickname": "抖音用户昵称",
+    "avatarUrl": "https://example.com/avatar.jpg",
+    "signature": "这是抖音账号简介",
+    "displayId": "dy_user123",
+    "uid": "1234567890",
+    "gender": "男",
+    "age": 25,
+    "country": "中国",
+    "province": "广东",
+    "city": "深圳",
+    "ipLocation": "广东",
+    "followerCount": 100000,
+    "awemeCount": 200,
+    "totalFavorited": 5000000,
+    "crawlTime": "2026-05-20 12:00:00"
+  }
+}
+```
+
+---
+
+## 密钥获取与安全说明
+
+- 本API需要使用API密钥 `REDFOX_API_KEY`。
+- API密钥由 [红狐 hub](https://redfox.hk/settings/api-keys?source=redfox_api_md) (`https://redfox.hk`)提供。
+- 请前往 [红狐 hub](https://redfox.hk?source=redfox_api_md) 注册并登录账号，在密钥管理模块创建 API密钥。
+- 复制并仅在请求头中使用API密钥。
+- 在提供密钥前，请先确认密钥来源、可用范围、有效期及是否支持重置/撤销。
+- 禁止在代码、提示词、日志或输出文件中硬编码/明文暴露密钥。
+
+"""
+
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
+from typing import Any
+
+import requests
 
 from bamboo.helpers.config import load_builtin_skill_variables
 
-DEFAULT_BASE_URL = "https://redfox.hk"
+SKILL_NAME = 'douyin-reach'
+API_URL = 'https://redfox.hk/story/api/dyData/queryUser'
 
 
 class RedFoxHubError(RuntimeError):
     """Raised when RedFoxHub cannot complete a request."""
 
 
-def load_api_key(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
-    if not api_key:
-        raise RedFoxHubError("missing REDFOX_API_KEY; set it in the environment or the built-in skill variables")
-    return api_key
-
-
-def base_url(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    return (
-        os.environ.get("REDFOX_BASE_URL")
-        or str(variables.get("REDFOX_BASE_URL") or DEFAULT_BASE_URL)
-    ).rstrip("/")
-
-
-def post(skill_name: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "POST", path, payload=payload)
-
-
-def get(skill_name: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "GET", path, params=params)
-
-
-def print_json(value: Any) -> None:
-    print(json.dumps(value, ensure_ascii=False, indent=2))
-
-
-def handle_cli(func) -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description='获取抖音账号信息  (优质库)')
+    parser.add_argument('account_id')
+    args = parser.parse_args(argv)
     try:
-        print_json(func())
-        return 0
+        data = call_api(build_payload(args))
     except RedFoxHubError as exc:
         print(f"RedFoxHub error: {exc}", file=sys.stderr)
         return 1
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
 
 
-def compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def build_payload(args: argparse.Namespace) -> dict[str, Any]:
+    payload = {
+        'accountId': args.account_id,
+    }
     return {key: value for key, value in payload.items() if value not in (None, "")}
 
 
-def _request(
-    skill_name: str,
-    method: str,
-    path: str,
-    *,
-    payload: dict[str, Any] | None = None,
-    params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    api_key = load_api_key(skill_name)
-    url = f"{base_url(skill_name)}{path}"
-    data = None
-    if method == "POST":
-        data = json.dumps(compact_payload(payload or {}), ensure_ascii=False).encode("utf-8")
-    elif params:
-        query = urllib.parse.urlencode(compact_payload(params), doseq=True)
-        url = f"{url}?{query}"
-
-    request = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "Bamboo RedFoxHub Reach/1",
-            "REDFOX_API_KEY": api_key,
-            "X-API-KEY": api_key,
-            "X-API-Key": api_key,
-            "REDFOX-API-KEY": api_key,
-        },
-    )
+def call_api(payload: dict[str, Any]) -> dict[str, Any]:
+    api_key = load_api_key()
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            status = response.status
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1000]
-        raise RedFoxHubError(f"HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
+        response = requests.post(
+            API_URL,
+            json=payload,
+            headers={
+                "REDFOX_API_KEY": api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
         raise RedFoxHubError(f"network failure: {exc}") from exc
-
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RedFoxHubError(f"invalid JSON response from HTTP {status}: {raw[:500]}") from exc
-
-    code = parsed.get("code") if isinstance(parsed, dict) else None
-    if code not in (None, 0, 2000, "0", "2000"):
-        message = parsed.get("msg") or parsed.get("message") or "unknown RedFoxHub error"
-        raise RedFoxHubError(f"code={code}: {message}")
-    return {
-        "source": "RedFoxHub",
-        "method": method,
-        "path": path,
-        "data": parsed.get("data", parsed) if isinstance(parsed, dict) else parsed,
-    }
-
-import argparse
+        data = response.json()
+    except ValueError as exc:
+        raise RedFoxHubError(f"invalid JSON response from HTTP {response.status_code}: {response.text[:500]}") from exc
+    if response.status_code >= 400:
+        raise RedFoxHubError(f"HTTP {response.status_code}: {response.text[:1000]}")
+    return data
 
 
-SKILL = "douyin-reach"
-PATH = "/story/api/dyData/queryUser"
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Fetch Douyin account details through RedFoxHub.")
-    parser.add_argument("account_id", help="Douyin unique_id, short_id, uid, or account id.")
-    args = parser.parse_args()
-    return handle_cli(lambda: post(SKILL, PATH, {"accountId": args.account_id}))
+def load_api_key() -> str:
+    variables = load_builtin_skill_variables(SKILL_NAME)
+    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
+    if not api_key:
+        raise RedFoxHubError("missing REDFOX_API_KEY; set it in ~/.bamboo/.env or built-in skill variables")
+    return api_key
 
 
 if __name__ == "__main__":

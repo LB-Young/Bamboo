@@ -2,11 +2,11 @@
 """
 Official RedFoxHub API document for this script:
 
-# 搜索关键词获取哔哩哔哩账号 (优质库)
+# AI垂类——搜索公众号AI相关作品
 
-搜索关键词获取哔哩哔哩账号 (优质库)
+按关键词搜索公众号作品，仅限 AI 垂直内容——专门收录 AI创作相关文章。搜索全部公众号文章请用「搜索关键词获取公众号作品（广域库）」接口。
 
-**`POST`** `https://redfox.hk/story/api/bili/data/accountSearch`
+**`POST`** `https://redfox.hk/story/api/parseWork/queryAiMsgs`
 
 ---
 
@@ -14,7 +14,7 @@ Official RedFoxHub API document for this script:
 
 **Method**: `POST`
 **Host**: `https://redfox.hk`
-**Path**: `/story/api/bili/data/accountSearch`
+**Path**: `/story/api/parseWork/queryAiMsgs`
 
 ---
 
@@ -31,10 +31,11 @@ Official RedFoxHub API document for this script:
 
 | 参数 | 类型 | 必填 | 说明 | 示例 |
 | --- | --- | --- | --- | --- |
-| keyword | String | 是 | （必填，搜索关键词） | 影视飓风 |
-| page | String | 是 | （必填，页码，从1开始） | 1 |
-| pageSize | Integer | 否 | 非必填，每页条数，默认10，最大50） | 10 |
-| order | String | 否 | （非必填，排序：follower=粉丝数/like=获赞数，默认相关性） | follower |
+| keyword | String | 是 | 搜索关键词 | 人工智能 |
+| pageNum | Integer | 是 | 页码 | 1 |
+| pageSize | Integer | 是 | 每页条数 | 20 |
+| startTime | String | 否 | start时间 | 2026-06-01 00:00:00 |
+| endTime | String | 否 | 结束时间 | 2026-06-01 23:59:59 |
 
 ---
 
@@ -48,41 +49,37 @@ Official RedFoxHub API document for this script:
 
 | 字段 | 类型 | 说明 | 示例 |
 | --- | --- | --- | --- |
-| code | Integer | 状态码，2000=成功 | 2000 |
+| code | Integer | 状态码（2000=成功） | 2000 |
 | msg | String | 提示信息 | 成功 |
-| data | Object |  | — |
-| accountList | Array | 账号列表 | — |
-| face | String | 头像链接 | https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg |
-| follower | Integer | 粉丝数 | 16543755 |
-| lastCreated | String | 最近发文时间 | 2026-06-22 17:00:00 |
-| likeCount | Integer | 总点赞数 | 116559842 |
-| mid | String | 账号MID | 946974 |
-| name | String | 账号名 | 影视飓风 |
-| officialTitle | String | 认证信息 | 2025百大UP主、2023年度最高人气奖UP主、课堂优质讲师 |
-| playCount | Integer | 总播放数 | 251236875 |
-| redFoxIndex | Integer | 红狐指数-日 | 0 |
-| regionDesc | String | 地域-省 | 浙江 |
-| sex | String | 性别 | 男 |
-| sign | String | 账号简介 | 无限进步！商务合作请联系邮箱：bd@ysjf.com（邮件中麻烦备注公司、咨询内容）店铺名：影视飓风 |
-| type | String | 一级分类 | 科技 |
-| typeV2 | String | 二级分类 | 数码 |
-| videoCount | Integer | 总发布作品数 | 908 |
-| page | Integer | 当前页码 | 1 |
-| pageSize | Integer | 每页条数 | 10 |
-| total | Integer | 总条数 | 3540 |
+| data | Object | 返回数据 | — |
+| list | Array | 数据列表 | — |
+| authorId | String | authorID | 10000123456789 |
+| commentCount | Integer | 评论数 | 280 |
+| coverUrl | String | 封面链接 | https://example.com/cover.jpg |
+| gmtCreate | String | 创建时间 | 2026-01-01 00:00:00 |
+| gmtModified | String | 修改时间 | 2026-01-01 00:00:00 |
+| likeCount | Integer | 点赞数 | 3500 |
+| photoId | String | photoID | 10000123456789 |
+| platform | Integer | platform | example |
+| readCount | Integer | 阅读数 | 50000 |
+| shareCount | Integer | 分享数 | 150 |
+| title | String | 标题 | 人工智能热门课程 |
+| topic | String | topic | — |
+| type | String | 类型 | default |
+| url | String | 链接地址 | https://example.com/example |
+| userHeadUrl | String | userHead链接 | https://example.com/example |
+| userName | String | user名称 | 示例用户 |
+| pageNum | Integer | 页码 | 1 |
+| pages | Integer | pages | 25 |
+| pageSize | Integer | 每页条数 | 20 |
+| total | Long | 总数 | 100 |
 
 ---
 
 ## 请求示例
 
 ```bash
-请求参数：
-{
-  "keyword": "影视飓风",
-  "page": "1",
-  "pageSize": 10,
-  "order": "follower"
-}
+
 ```
 
 ---
@@ -94,28 +91,28 @@ Official RedFoxHub API document for this script:
   "code": 2000,
   "msg": "成功",
   "data": {
-    "accountList": [
-      {
-        "name": "影视飓风",
-        "mid": "946974",
-        "sex": "男",
-        "face": "https://i0.hdslb.com/bfs/face/c1733474892caa45952b2c09a89323157df7129a.jpg",
-        "follower": 16543755,
-        "officialTitle": "2025百大UP主、2023年度最高人气奖UP主、课堂优质讲师",
-        "sign": "无限进步！商务合作请联系邮箱：bd@ysjf.com（邮件中麻烦备注公司、咨询内容）店铺名：影视飓风",
-        "type": "科技",
-        "typeV2": "数码",
-        "videoCount": 908,
-        "likeCount": 116559842,
-        "playCount": 251236875,
-        "redFoxIndex": 0,
-        "lastCreated": "2026-06-22 17:00:00",
-        "regionDesc": "浙江"
-      }
+    "list": [
+      "photoId": "10000123456789",
+      "authorId": "10000123456789",
+      "coverUrl": "https://example.com/cover.jpg",
+      "userName": "示例用户",
+      "userHeadUrl": "https://example.com/example",
+      "title": "人工智能热门课程",
+      "platform": example,
+      "url": "https://example.com/example",
+      "likeCount": 3500,
+      "commentCount": 280,
+      "shareCount": 150,
+      "readCount": 50000,
+      "type": "default",
+      "topic": "示例值",
+      "gmtCreate": "2026-01-01 00:00:00",
+      "gmtModified": "2026-01-01 00:00:00"
     ],
-    "page": 1,
-    "pageSize": 10,
-    "total": 3540
+    "total": 100,
+    "pageNum": 1,
+    "pageSize": 20,
+    "pages": 25
   }
 }
 ```
@@ -145,8 +142,8 @@ import requests
 
 from bamboo.helpers.config import load_builtin_skill_variables
 
-SKILL_NAME = 'bilibili-reach'
-API_URL = 'https://redfox.hk/story/api/bili/data/accountSearch'
+SKILL_NAME = "gzh-reach"
+API_URL = 'https://redfox.hk/story/api/parseWork/queryAiMsgs'
 
 
 class RedFoxHubError(RuntimeError):
@@ -154,11 +151,12 @@ class RedFoxHubError(RuntimeError):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='搜索关键词获取哔哩哔哩账号 (优质库)')
+    parser = argparse.ArgumentParser(description='AI垂类——搜索公众号AI相关作品')
     parser.add_argument('keyword')
-    parser.add_argument('--page', default='1')
-    parser.add_argument('--page-size', type=int, default=10)
-    parser.add_argument('--order', default=None)
+    parser.add_argument('--page-num', type=int, default=1)
+    parser.add_argument('--page-size', type=int, default=20)
+    parser.add_argument('--start-time', default=None)
+    parser.add_argument('--end-time', default=None)
     args = parser.parse_args(argv)
     try:
         data = call_api(build_payload(args))
@@ -172,9 +170,10 @@ def main(argv: list[str] | None = None) -> int:
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     payload = {
         'keyword': args.keyword,
-        'page': args.page,
+        'pageNum': args.page_num,
         'pageSize': args.page_size,
-        'order': args.order,
+        'startTime': args.start_time,
+        'endTime': args.end_time,
     }
     return {key: value for key, value in payload.items() if value not in (None, "")}
 

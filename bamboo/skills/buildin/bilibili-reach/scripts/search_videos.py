@@ -1,140 +1,229 @@
 #!/usr/bin/env python3
+"""
+Official RedFoxHub API document for this script:
+
+# 搜索关键词获取哔哩哔哩作品 (优质库)
+
+搜索关键词获取哔哩哔哩作品 (优质库)
+
+**`POST`** `https://redfox.hk/story/api/bili/data/workSearch`
+
+---
+
+## API 说明
+
+**Method**: `POST`
+**Host**: `https://redfox.hk`
+**Path**: `/story/api/bili/data/workSearch`
+
+---
+
+## 请求头
+
+| 名称 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| REDFOX_API_KEY | string | 是 | 平台鉴权令牌，每次请求必填 | ak_xxxxxx |
+| Content-Type | string | 是 | 请求体数据类型 | application/json |
+
+---
+
+## 请求参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 |
+| --- | --- | --- | --- | --- |
+| keyword | String | 是 | （必填，搜索关键词） | 羽绒服 |
+| exactMatch | Boolean | 否 | 是否精准匹配（默认false） false: 模糊匹配，关键词分词后部分匹配即可召回 true: 精准匹配，关键词作为完整短语必须包含在作品标题或作者中 | — |
+| page | String | 是 | （必填，页码） | 1 |
+| pageSize | Integer | 否 | （非必填，每页条数，默认10，最大50） | 10 |
+| order | String | 否 | （非必填，排序：time=发布时间/play=播放数/like=点赞数/comment=评论数/favorite=收藏数，默认time） | time |
+
+---
+
+## 返回值与结构
+
+统一包装一般为 `code`、`message`/`msg`、`data`（以实际服务为准）。
+
+---
+
+## 响应字段
+
+| 字段 | 类型 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| code | Integer | 状态码，2000=成功 | 2000 |
+| msg | String | 提示信息 | 成功 |
+| data | Object |  | — |
+| page | Integer | 当前页码 | 1 |
+| pageSize | Integer | 每页条数 | 10 |
+| total | Integer | 总条数 | 25117 |
+| workList | Array | 作品列表 | — |
+| author | String | 作者昵称 | Randall-FD |
+| authorId | String | 作者ID | 31701874 |
+| bvId | String | BV号 | BV1n57e6kEtz |
+| coinCount | Integer | 投币数 | 0 |
+| commentCount | Integer | 评论数 | 0 |
+| created | String | 发布时间 | 2026-06-26 03:03:13 |
+| description | String | 视频描述 | https://youtu.be/pJHNYg7DoeI BGM：少年よ 嘘をつけ! … |
+| duration | Integer | 时长（秒） | 16 |
+| favoriteCount | Integer | 收藏数 | 0 |
+| firstType | String | 一级分类 | 游戏 |
+| interactionQuantity | Integer | 互动数 | 13 |
+| likeCount | Integer | 点赞数 | 12 |
+| picUrl | String | 封面 | http://i0.hdslb.com/bfs/archive/3c6d1ef92af603bc82f7e0edf03cbce1a3857164.jpg |
+| playCount | Integer | 播放数 | 4 |
+| secondType | String | 二级分类 | 网络游戏 |
+| shareCount | Integer | 分享数 | 1 |
+| tagNames | Array | 作品标签 | — |
+| title | String | 作品标题 | 【跑跑卡丁车】【远古视频】日服跑跑宣传视频（走廊奔跑队7） |
+| videoReview | Integer | 弹幕数 | 0 |
+
+---
+
+## 请求示例
+
+```bash
+请求参数：
+{
+  "keyword": "羽绒服",
+  "page": "1",
+  "pageSize": 10,
+  "order": "time"
+}
+```
+
+---
+
+## 响应示例
+
+```json
+{
+  "code": 2000,
+  "msg": "成功",
+  "data": {
+    "workList": [
+      {
+        "bvId": "BV1n57e6kEtz",
+        "title": "【跑跑卡丁车】【远古视频】日服跑跑宣传视频（走廊奔跑队7）",
+        "description": "https://youtu.be/pJHNYg7DoeI\nBGM：少年よ 嘘をつけ! …",
+        "duration": 16,
+        "picUrl": "http://i0.hdslb.com/bfs/archive/3c6d1ef92af603bc82f7e0edf03cbce1a3857164.jpg",
+        "created": "2026-06-26 03:03:13",
+        "author": "Randall-FD",
+        "authorId": "31701874",
+        "firstType": "游戏",
+        "secondType": "网络游戏",
+        "playCount": 4,
+        "likeCount": 12,
+        "favoriteCount": 0,
+        "commentCount": 0,
+        "shareCount": 1,
+        "videoReview": 0,
+        "coinCount": 0,
+        "interactionQuantity": 13,
+        "tagNames": [
+          "跑跑卡丁车",
+          "日服",
+          "宣传片",
+          "宣传视频"
+        ]
+      }
+    ],
+    "page": 1,
+    "pageSize": 10,
+    "total": 25117
+  }
+}
+```
+
+---
+
+## 密钥获取与安全说明
+
+- 本API需要使用API密钥 `REDFOX_API_KEY`。
+- API密钥由 [红狐 hub](https://redfox.hk/settings/api-keys?source=redfox_api_md) (`https://redfox.hk`)提供。
+- 请前往 [红狐 hub](https://redfox.hk?source=redfox_api_md) 注册并登录账号，在密钥管理模块创建 API密钥。
+- 复制并仅在请求头中使用API密钥。
+- 在提供密钥前，请先确认密钥来源、可用范围、有效期及是否支持重置/撤销。
+- 禁止在代码、提示词、日志或输出文件中硬编码/明文暴露密钥。
+
+"""
+
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
+from typing import Any
+
+import requests
 
 from bamboo.helpers.config import load_builtin_skill_variables
 
-DEFAULT_BASE_URL = "https://redfox.hk"
+SKILL_NAME = 'bilibili-reach'
+API_URL = 'https://redfox.hk/story/api/bili/data/workSearch'
 
 
 class RedFoxHubError(RuntimeError):
     """Raised when RedFoxHub cannot complete a request."""
 
 
-def load_api_key(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
-    if not api_key:
-        raise RedFoxHubError("missing REDFOX_API_KEY; set it in the environment or the built-in skill variables")
-    return api_key
-
-
-def base_url(skill_name: str) -> str:
-    variables = load_builtin_skill_variables(skill_name)
-    return (
-        os.environ.get("REDFOX_BASE_URL")
-        or str(variables.get("REDFOX_BASE_URL") or DEFAULT_BASE_URL)
-    ).rstrip("/")
-
-
-def post(skill_name: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "POST", path, payload=payload)
-
-
-def get(skill_name: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
-    return _request(skill_name, "GET", path, params=params)
-
-
-def print_json(value: Any) -> None:
-    print(json.dumps(value, ensure_ascii=False, indent=2))
-
-
-def handle_cli(func) -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description='搜索关键词获取哔哩哔哩作品 (优质库)')
+    parser.add_argument('keyword')
+    parser.add_argument('--exact-match', action='store_true')
+    parser.add_argument('--page', default='1')
+    parser.add_argument('--page-size', type=int, default=10)
+    parser.add_argument('--order', default='time')
+    args = parser.parse_args(argv)
     try:
-        print_json(func())
-        return 0
+        data = call_api(build_payload(args))
     except RedFoxHubError as exc:
         print(f"RedFoxHub error: {exc}", file=sys.stderr)
         return 1
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
 
 
-def compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def build_payload(args: argparse.Namespace) -> dict[str, Any]:
+    payload = {
+        'keyword': args.keyword,
+        'exactMatch': args.exact_match,
+        'page': args.page,
+        'pageSize': args.page_size,
+        'order': args.order,
+    }
     return {key: value for key, value in payload.items() if value not in (None, "")}
 
 
-def _request(
-    skill_name: str,
-    method: str,
-    path: str,
-    *,
-    payload: dict[str, Any] | None = None,
-    params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    api_key = load_api_key(skill_name)
-    url = f"{base_url(skill_name)}{path}"
-    data = None
-    if method == "POST":
-        data = json.dumps(compact_payload(payload or {}), ensure_ascii=False).encode("utf-8")
-    elif params:
-        query = urllib.parse.urlencode(compact_payload(params), doseq=True)
-        url = f"{url}?{query}"
-
-    request = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "Bamboo RedFoxHub Reach/1",
-            "REDFOX_API_KEY": api_key,
-            "X-API-KEY": api_key,
-            "X-API-Key": api_key,
-            "REDFOX-API-KEY": api_key,
-        },
-    )
+def call_api(payload: dict[str, Any]) -> dict[str, Any]:
+    api_key = load_api_key()
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            status = response.status
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:1000]
-        raise RedFoxHubError(f"HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
+        response = requests.post(
+            API_URL,
+            json=payload,
+            headers={
+                "REDFOX_API_KEY": api_key,
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
         raise RedFoxHubError(f"network failure: {exc}") from exc
-
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RedFoxHubError(f"invalid JSON response from HTTP {status}: {raw[:500]}") from exc
-
-    code = parsed.get("code") if isinstance(parsed, dict) else None
-    if code not in (None, 0, 2000, "0", "2000"):
-        message = parsed.get("msg") or parsed.get("message") or "unknown RedFoxHub error"
-        raise RedFoxHubError(f"code={code}: {message}")
-    return {
-        "source": "RedFoxHub",
-        "method": method,
-        "path": path,
-        "data": parsed.get("data", parsed) if isinstance(parsed, dict) else parsed,
-    }
-
-import argparse
+        data = response.json()
+    except ValueError as exc:
+        raise RedFoxHubError(f"invalid JSON response from HTTP {response.status_code}: {response.text[:500]}") from exc
+    if response.status_code >= 400:
+        raise RedFoxHubError(f"HTTP {response.status_code}: {response.text[:1000]}")
+    return data
 
 
-SKILL = "bilibili-reach"
-PATH = "/story/api/bili/data/workSearch"
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Search Bilibili videos through RedFoxHub.")
-    parser.add_argument("keyword")
-    parser.add_argument("--page", type=int, default=1)
-    parser.add_argument("--page-size", type=int, default=10)
-    parser.add_argument("--order", default="time", choices=["time", "play", "like", "comment", "favorite"])
-    args = parser.parse_args()
-    return handle_cli(lambda: post(SKILL, PATH, {
-        "keyword": args.keyword,
-        "page": args.page,
-        "pageSize": args.page_size,
-        "order": args.order,
-    }))
+def load_api_key() -> str:
+    variables = load_builtin_skill_variables(SKILL_NAME)
+    api_key = os.environ.get("REDFOX_API_KEY") or str(variables.get("REDFOX_API_KEY") or "")
+    if not api_key:
+        raise RedFoxHubError("missing REDFOX_API_KEY; set it in ~/.bamboo/.env or built-in skill variables")
+    return api_key
 
 
 if __name__ == "__main__":
