@@ -17,7 +17,7 @@ metadata:
 
 ## When to Use
 
-Use this skill when the task needs Xiaohongshu note search, account search, account details, note details, account note lists, hot-note discovery, hot accounts, or comment retrieval through RedFoxHub.
+Use this skill when the task needs Xiaohongshu note search, account search, account details, note details, account note lists, hot-note discovery, hot accounts, note video download parsing, or comment retrieval through RedFoxHub.
 
 Do not use this skill for direct browser automation, login-only pages, private notes, private collections, publishing, liking, following, or messaging.
 
@@ -45,6 +45,8 @@ python <skill_dir>/scripts/hot_notes.py --kind daily --rank-date 2026-09-13 --ca
 python <skill_dir>/scripts/hot_notes.py --kind weekly --category 美味佳肴
 python <skill_dir>/scripts/hot_notes.py --kind dark-horse --keyword "睫毛膏" --start-date 2026-08-15
 python <skill_dir>/scripts/hot_notes.py --kind hot-accounts --date-type 1 --rank-date 2026-09-13 --type 综合全部
+python <skill_dir>/scripts/download_video.py "https://www.xiaohongshu.com/explore/..."
+python <skill_dir>/scripts/download_video.py "https://www.xiaohongshu.com/explore/..." --output-dir ./downloads
 python <skill_dir>/scripts/comments.py submit "opus_id" --data-num 100
 python <skill_dir>/scripts/comments.py result "task_id_from_submit"
 ```
@@ -57,6 +59,7 @@ python <skill_dir>/scripts/comments.py result "task_id_from_submit"
 - `get_account.py` fetches one creator/account.
 - `list_account_notes.py` lists notes from one account.
 - `hot_notes.py` covers hot-note search, daily/weekly hot lists, low-follower explosive notes, and hot accounts.
+- `download_video.py` calls RedFoxHub's short-video parser and optionally saves the first detected video URL when `--output-dir` is provided.
 - `comments.py` submits and polls comment tasks.
 
 Outputs are JSON. State clearly when a result comes from RedFoxHub's premium library, hot-list dataset, or an async task result.

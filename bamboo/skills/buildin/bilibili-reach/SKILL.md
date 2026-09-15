@@ -16,9 +16,9 @@ metadata:
 
 ## When to Use
 
-Use this skill when the task needs Bilibili video search, UP account search, UP account details, a creator's video list, or a single video detail from RedFoxHub.
+Use this skill when the task needs Bilibili video search, UP account search, UP account details, a creator's video list, a single video detail, or video download parsing from RedFoxHub.
 
-Do not use this skill for direct Bilibili browser automation, login-only data, state-changing actions, or media download.
+Do not use this skill for direct Bilibili browser automation, login-only data, or state-changing actions.
 
 ## Authentication
 
@@ -42,6 +42,8 @@ python <skill_dir>/scripts/get_video.py "https://www.bilibili.com/video/BV1ghJg6
 python <skill_dir>/scripts/get_account.py 946974
 python <skill_dir>/scripts/list_account_videos.py --mid 946974 --page 1 --page-size 10 --order time
 python <skill_dir>/scripts/list_account_videos.py --account-url "https://space.bilibili.com/946974"
+python <skill_dir>/scripts/download_video.py "https://www.bilibili.com/video/BV1ghJg6hEWV"
+python <skill_dir>/scripts/download_video.py "https://www.bilibili.com/video/BV1ghJg6hEWV" --output-dir ./downloads
 ```
 
 ## Capability Notes
@@ -51,6 +53,7 @@ python <skill_dir>/scripts/list_account_videos.py --account-url "https://space.b
 - `get_video.py` fetches one video by `bvid` or URL.
 - `get_account.py` fetches one UP account by `mid`.
 - `list_account_videos.py` lists videos for one UP account by `mid` or account URL.
+- `download_video.py` calls RedFoxHub's short-video parser and optionally saves the first detected video URL when `--output-dir` is provided.
 
 Outputs are JSON. Keep final answers grounded in returned fields and URLs.
 

@@ -17,9 +17,9 @@ metadata:
 
 ## When to Use
 
-Use this skill when the task needs Douyin work search, account search, account details, work details, account work lists, hot ranks, hot accounts, or RedFoxHub transcript extraction.
+Use this skill when the task needs Douyin work search, account search, account details, work details, account work lists, hot ranks, hot accounts, video download parsing, or RedFoxHub transcript extraction.
 
-Do not use this skill for direct Douyin browser automation, publishing, liking, following, downloading media, or login-only creator-center data.
+Do not use this skill for direct Douyin browser automation, publishing, liking, following, or login-only creator-center data.
 
 ## Authentication
 
@@ -45,6 +45,8 @@ python <skill_dir>/scripts/list_account_works.py --account-id nxpt260212 --offse
 python <skill_dir>/scripts/list_account_works.py --wide --unique-name luoyonghao --page-num 1 --page-size 10
 python <skill_dir>/scripts/hot_rank.py --kind daily-hot --type 美食
 python <skill_dir>/scripts/hot_rank.py --kind hot-accounts --date-type days --rank-date 2026-09-13 --type 全部
+python <skill_dir>/scripts/download_video.py "https://www.douyin.com/video/..."
+python <skill_dir>/scripts/download_video.py "https://www.douyin.com/video/..." --output-dir ./downloads
 python <skill_dir>/scripts/transcript.py submit "https://www.douyin.com/video/..."
 python <skill_dir>/scripts/transcript.py result "task_id_from_submit"
 ```
@@ -57,6 +59,7 @@ python <skill_dir>/scripts/transcript.py result "task_id_from_submit"
 - `get_account.py` fetches one account profile.
 - `list_account_works.py` lists one account's works.
 - `hot_rank.py` fetches daily hot works, daily/weekly surge ranks, or hot account recommendations.
+- `download_video.py` calls RedFoxHub's short-video parser and optionally saves the first detected video URL when `--output-dir` is provided.
 - `transcript.py` submits and polls RedFoxHub video transcript extraction.
 
 Outputs are JSON. For analysis, cite the returned `workUrl`, `opusUrl`, `authorLink`, or equivalent URL fields when available.

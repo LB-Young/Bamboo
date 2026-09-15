@@ -46,26 +46,6 @@ skills:
       can_edit_files: false
       can_access_network: true
 
-  paper-reach:
-    enabled: true
-    user_invocable: true
-    load_experiences: false
-    load_policy:
-      auto_select: true
-      max_references: 0
-      max_tokens: 3500
-    variables:
-      PAPER_REACH_USER_AGENT: "Bamboo Paper Reach/1"
-    requirements:
-      bins:
-        - python
-      env: []
-      python_packages: []
-    permissions:
-      can_run_commands: true
-      can_edit_files: false
-      can_access_network: true
-
   humanize-writing:
     enabled: true
     user_invocable: true
@@ -139,26 +119,6 @@ skills:
       bins:
         - python
         - yt-dlp
-      env: []
-      python_packages: []
-    permissions:
-      can_run_commands: true
-      can_edit_files: false
-      can_access_network: true
-
-  rss-reach:
-    enabled: true
-    user_invocable: true
-    load_experiences: false
-    load_policy:
-      auto_select: true
-      max_references: 0
-      max_tokens: 3000
-    variables:
-      RSS_REACH_USER_AGENT: "Bamboo RSS Reach/1"
-    requirements:
-      bins:
-        - python
       env: []
       python_packages: []
     permissions:
