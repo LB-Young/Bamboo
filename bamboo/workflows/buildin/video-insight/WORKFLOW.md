@@ -1,0 +1,129 @@
+---
+name: video-insight
+description: Extract audio, speech transcript, keyframes, OCR text, keyframe descriptions, and visual summaries from a local video file.
+usage: |
+  1. Call `workflow_load` with `name="video-insight"` before running this workflow.
+  2. Call `workflow_run` with `name="video-insight"` and arguments containing a local video path.
+  3. Arguments may be either `"/absolute/input.mp4"` or `"/absolute/input.mp4" "/absolute/output-dir"`.
+  4. Extra process flags are supported, for example `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, or `--vision-model-dir /models/Qwen2.5-VL`.
+  5. The workflow returns the output directory and key artifact paths in stdout.
+dependencies:
+- ffmpeg
+- ffprobe
+- faster-whisper (optional, for speech transcription)
+- PaddleOCR / PaddlePaddle (optional, for keyframe OCR)
+- torch / transformers / accelerate / qwen-vl-utils (optional, for local Qwen2.5-VL visual analysis)
+run:
+  script: scripts/run_video_insight.py
+  cwd: .
+  timeout: 7200
+  risk: write
+---
+
+# Video Insight Workflow
+
+## 功能
+
+将一个本地视频文件转换成一组可继续分析、写作或归档的副产品。它适合固定的“视频材料入库”流程：输入一个本地视频路径，输出音频、字幕文本、关键帧、OCR 文本、关键帧描述、画面总结和总报告。
+
+这个 workflow 不负责下载视频。对于 Bilibili、抖音、小红书、YouTube、知乎等平台内容，先用对应 reach skill 下载到本地文件，再运行本 workflow。
+
+## 使用方式
+
+只传视频路径时，默认输出到视频同级目录下的 `<视频名>-video-insight/`：
+
+```json
+{"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\""}
+```
+
+也可以显式指定输出目录：
+
+```json
+{"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" \"/Users/me/outputs/demo-video\""}
+```
+
+跳过耗时或未配置的能力：
+
+```json
+{"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" --skip-transcript --skip-vision"}
+```
+
+指定本地模型路径：
+
+```json
+{"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" --model-dir \"/models/whisper\" --vision-model-dir \"/models/Qwen2.5-VL\" --device cuda"}
+```
+
+> 由于 Bamboo 当前 `workflow_run` 将参数作为一个字符串传给脚本，路径包含空格时请使用 shell 风格引号。
+
+## 环境变量
+
+脚本直接运行时会读取 `~/.bamboo/.env` 和 `~/.Bamboo/.env`。
+
+```bash
+# faster-whisper 模型目录；提前下载好的 Whisper 模型放这里，也会作为下载目录使用。
+VIDEO_INSIGHT_MODEL_DIR=/absolute/path/to/video-insight-models
+
+# 本地 Qwen2.5-VL 模型目录；用于关键帧描述和整体画面总结。
+VIDEO_INSIGHT_VISION_MODEL_DIR=/absolute/path/to/Qwen2.5-VL-model
+
+# 视觉模型运行设备；auto 让 transformers/accelerate 自动分配，cuda/cpu 可手动指定。
+VIDEO_INSIGHT_VISION_DEVICE=auto
+
+# 视觉模型权重 dtype；auto 通常即可，也可按环境改成 float16/bfloat16。
+VIDEO_INSIGHT_VISION_DTYPE=auto
+
+# 每次视觉模型生成的最大 token 数，影响关键帧描述和画面总结长度。
+VIDEO_INSIGHT_VISION_MAX_NEW_TOKENS=512
+
+# 最多送入视觉模型分析的关键帧数量，避免长视频一次处理太多图片。
+VIDEO_INSIGHT_MAX_VISION_FRAMES=12
+
+# 输出语言，默认中文。
+VIDEO_INSIGHT_ANALYSIS_LANGUAGE=zh-CN
+
+# 是否启用关键帧 OCR；auto 表示能加载 PaddleOCR 就使用，disabled/false/off 可关闭。
+VIDEO_INSIGHT_ENABLE_OCR=auto
+
+# PaddleOCR 检测模型名称和本地目录，用于定位画面中文字区域。
+VIDEO_INSIGHT_OCR_DETECTION_MODEL_NAME=PP-OCRv5_mobile_det
+VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR=/absolute/path/to/PP-OCRv5_mobile_det
+
+# PaddleOCR 识别模型名称和本地目录，用于把检测到的文字区域识别成文本。
+VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_NAME=PP-OCRv5_mobile_rec
+VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR=/absolute/path/to/PP-OCRv5_mobile_rec
+```
+
+## 执行流程
+
+1. 校验本地视频路径并创建输出目录。
+2. 使用 `ffmpeg` 抽取 `audio.wav`。
+3. 如果未传 `--skip-transcript`，使用 `faster-whisper` 生成 `transcript.json`、`transcript.srt`、`transcript.vtt`。
+4. 使用 `ffmpeg` 场景检测抽取关键帧到 `keyframes/`，并生成 `keyframes.json`；短视频或静态视频至少兜底抽首帧。
+5. 如果未传 `--skip-vision`，对关键帧运行 OCR、关键帧描述和整体画面总结，生成 `keyframe_analysis.json`。
+6. 生成 `report.json` 汇总所有副产品路径和运行结果。
+
+## 输出约定
+
+运行成功后，stdout 会包含：
+
+```text
+OutputDir: /absolute/path/to/output-directory
+Report: /absolute/path/to/output-directory/report.json
+Audio: /absolute/path/to/output-directory/audio.wav
+Keyframes: /absolute/path/to/output-directory/keyframes
+KeyframesJson: /absolute/path/to/output-directory/keyframes.json
+KeyframeAnalysis: /absolute/path/to/output-directory/keyframe_analysis.json
+TranscriptJson: /absolute/path/to/output-directory/transcript.json
+TranscriptSrt: /absolute/path/to/output-directory/transcript.srt
+TranscriptVtt: /absolute/path/to/output-directory/transcript.vtt
+```
+
+最终回答用户时，优先返回 `OutputDir` 和 `Report`。如果用户要继续写文章或做二次分析，再返回字幕、关键帧和画面分析文件。
+
+## 限制
+
+- 视觉分析使用本地 Qwen2.5-VL 目录，脚本以 `local_files_only=True` 加载，不会联网下载模型。
+- 未配置 `VIDEO_INSIGHT_VISION_MODEL_DIR` 时，基础音频和关键帧仍会产出，报告中会记录视觉分析错误。
+- 未安装 `faster-whisper` 时，语音转写不可用；可以传 `--skip-transcript` 只生成音频和关键帧。
+- 未安装 PaddleOCR 时，OCR 文本为空，但视觉描述仍可在配置视觉模型后运行。

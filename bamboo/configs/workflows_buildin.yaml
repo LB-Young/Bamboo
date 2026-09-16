@@ -54,6 +54,59 @@ workflows:
       timeout: 1800
       risk: write
 
+  video-insight:
+    enabled: true
+    user_invocable: true
+    description: Extract audio, transcripts, keyframes, OCR text, keyframe descriptions, and visual summaries from a local video file.
+    usage: |
+      1. Call `workflow_load` with `name="video-insight"` before running this workflow.
+      2. Call `workflow_run` with `name="video-insight"` and arguments containing a local video path.
+      3. Arguments may be either `"/absolute/input.mp4"` or `"/absolute/input.mp4" "/absolute/output-dir"`.
+      4. Extra flags are supported, such as `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, and `--vision-model-dir /models/Qwen2.5-VL`.
+      5. The workflow returns the output directory and key artifact paths in stdout.
+    variables:
+      # Whisper 语音转写模型目录，避免使用默认缓存路径。
+      VIDEO_INSIGHT_MODEL_DIR: "${VIDEO_INSIGHT_MODEL_DIR}"
+      # 本地 Qwen2.5-VL 视觉模型配置，用于关键帧描述和画面总结。
+      VIDEO_INSIGHT_VISION_MODEL_DIR: "${VIDEO_INSIGHT_VISION_MODEL_DIR}"
+      VIDEO_INSIGHT_VISION_DEVICE: auto
+      VIDEO_INSIGHT_VISION_DTYPE: auto
+      VIDEO_INSIGHT_VISION_MAX_NEW_TOKENS: "512"
+      VIDEO_INSIGHT_MAX_VISION_FRAMES: "12"
+      VIDEO_INSIGHT_ANALYSIS_LANGUAGE: zh-CN
+      # PaddleOCR 配置，用于关键帧中文字识别。
+      VIDEO_INSIGHT_ENABLE_OCR: auto
+      VIDEO_INSIGHT_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
+      VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
+      VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_det
+      VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_rec
+    requirements:
+      bins:
+        - python
+        - ffmpeg
+        - ffprobe
+      env:
+        - VIDEO_INSIGHT_MODEL_DIR
+      optional_env:
+        - VIDEO_INSIGHT_VISION_MODEL_DIR
+      optional_python_packages:
+        - faster-whisper
+        - paddleocr
+        - paddlepaddle
+        - torch
+        - transformers
+        - accelerate
+        - qwen-vl-utils
+    permissions:
+      can_run_commands: true
+      can_edit_files: true
+      can_access_network: false
+    run:
+      script: scripts/run_video_insight.py
+      cwd: .
+      timeout: 7200
+      risk: write
+
   extracted-content-to-wechat-article:
     enabled: true
     user_invocable: true
