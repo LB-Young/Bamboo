@@ -205,6 +205,52 @@ skills:
       can_edit_files: false
       can_access_network: true
 
+  video-insight:
+    enabled: true
+    user_invocable: true
+    load_experiences: false
+    load_policy:
+      auto_select: true
+      max_references: 0
+      max_tokens: 4500
+    variables:
+      # Whisper 语音转写模型目录，避免使用默认缓存路径。
+      VIDEO_INSIGHT_MODEL_DIR: "${VIDEO_INSIGHT_MODEL_DIR}"
+      # 本地 Qwen2.5-VL 视觉模型配置，用于关键帧描述和画面总结。
+      VIDEO_INSIGHT_VISION_MODEL_DIR: "${VIDEO_INSIGHT_VISION_MODEL_DIR}"
+      VIDEO_INSIGHT_VISION_DEVICE: auto
+      VIDEO_INSIGHT_VISION_DTYPE: auto
+      VIDEO_INSIGHT_VISION_MAX_NEW_TOKENS: "512"
+      VIDEO_INSIGHT_MAX_VISION_FRAMES: "12"
+      VIDEO_INSIGHT_ANALYSIS_LANGUAGE: zh-CN
+      # PaddleOCR 配置，用于关键帧中文字识别。
+      VIDEO_INSIGHT_ENABLE_OCR: auto
+      VIDEO_INSIGHT_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
+      VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
+      VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_det
+      VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_rec
+    requirements:
+      bins:
+        - python
+        - ffmpeg
+        - ffprobe
+      env:
+        - VIDEO_INSIGHT_MODEL_DIR
+      optional_env:
+        - VIDEO_INSIGHT_VISION_MODEL_DIR
+      optional_python_packages:
+        - faster-whisper
+        - paddleocr
+        - paddlepaddle
+        - torch
+        - transformers
+        - accelerate
+        - qwen-vl-utils
+    permissions:
+      can_run_commands: true
+      can_edit_files: true
+      can_access_network: false
+
   hithink-finance:
     enabled: true
     user_invocable: true
