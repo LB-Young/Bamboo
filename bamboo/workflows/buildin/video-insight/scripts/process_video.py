@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default="large-v3")
     parser.add_argument("--model-dir", default=os.environ.get("VIDEO_INSIGHT_MODEL_DIR"))
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
-    parser.add_argument("--compute-type", default="float16")
+    parser.add_argument("--compute-type", default="auto")
     parser.add_argument("--language")
     parser.add_argument("--skip-transcript", action="store_true")
     parser.add_argument("--skip-keyframes", action="store_true")

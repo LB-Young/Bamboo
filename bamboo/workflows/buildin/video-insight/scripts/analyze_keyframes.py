@@ -38,8 +38,11 @@ def main(argv: list[str] | None = None) -> int:
 
 def analyze_keyframes(args: argparse.Namespace) -> dict[str, Any]:
     frames = load_frame_entries(args.keyframes_json, args.keyframes_dir)
-    if args.max_frames > 0:
-        frames = frames[: args.max_frames]
+    if 0 < args.max_frames < len(frames):
+        if args.max_frames == 1:
+            frames = [frames[len(frames) // 2]]
+        else:
+            frames = [frames[round(i * (len(frames) - 1) / (args.max_frames - 1))] for i in range(args.max_frames)]
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -136,6 +139,8 @@ class LocalQwenVisionModel:
         self.torch = torch
         self.process_vision_info = process_vision_info
         self.max_new_tokens = max_new_tokens
+        if device == "auto" and torch.backends.mps.is_available():
+            device = "mps"
         device_map: str | None = "auto" if device == "auto" else None
         kwargs: dict[str, Any] = {
             "torch_dtype": dtype,
@@ -145,11 +150,12 @@ class LocalQwenVisionModel:
             kwargs["device_map"] = device_map
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(str(model_dir), **kwargs)
         if not device_map:
-            target_device = "cuda" if device == "cuda" and torch.cuda.is_available() else "cpu"
-            self.model.to(target_device)
-        self.processor = AutoProcessor.from_pretrained(str(model_dir), local_files_only=True)
+            self.model.to(device)
+        self.processor = AutoProcessor.from_pretrained(
+            str(model_dir), local_files_only=True, max_pixels=512 * 28 * 28,
+        )
 
-    def generate(self, prompt: str, *, image_path: Path | None = None) -> str:
+    def generate(self, prompt: str, *, image_path: Path | None = None, max_new_tokens: int | None = None) -> str:
         content: list[dict[str, Any]] = []
         if image_path is not None:
             content.append({"type": "image", "image": str(image_path)})
@@ -165,7 +171,8 @@ class LocalQwenVisionModel:
             return_tensors="pt",
         )
         inputs = inputs.to(next(self.model.parameters()).device)
-        generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+        with self.torch.inference_mode():
+            generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens or self.max_new_tokens, do_sample=False)
         generated_trimmed = [
             output_ids[len(input_ids) :]
             for input_ids, output_ids in zip(inputs.input_ids, generated_ids, strict=False)
@@ -223,6 +230,8 @@ def load_ocr_engine() -> tuple[Any | None, str]:
     recognition_name = env_value("VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_NAME")
     detection_dir = configured_model_dir(env_value("VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR"))
     recognition_dir = configured_model_dir(env_value("VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR"))
+    if not detection_dir or not recognition_dir:
+        return None, "Set both VIDEO_INSIGHT_OCR model directories; default model downloads are disabled."
     if detection_name:
         kwargs["text_detection_model_name"] = detection_name
     if detection_dir:
@@ -233,10 +242,6 @@ def load_ocr_engine() -> tuple[Any | None, str]:
         kwargs["text_recognition_model_dir"] = str(recognition_dir)
 
     try:
-        return PaddleOCR(**kwargs), ""
-    except ValueError:
-        kwargs.pop("text_detection_model_dir", None)
-        kwargs.pop("text_recognition_model_dir", None)
         return PaddleOCR(**kwargs), ""
     except Exception as exc:
         return None, f"PaddleOCR failed to initialize: {exc}"
@@ -307,10 +312,11 @@ def summarize_visuals(model: LocalQwenVisionModel, frames: list[dict[str, Any]],
     prompt = (
         f"请用{language}根据下面的视频关键帧 OCR 和描述，总结视频画面内容。"
         "请输出：1. 画面主线；2. 关键视觉证据；3. 屏幕文字/字幕线索；4. 不确定点。"
+        "每项一到两句话，总长度不超过300个中文字符。不要推断画面中没有依据的内容。"
         "\n\n"
         + "\n\n".join(frame_lines)
     )
-    return model.generate(prompt)
+    return model.generate(prompt, max_new_tokens=max(512, model.max_new_tokens))
 
 
 if __name__ == "__main__":

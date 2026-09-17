@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default="large-v3")
     parser.add_argument("--model-dir", default=os.environ.get("VIDEO_INSIGHT_MODEL_DIR"))
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
-    parser.add_argument("--compute-type", default="float16")
+    parser.add_argument("--compute-type", default="auto")
     parser.add_argument("--language")
     parser.add_argument("--beam-size", type=int, default=5)
     args = parser.parse_args(argv)
@@ -95,12 +95,22 @@ def transcribe_audio(
         raise RuntimeError("missing optional dependency: install faster-whisper to transcribe audio") from exc
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    resolved_device = "cuda" if device == "auto" else device
-    model_kwargs: dict[str, Any] = {"device": resolved_device, "compute_type": compute_type}
-    if model_dir:
+    import ctranslate2
+
+    if model_dir is None:
+        raise RuntimeError("set VIDEO_INSIGHT_MODEL_DIR or --model-dir; default model cache is not used")
+    model_dir = model_dir.expanduser().resolve()
+    resolved_device = ("cuda" if ctranslate2.get_cuda_device_count() else "cpu") if device == "auto" else device
+    resolved_compute = ("float16" if resolved_device == "cuda" else "int8") if compute_type == "auto" else compute_type
+    model_kwargs: dict[str, Any] = {"device": resolved_device, "compute_type": resolved_compute}
+    if (model_dir / "model.bin").is_file():
+        model_source = str(model_dir)
+        model_kwargs["local_files_only"] = True
+    else:
         model_dir.mkdir(parents=True, exist_ok=True)
+        model_source = model_name
         model_kwargs["download_root"] = str(model_dir)
-    model = WhisperModel(model_name, **model_kwargs)
+    model = WhisperModel(model_source, **model_kwargs)
     segments_iter, info = model.transcribe(str(audio), beam_size=beam_size, language=language)
     segments = [
         {"id": index, "start": segment.start, "end": segment.end, "text": segment.text.strip()}
@@ -108,10 +118,10 @@ def transcribe_audio(
     ]
     data = {
         "audio": str(audio),
-        "model": model_name,
+        "model": model_source,
         "model_dir": str(model_dir) if model_dir else None,
         "device": resolved_device,
-        "compute_type": compute_type,
+        "compute_type": resolved_compute,
         "language": getattr(info, "language", None),
         "language_probability": getattr(info, "language_probability", None),
         "duration": getattr(info, "duration", None),
@@ -140,11 +150,10 @@ def _to_vtt(segments: list[dict[str, Any]]) -> str:
 
 
 def _format_srt_time(value: float) -> str:
-    hours, remainder = divmod(value, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    whole = int(seconds)
-    millis = int(round((seconds - whole) * 1000))
-    return f"{int(hours):02d}:{int(minutes):02d}:{whole:02d},{millis:03d}"
+    seconds, millis = divmod(round(value * 1000), 1000)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
 
 
 def _format_vtt_time(value: float) -> str:

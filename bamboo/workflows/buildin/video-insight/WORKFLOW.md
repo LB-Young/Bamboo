@@ -30,13 +30,21 @@ run:
 
 ## 使用方式
 
-只传视频路径时，默认输出到视频同级目录下的 `<视频名>-video-insight/`：
+只传视频路径时，默认输出到 `VIDEO_INSIGHT_OUTPUT_DIR` 下面的一个视频子目录。未配置 `VIDEO_INSIGHT_OUTPUT_DIR` 时，默认输出根目录是 `~/.bamboo/workspace/video-insight/`：
 
 ```json
 {"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\""}
 ```
 
-也可以显式指定输出目录：
+例如输入 `/Users/me/videos/demo.mp4` 时，默认输出目录通常是：
+
+```text
+/Users/me/.bamboo/workspace/video-insight/demo/
+```
+
+如果同名目录已存在，会自动使用 `demo-2/`、`demo-3/` 这类后缀，避免覆盖旧结果。
+
+也可以显式指定输出目录；显式目录优先级最高，会绕过默认输出根目录：
 
 ```json
 {"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" \"/Users/me/outputs/demo-video\""}
@@ -61,19 +69,23 @@ run:
 脚本直接运行时会读取 `~/.bamboo/.env` 和 `~/.Bamboo/.env`。
 
 ```bash
-# faster-whisper 模型目录；提前下载好的 Whisper 模型放这里，也会作为下载目录使用。
+# 提取结果输出根目录；每个视频会在这个目录下面自动创建一个独立子目录。
+# 未配置时默认使用 ~/.bamboo/workspace/video-insight。
+VIDEO_INSIGHT_OUTPUT_DIR=/absolute/path/to/video-insight-output
+
+# faster-whisper 模型目录；包含 model.bin 时直接加载本地模型，否则作为指定下载目录。
 VIDEO_INSIGHT_MODEL_DIR=/absolute/path/to/video-insight-models
 
 # 本地 Qwen2.5-VL 模型目录；用于关键帧描述和整体画面总结。
 VIDEO_INSIGHT_VISION_MODEL_DIR=/absolute/path/to/Qwen2.5-VL-model
 
-# 视觉模型运行设备；auto 让 transformers/accelerate 自动分配，cuda/cpu 可手动指定。
+# 视觉模型运行设备；auto 在 Apple Silicon 上选 MPS，其他环境自动分配，也可指定 mps/cuda/cpu。
 VIDEO_INSIGHT_VISION_DEVICE=auto
 
 # 视觉模型权重 dtype；auto 通常即可，也可按环境改成 float16/bfloat16。
 VIDEO_INSIGHT_VISION_DTYPE=auto
 
-# 每次视觉模型生成的最大 token 数，影响关键帧描述和画面总结长度。
+# 单帧描述最大 token 数；整段画面总结使用至少 512 token 的上限。
 VIDEO_INSIGHT_VISION_MAX_NEW_TOKENS=512
 
 # 最多送入视觉模型分析的关键帧数量，避免长视频一次处理太多图片。
@@ -99,8 +111,8 @@ VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR=/absolute/path/to/PP-OCRv5_mobile_rec
 1. 校验本地视频路径并创建输出目录。
 2. 使用 `ffmpeg` 抽取 `audio.wav`。
 3. 如果未传 `--skip-transcript`，使用 `faster-whisper` 生成 `transcript.json`、`transcript.srt`、`transcript.vtt`。
-4. 使用 `ffmpeg` 场景检测抽取关键帧到 `keyframes/`，并生成 `keyframes.json`；短视频或静态视频至少兜底抽首帧。
-5. 如果未传 `--skip-vision`，对关键帧运行 OCR、关键帧描述和整体画面总结，生成 `keyframe_analysis.json`。
+4. 使用 `ffmpeg` 场景检测抽取关键帧到 `keyframes/`，并生成 `keyframes.json`；场景帧少于两张时每 10 秒抽帧，时间戳取自视频实际帧；短视频至少兜底抽首帧。
+5. 如果未传 `--skip-vision`，在整段视频的关键帧中均匀选取最多 12 张，运行 OCR、关键帧描述和整体画面总结，生成 `keyframe_analysis.json`。
 6. 生成 `report.json` 汇总所有副产品路径和运行结果。
 
 ## 输出约定
@@ -123,6 +135,8 @@ TranscriptVtt: /absolute/path/to/output-directory/transcript.vtt
 
 ## 限制
 
+- 语音转写的 `--device auto` 自动选择 CUDA 或 CPU；`--compute-type auto` 对应 float16 或 int8。Apple Silicon 的语音转写使用 CPU，视觉分析可使用 MPS。
+- 未指定语音模型目录时会报错，不会隐式下载到默认缓存目录。
 - 视觉分析使用本地 Qwen2.5-VL 目录，脚本以 `local_files_only=True` 加载，不会联网下载模型。
 - 未配置 `VIDEO_INSIGHT_VISION_MODEL_DIR` 时，基础音频和关键帧仍会产出，报告中会记录视觉分析错误。
 - 未安装 `faster-whisper` 时，语音转写不可用；可以传 `--skip-transcript` 只生成音频和关键帧。

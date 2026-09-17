@@ -68,7 +68,9 @@ def extract_keyframes(
 
     frames = sorted(output_dir.glob("frame_*.jpg"))
     times = [float(match.group(1)) for match in PTS_RE.finditer(process.stderr or "")]
-    if not frames:
+    if len(frames) < 2:
+        for frame in frames:
+            frame.unlink()
         return _extract_fallback_frames(video, output_dir, max_width=max_width, interval=fallback_interval)
 
     entries = []
@@ -91,9 +93,9 @@ def extract_keyframes(
 def _extract_fallback_frames(video: Path, output_dir: Path, *, max_width: int, interval: float) -> dict[str, Any]:
     pattern = output_dir / "frame_%06d.jpg"
     scale = f"scale='min({max_width},iw)':-2,format=yuvj420p"
-    vf = f"fps=1/{interval},{scale}"
+    vf = f"select='isnan(prev_selected_t)+gte(t-prev_selected_t,{interval})',showinfo,{scale}"
     process = subprocess.run(
-        ["ffmpeg", "-y", "-i", str(video), "-vf", vf, str(pattern)],
+        ["ffmpeg", "-y", "-i", str(video), "-vf", vf, "-vsync", "vfr", str(pattern)],
         check=False,
         capture_output=True,
         text=True,
@@ -101,6 +103,7 @@ def _extract_fallback_frames(video: Path, output_dir: Path, *, max_width: int, i
     if process.returncode != 0:
         raise RuntimeError((process.stderr or process.stdout or "fallback ffmpeg failed").strip()[-2000:])
     frames = sorted(output_dir.glob("frame_*.jpg"))
+    times = [float(match.group(1)) for match in PTS_RE.finditer(process.stderr or "")]
     if not frames:
         first_frame = output_dir / "frame_000001.jpg"
         scale = f"scale='min({max_width},iw)':-2,format=yuvj420p"
@@ -114,7 +117,7 @@ def _extract_fallback_frames(video: Path, output_dir: Path, *, max_width: int, i
             raise RuntimeError((first_process.stderr or first_process.stdout or "first-frame ffmpeg failed").strip()[-2000:])
         frames = sorted(output_dir.glob("frame_*.jpg"))
     entries = [
-        {"index": index + 1, "time": index * interval, "path": str(frame), "bytes": frame.stat().st_size, "method": "interval"}
+        {"index": index + 1, "time": times[index] if index < len(times) else 0.0, "path": str(frame), "bytes": frame.stat().st_size, "method": "interval"}
         for index, frame in enumerate(frames)
     ]
     data = {"video": str(video), "scene_threshold": None, "fallback_interval": interval, "frames": entries}
