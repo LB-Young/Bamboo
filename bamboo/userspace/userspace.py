@@ -48,6 +48,7 @@ dirs: list[str] = [
 ]
 
 OVERWRITABLE_BUILTIN_DIRS: set[str] = {
+    "configs",
     "buildin_tools",
     "buildin_skills",
     "buildin_subagents",
@@ -129,6 +130,8 @@ def copy_builtin_info(subdir: str, target_dir: Path) -> None:
     """只复制用户空间中尚不存在的内置文件，避免覆盖用户配置。"""
     package_root = Path(__file__).resolve().parent.parent
     src_dir = package_root / subdir
+    if subdir == "buildin_tools":
+        src_dir = package_root / "tools" / "buildin"
     if subdir == "buildin_skills":
         src_dir = package_root / "skills" / "buildin"
     if subdir == "buildin_subagents":
