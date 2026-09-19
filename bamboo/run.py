@@ -3,6 +3,9 @@
 这个脚本负责注册 Typer 命令，并把用户输入转换为 RunParams 后交给
 CLI adapter 和 TaskRuntime。真实执行逻辑不放在这里，避免入口层变重。
 """
+import os
+import platform
+import sysconfig
 import threading
 import uuid
 import webbrowser
@@ -82,7 +85,13 @@ app.add_typer(bkn_app, name="bkn")
 
 
 @app.command()
-def init() -> None:
+def init(
+    fix_path: bool = typer.Option(
+        True,
+        "--fix-path/--no-fix-path",
+        help="On Windows, add Python's Scripts directory to the current user's PATH.",
+    ),
+) -> None:
     """初始化 Bamboo 用户目录。"""
     bamboo_root = get_configs_dir()
     overwrite = False
@@ -95,7 +104,86 @@ def init() -> None:
     console.print(f"[green]✓ 用户目录已就绪：{layout.root}[/green]")
     console.print("[dim]如需使用 browser 工具，可按需安装 Playwright Chromium 运行时：[/dim]")
     console.print("[bold dim]python -m playwright install chromium[/bold dim]")
+    if fix_path:
+        _ensure_windows_console_script_path()
     console.print("\n接下来请编辑配置文件，填写你的 LLM API Key等信息。")
+
+
+def _ensure_windows_console_script_path() -> None:
+    """Make the `bamboo` console script discoverable for future Windows shells."""
+    if platform.system() != "Windows":
+        return
+    scripts_dir = Path(sysconfig.get_path("scripts")).resolve(strict=False)
+    if _path_contains_dir(os.environ.get("PATH", ""), scripts_dir):
+        return
+    try:
+        changed = _append_windows_user_path(scripts_dir)
+    except OSError as exc:
+        console.print(f"[yellow]未能自动更新 PATH：{exc}[/yellow]")
+        console.print(f"[dim]请手动把这个目录加入用户 PATH：{scripts_dir}[/dim]")
+        return
+    if changed:
+        console.print(f"[green]✓ 已把 Python Scripts 目录加入用户 PATH：{scripts_dir}[/green]")
+        console.print("[yellow]请重新打开 PowerShell/CMD 后使用：bamboo init[/yellow]")
+        return
+    console.print("[yellow]Python Scripts 目录已在用户 PATH 中；请重新打开终端后再试 bamboo 命令。[/yellow]")
+
+
+def _path_contains_dir(path_value: str, directory: Path) -> bool:
+    target = os.path.normcase(os.path.normpath(str(directory)))
+    for item in path_value.split(os.pathsep):
+        if not item.strip():
+            continue
+        expanded = os.path.expandvars(os.path.expanduser(item.strip().strip('"')))
+        normalized = os.path.normcase(os.path.normpath(expanded))
+        if normalized == target:
+            return True
+    return False
+
+
+def _append_windows_user_path(scripts_dir: Path) -> bool:
+    import winreg
+
+    scripts_dir_str = str(scripts_dir)
+    with winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        "Environment",
+        0,
+        winreg.KEY_READ | winreg.KEY_SET_VALUE,
+    ) as key:
+        try:
+            current_path, value_type = winreg.QueryValueEx(key, "Path")
+        except FileNotFoundError:
+            current_path, value_type = "", winreg.REG_EXPAND_SZ
+        current_path = str(current_path or "")
+        if _path_contains_dir(current_path, scripts_dir):
+            return False
+        separator = "" if not current_path or current_path.endswith(";") else ";"
+        updated_path = f"{current_path}{separator}{scripts_dir_str}"
+        winreg.SetValueEx(key, "Path", 0, value_type, updated_path)
+    _broadcast_windows_environment_change()
+    return True
+
+
+def _broadcast_windows_environment_change() -> None:
+    try:
+        import ctypes.wintypes
+
+        hwnd_broadcast = 0xFFFF
+        wm_settingchange = 0x001A
+        smto_abortifhung = 0x0002
+        result = ctypes.wintypes.DWORD()
+        ctypes.windll.user32.SendMessageTimeoutW(
+            hwnd_broadcast,
+            wm_settingchange,
+            0,
+            "Environment",
+            smto_abortifhung,
+            5000,
+            ctypes.byref(result),
+        )
+    except Exception:
+        pass
 
 
 @app.command()
