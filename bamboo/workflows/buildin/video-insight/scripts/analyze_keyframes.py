@@ -13,7 +13,7 @@ from typing import Any
 
 def main(argv: list[str] | None = None) -> int:
     load_env_file()
-    parser = argparse.ArgumentParser(description="Analyze extracted video keyframes with local OCR and local Qwen2.5-VL.")
+    parser = argparse.ArgumentParser(description="Analyze extracted video keyframes with local OCR and local vision-language models.")
     parser.add_argument("--keyframes-json")
     parser.add_argument("--keyframes-dir")
     parser.add_argument("--output", required=True)
@@ -54,7 +54,7 @@ def analyze_keyframes(args: argparse.Namespace) -> dict[str, Any]:
     vision_model_dir = ""
     if not args.skip_description:
         vision_model_dir = resolve_required_dir(args.vision_model_dir, "VIDEO_INSIGHT_VISION_MODEL_DIR")
-        vision_model = LocalQwenVisionModel(
+        vision_model = LocalVisionLanguageModel(
             Path(vision_model_dir),
             device=args.vision_device,
             dtype=args.vision_dtype,
@@ -121,8 +121,8 @@ def parse_env_line(raw_line: str) -> tuple[str, str] | None:
     return key, value
 
 
-class LocalQwenVisionModel:
-    """Lazy local Qwen2.5-VL runner based on transformers."""
+class LocalVisionLanguageModel:
+    """Lazy local vision-language runner based on transformers auto classes."""
 
     def __init__(self, model_dir: Path, *, device: str, dtype: str, max_new_tokens: int) -> None:
         if not model_dir.is_dir():
@@ -130,7 +130,7 @@ class LocalQwenVisionModel:
         try:
             import torch
             from qwen_vl_utils import process_vision_info
-            from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+            from transformers import AutoModelForImageTextToText, AutoProcessor
         except ImportError as exc:
             raise RuntimeError(
                 "missing local vision dependencies: install torch, transformers, accelerate, and qwen-vl-utils"
@@ -143,12 +143,17 @@ class LocalQwenVisionModel:
             device = "mps"
         device_map: str | None = "auto" if device == "auto" else None
         kwargs: dict[str, Any] = {
-            "torch_dtype": dtype,
+            "dtype": resolve_torch_dtype(torch, dtype),
             "local_files_only": True,
         }
         if device_map:
             kwargs["device_map"] = device_map
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(str(model_dir), **kwargs)
+        try:
+            self.model = AutoModelForImageTextToText.from_pretrained(str(model_dir), **kwargs)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"unsupported vision-language model at {model_dir}; update transformers or use a supported model"
+            ) from exc
         if not device_map:
             self.model.to(device)
         self.processor = AutoProcessor.from_pretrained(
@@ -179,6 +184,24 @@ class LocalQwenVisionModel:
         ]
         decoded = self.processor.batch_decode(generated_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         return (decoded[0] if decoded else "").strip()
+
+
+def resolve_torch_dtype(torch: Any, dtype: str) -> Any:
+    value = str(dtype or "auto").strip().lower()
+    if value == "auto":
+        return "auto"
+    aliases = {
+        "float16": torch.float16,
+        "fp16": torch.float16,
+        "half": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "bf16": torch.bfloat16,
+        "float32": torch.float32,
+        "fp32": torch.float32,
+    }
+    if value not in aliases:
+        raise RuntimeError(f"unsupported VIDEO_INSIGHT_VISION_DTYPE: {dtype}")
+    return aliases[value]
 
 
 def resolve_required_dir(value: str, env_name: str) -> str:
@@ -288,7 +311,7 @@ def normalize_text(text: str) -> str:
     return "\n".join(line.strip() for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n") if line.strip())
 
 
-def describe_frame(model: LocalQwenVisionModel, image_path: Path, *, frame: dict[str, Any], language: str) -> str:
+def describe_frame(model: LocalVisionLanguageModel, image_path: Path, *, frame: dict[str, Any], language: str) -> str:
     prompt = (
         f"请用{language}描述这张视频关键帧。"
         "输出一段简洁但信息密集的描述，包含主体、场景、屏幕文字、动作/状态、可能的业务含义。"
@@ -297,7 +320,7 @@ def describe_frame(model: LocalQwenVisionModel, image_path: Path, *, frame: dict
     return model.generate(prompt, image_path=image_path)
 
 
-def summarize_visuals(model: LocalQwenVisionModel, frames: list[dict[str, Any]], *, language: str) -> str:
+def summarize_visuals(model: LocalVisionLanguageModel, frames: list[dict[str, Any]], *, language: str) -> str:
     frame_lines = []
     for frame in frames:
         frame_lines.append(

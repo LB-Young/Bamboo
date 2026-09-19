@@ -24,8 +24,25 @@ Bamboo is a Python agent runtime for local CLI, Web, desktop, and IM workflows. 
 ```bash
 git clone https://github.com/LB-Young/Bamboo.git
 cd Bamboo
-pip install -e .
+python -m pip install -e .
 bamboo init
+```
+
+On Windows PowerShell, if `bamboo init` reports that `bamboo` is not recognized
+as a cmdlet, function, script file, or operable program, use the module entry
+point:
+
+```powershell
+python -m bamboo init
+```
+
+That means Python installed the `bamboo` launcher into a `Scripts` directory
+that is not on your `PATH`. You can continue using `python -m bamboo ...`, or
+add the Scripts directory shown by the command below to your user `PATH` and
+open a new PowerShell window:
+
+```powershell
+python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
 ```
 
 If you want to use browser automation, install the Playwright Chromium runtime manually after installing Bamboo:

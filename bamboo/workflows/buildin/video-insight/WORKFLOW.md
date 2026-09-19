@@ -5,14 +5,14 @@ usage: |
   1. Call `workflow_load` with `name="video-insight"` before running this workflow.
   2. Call `workflow_run` with `name="video-insight"` and arguments containing a local video path.
   3. Arguments may be either `"/absolute/input.mp4"` or `"/absolute/input.mp4" "/absolute/output-dir"`.
-  4. Extra process flags are supported, for example `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, or `--vision-model-dir /models/Qwen2.5-VL`.
+  4. Extra process flags are supported, for example `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, or `--vision-model-dir /models/vision-language-model`.
   5. The workflow returns the output directory and key artifact paths in stdout.
 dependencies:
 - ffmpeg
 - ffprobe
 - faster-whisper (optional, for speech transcription)
 - PaddleOCR / PaddlePaddle (optional, for keyframe OCR)
-- torch / transformers / accelerate / qwen-vl-utils (optional, for local Qwen2.5-VL visual analysis)
+- torch / transformers / accelerate / qwen-vl-utils (optional, for local vision-language model analysis)
 run:
   script: scripts/run_video_insight.py
   cwd: .
@@ -59,7 +59,7 @@ run:
 指定本地模型路径：
 
 ```json
-{"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" --model-dir \"/models/whisper\" --vision-model-dir \"/models/Qwen2.5-VL\" --device cuda"}
+{"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" --model-dir \"/models/whisper\" --vision-model-dir \"/models/vision-language-model\" --device cuda"}
 ```
 
 > 由于 Bamboo 当前 `workflow_run` 将参数作为一个字符串传给脚本，路径包含空格时请使用 shell 风格引号。
@@ -76,8 +76,9 @@ VIDEO_INSIGHT_OUTPUT_DIR=/absolute/path/to/video-insight-output
 # faster-whisper 模型目录；包含 model.bin 时直接加载本地模型，否则作为指定下载目录。
 VIDEO_INSIGHT_MODEL_DIR=/absolute/path/to/video-insight-models
 
-# 本地 Qwen2.5-VL 模型目录；用于关键帧描述和整体画面总结。
-VIDEO_INSIGHT_VISION_MODEL_DIR=/absolute/path/to/Qwen2.5-VL-model
+# 本地多模态模型目录；用于关键帧描述和整体画面总结。
+# 需要是当前 transformers 支持的 image-text-to-text 模型。
+VIDEO_INSIGHT_VISION_MODEL_DIR=/absolute/path/to/vision-language-model
 
 # 视觉模型运行设备；auto 在 Apple Silicon 上选 MPS，其他环境自动分配，也可指定 mps/cuda/cpu。
 VIDEO_INSIGHT_VISION_DEVICE=auto
@@ -137,7 +138,7 @@ TranscriptVtt: /absolute/path/to/output-directory/transcript.vtt
 
 - 语音转写的 `--device auto` 自动选择 CUDA 或 CPU；`--compute-type auto` 对应 float16 或 int8。Apple Silicon 的语音转写使用 CPU，视觉分析可使用 MPS。
 - 未指定语音模型目录时会报错，不会隐式下载到默认缓存目录。
-- 视觉分析使用本地 Qwen2.5-VL 目录，脚本以 `local_files_only=True` 加载，不会联网下载模型。
+- 视觉分析使用本地多模态模型目录，脚本通过 transformers auto class 以 `local_files_only=True` 加载，不会联网下载模型。
 - 未配置 `VIDEO_INSIGHT_VISION_MODEL_DIR` 时，基础音频和关键帧仍会产出，报告中会记录视觉分析错误。
 - 未安装 `faster-whisper` 时，语音转写不可用；可以传 `--skip-transcript` 只生成音频和关键帧。
 - 未安装 PaddleOCR 时，OCR 文本为空，但视觉描述仍可在配置视觉模型后运行。
