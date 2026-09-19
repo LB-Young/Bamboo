@@ -93,6 +93,8 @@ def init(
     ),
 ) -> None:
     """初始化 Bamboo 用户目录。"""
+    if fix_path:
+        _ensure_windows_console_script_path()
     bamboo_root = get_configs_dir()
     overwrite = False
     if bamboo_root.exists():
@@ -104,8 +106,6 @@ def init(
     console.print(f"[green]✓ 用户目录已就绪：{layout.root}[/green]")
     console.print("[dim]如需使用 browser 工具，可按需安装 Playwright Chromium 运行时：[/dim]")
     console.print("[bold dim]python -m playwright install chromium[/bold dim]")
-    if fix_path:
-        _ensure_windows_console_script_path()
     console.print("\n接下来请编辑配置文件，填写你的 LLM API Key等信息。")
 
 
