@@ -5,6 +5,7 @@ from bamboo.userspace.userspace import ensure_userspace
 
 def test_init_creates_builtin_and_config_dirs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
 
     ensure_userspace(overwrite=False)
 
@@ -28,6 +29,7 @@ def test_init_creates_builtin_and_config_dirs(monkeypatch, tmp_path: Path) -> No
 
 def test_overwrite_refreshes_builtin_and_config_dirs(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     ensure_userspace(overwrite=False)
 
     root = tmp_path / ".bamboo"

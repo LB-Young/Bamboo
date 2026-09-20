@@ -193,7 +193,7 @@ models:
     model: local_openai-gpt-5.2-chat
     model_type: text
     prompt_profile: gpt
-    api_key: "sk-"
+    api_key: "${HTTP_PROVIDER_API_KEY}"
     base_url: http://your-proxy/brush/api/pie/callLargeModelProxy
     timeout: 60
     temperature: 1.0

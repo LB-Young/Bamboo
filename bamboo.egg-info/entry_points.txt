@@ -1,0 +1,2 @@
+[console_scripts]
+bamboo = bamboo.run:app

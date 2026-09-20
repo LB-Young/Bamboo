@@ -89,6 +89,7 @@ skills:
       max_references: 0
       max_tokens: 5500
     variables:
+      REDFOX_API_KEY: "${REDFOX_API_KEY}"
       DOUYIN_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Douyin Reach/1"
       DOUYIN_REACH_REFERER: "https://www.douyin.com/"
       DOUYIN_REACH_DOWNLOAD_DIR: "douyin-downloads"
@@ -96,7 +97,8 @@ skills:
     requirements:
       bins:
         - python
-      env: []
+      env:
+        - REDFOX_API_KEY
       optional_bins:
         - ffmpeg
       python_packages: []
@@ -113,10 +115,13 @@ skills:
       auto_select: true
       max_references: 0
       max_tokens: 3500
+    variables:
+      REDFOX_API_KEY: "${REDFOX_API_KEY}"
     requirements:
       bins:
         - python
-      env: []
+      env:
+        - REDFOX_API_KEY
       python_packages: []
     permissions:
       can_run_commands: true
@@ -132,12 +137,14 @@ skills:
       max_references: 0
       max_tokens: 3500
     variables:
+      REDFOX_API_KEY: "${REDFOX_API_KEY}"
       BILIBILI_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Bilibili Reach/1"
       BILIBILI_REACH_REFERER: "https://www.bilibili.com/"
     requirements:
       bins:
         - python
-      env: []
+      env:
+        - REDFOX_API_KEY
       python_packages: []
     permissions:
       can_run_commands: true
@@ -153,12 +160,14 @@ skills:
       max_references: 0
       max_tokens: 3500
     variables:
+      REDFOX_API_KEY: "${REDFOX_API_KEY}"
       XIAOHONGSHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Xiaohongshu Reach/1"
       XIAOHONGSHU_REACH_REFERER: "https://www.xiaohongshu.com/"
     requirements:
       bins:
         - python
-      env: []
+      env:
+        - REDFOX_API_KEY
       python_packages: []
     permissions:
       can_run_commands: true
@@ -174,12 +183,14 @@ skills:
       max_references: 0
       max_tokens: 3500
     variables:
+      REDFOX_API_KEY: "${REDFOX_API_KEY}"
       ZHIHU_REACH_USER_AGENT: "Mozilla/5.0 Bamboo Zhihu Reach/1"
       ZHIHU_REACH_REFERER: "https://www.zhihu.com/"
     requirements:
       bins:
         - python
-      env: []
+      env:
+        - REDFOX_API_KEY
       python_packages: []
     permissions:
       can_run_commands: true
@@ -194,10 +205,13 @@ skills:
       auto_select: true
       max_references: 0
       max_tokens: 3500
+    variables:
+      REDFOX_API_KEY: "${REDFOX_API_KEY}"
     requirements:
       bins:
         - python
-      env: []
+      env:
+        - REDFOX_API_KEY
       python_packages:
         - requests
     permissions:

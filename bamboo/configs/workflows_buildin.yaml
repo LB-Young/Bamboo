@@ -25,16 +25,16 @@ workflows:
       3. Arguments may be either `"/absolute/input.pdf"` or `"/absolute/input.pdf /absolute/output.md"`.
       4. The workflow returns the generated Markdown file path in stdout as `Markdown: ...`.
     variables:
-      PDF2MD_MODELS_DIR: /Users/liubaoyang/Documents/YoungL/models
+      PDF2MD_MODELS_DIR: "${PDF2MD_MODELS_DIR}"
       PDF2MD_LAYOUT_MODEL_NAME: PP-DocLayout_plus-L
-      PDF2MD_LAYOUT_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-DocLayout/PP-DocLayout_plus-L
+      PDF2MD_LAYOUT_MODEL_DIR: "${PDF2MD_LAYOUT_MODEL_DIR}"
       PDF2MD_DPI: "180"
       PDF2MD_LAYOUT_DEVICE: cpu
       PDF2MD_ENABLE_OCR: "auto"
       PDF2MD_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
       PDF2MD_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
-      PDF2MD_OCR_DETECTION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_det
-      PDF2MD_OCR_RECOGNITION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_rec
+      PDF2MD_OCR_DETECTION_MODEL_DIR: "${PDF2MD_OCR_DETECTION_MODEL_DIR}"
+      PDF2MD_OCR_RECOGNITION_MODEL_DIR: "${PDF2MD_OCR_RECOGNITION_MODEL_DIR}"
     requirements:
       bins:
         - python
@@ -61,9 +61,11 @@ workflows:
     usage: |
       1. Call `workflow_load` with `name="video-insight"` before running this workflow.
       2. Call `workflow_run` with `name="video-insight"` and arguments containing a local video path.
-      3. Arguments may be either `"/absolute/input.mp4"` or `"/absolute/input.mp4" "/absolute/output-dir"`.
-      4. Extra flags are supported, such as `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, and `--vision-model-dir /models/vision-language-model`.
-      5. The workflow returns the output directory and key artifact paths in stdout.
+      3. By default, pass only the video path. Do not invent or pass an output directory. Store results in a child directory for the current video under `VIDEO_INSIGHT_OUTPUT_DIR`, falling back to `~/.bamboo/workspace/video-insight` when unset.
+      4. Pass an explicit output directory only when the user explicitly requests a different location.
+      5. Keep downstream artifacts derived from this video, including article drafts and generated documents, under the `OutputDir` returned by this workflow.
+      6. Extra flags are supported, such as `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, and `--vision-model-dir /models/vision-language-model`.
+      7. The workflow returns the output directory and key artifact paths in stdout.
     variables:
       # Whisper 语音转写模型目录，避免使用默认缓存路径。
       VIDEO_INSIGHT_MODEL_DIR: "${VIDEO_INSIGHT_MODEL_DIR}"
@@ -78,8 +80,8 @@ workflows:
       VIDEO_INSIGHT_ENABLE_OCR: auto
       VIDEO_INSIGHT_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
       VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
-      VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_det
-      VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR: /Users/liubaoyang/Documents/YoungL/models/PP-OCRv5/PP-OCRv5_mobile_rec
+      VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR: "${VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR}"
+      VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR: "${VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_DIR}"
     requirements:
       bins:
         - python

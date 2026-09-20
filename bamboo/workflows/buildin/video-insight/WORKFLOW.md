@@ -4,9 +4,11 @@ description: Extract audio, speech transcript, keyframes, OCR text, keyframe des
 usage: |
   1. Call `workflow_load` with `name="video-insight"` before running this workflow.
   2. Call `workflow_run` with `name="video-insight"` and arguments containing a local video path.
-  3. Arguments may be either `"/absolute/input.mp4"` or `"/absolute/input.mp4" "/absolute/output-dir"`.
-  4. Extra process flags are supported, for example `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, or `--vision-model-dir /models/vision-language-model`.
-  5. The workflow returns the output directory and key artifact paths in stdout.
+  3. By default, pass only the video path. Do not invent or pass an output directory. The workflow must create a child directory for the current video under `VIDEO_INSIGHT_OUTPUT_DIR`, or under `~/.bamboo/workspace/video-insight` when that variable is unset.
+  4. Pass an explicit output directory only when the user explicitly requests a different location.
+  5. Keep downstream artifacts derived from this video, such as article drafts and generated documents, under the `OutputDir` returned by this workflow.
+  6. Extra process flags are supported, for example `--skip-transcript`, `--skip-vision`, `--skip-ocr`, `--device cuda`, or `--vision-model-dir /models/vision-language-model`.
+  7. The workflow returns the output directory and key artifact paths in stdout.
 dependencies:
 - ffmpeg
 - ffprobe
@@ -30,7 +32,16 @@ run:
 
 ## 使用方式
 
-只传视频路径时，默认输出到 `VIDEO_INSIGHT_OUTPUT_DIR` 下面的一个视频子目录。未配置 `VIDEO_INSIGHT_OUTPUT_DIR` 时，默认输出根目录是 `~/.bamboo/workspace/video-insight/`：
+### 输出目录规则（必须遵循）
+
+- 默认调用时只传视频路径，不得由 Agent 自行编造或附加输出目录。
+- 使用 `.env` 中的 `VIDEO_INSIGHT_OUTPUT_DIR` 作为统一输出根目录。
+- 未配置该变量时，统一使用 `~/.bamboo/workspace/video-insight/`。
+- Workflow 会以当前视频文件名创建独立子目录，音频、字幕、关键帧、OCR、分析报告等文件全部保存在该子目录内。
+- 后续基于该视频制作文章、报告或其他产物时，应继续保存在 Workflow 返回的 `OutputDir` 下，例如 `OutputDir/article/`，不得另行在 `~/.bamboo/workspace` 下创建同级临时目录。
+- 只有用户明确要求其他保存位置时，才允许传入显式输出目录。
+
+默认用法如下：
 
 ```json
 {"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\""}
@@ -44,7 +55,7 @@ run:
 
 如果同名目录已存在，会自动使用 `demo-2/`、`demo-3/` 这类后缀，避免覆盖旧结果。
 
-也可以显式指定输出目录；显式目录优先级最高，会绕过默认输出根目录：
+用户明确要求其他位置时，可以显式指定输出目录；显式目录优先级最高，会绕过默认输出根目录：
 
 ```json
 {"name": "video-insight", "arguments": "\"/Users/me/videos/demo.mp4\" \"/Users/me/outputs/demo-video\""}

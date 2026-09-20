@@ -94,6 +94,7 @@ bamboo = [
     "skills/buildin/*/references/*",
     "skills/buildin/*/references/*/*",
     "skills/buildin/*/scripts/*",
+    "skills/buildin/*/scripts_test/*",
     "skills/buildin/*/experiences/*.md",
     "workflows/buildin/*/WORKFLOW.md",
     "workflows/buildin/*/scripts/*",
@@ -124,5 +125,5 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "bamboo/skills/buildin"]
 asyncio_mode = "auto"
