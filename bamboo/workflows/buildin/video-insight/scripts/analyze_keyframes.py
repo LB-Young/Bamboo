@@ -78,7 +78,9 @@ def analyze_keyframes(args: argparse.Namespace) -> dict[str, Any]:
 
     data = {
         "vision_model_dir": vision_model_dir or None,
+        "vision_device": vision_model.device if vision_model is not None else None,
         "ocr_enabled": not args.skip_ocr and ocr_engine is not None,
+        "ocr_device": getattr(ocr_engine, "_bamboo_device", None),
         "ocr_warning": ocr_warning,
         "frames": analyzed_frames,
         "visual_summary": visual_summary,
@@ -139,9 +141,21 @@ class LocalVisionLanguageModel:
         self.torch = torch
         self.process_vision_info = process_vision_info
         self.max_new_tokens = max_new_tokens
-        if device == "auto" and torch.backends.mps.is_available():
-            device = "mps"
-        device_map: str | None = "auto" if device == "auto" else None
+        if device == "auto":
+            if torch.cuda.is_available():
+                self.device = "cuda"
+                device_map: str | None = "auto"
+            elif torch.backends.mps.is_available():
+                self.device = "mps"
+                device = "mps"
+                device_map = None
+            else:
+                self.device = "cpu"
+                device = "cpu"
+                device_map = None
+        else:
+            self.device = device
+            device_map = None
         kwargs: dict[str, Any] = {
             "dtype": resolve_torch_dtype(torch, dtype),
             "local_files_only": True,
@@ -240,11 +254,13 @@ def load_ocr_engine() -> tuple[Any | None, str]:
     if enable_ocr in {"0", "false", "no", "off", "disabled"}:
         return None, "OCR is disabled by VIDEO_INSIGHT_ENABLE_OCR."
     try:
+        import paddle
         from paddleocr import PaddleOCR  # type: ignore
     except ImportError:
         return None, "PaddleOCR is not installed; keyframe OCR is skipped."
 
     kwargs: dict[str, Any] = {
+        "device": resolve_paddle_device(os.environ.get("VIDEO_INSIGHT_OCR_DEVICE", "auto"), paddle),
         "use_doc_orientation_classify": False,
         "use_doc_unwarping": False,
         "use_textline_orientation": False,
@@ -265,13 +281,28 @@ def load_ocr_engine() -> tuple[Any | None, str]:
         kwargs["text_recognition_model_dir"] = str(recognition_dir)
 
     try:
-        return PaddleOCR(**kwargs), ""
+        engine = PaddleOCR(**kwargs)
+        engine._bamboo_device = kwargs["device"]
+        return engine, ""
     except Exception as exc:
         return None, f"PaddleOCR failed to initialize: {exc}"
 
 
 def env_value(name: str) -> str:
     return os.environ.get(name, "").strip()
+
+
+def resolve_paddle_device(requested: str, paddle: Any) -> str:
+    """Resolve auto to the first CUDA device when this Paddle build supports it."""
+    value = str(requested or "auto").strip().lower()
+    if value != "auto":
+        return value
+    try:
+        if paddle.device.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0:
+            return "gpu:0"
+    except (AttributeError, RuntimeError):
+        pass
+    return "cpu"
 
 
 def configured_model_dir(value: str) -> Path | None:

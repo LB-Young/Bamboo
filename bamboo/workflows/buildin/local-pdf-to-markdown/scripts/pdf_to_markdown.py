@@ -58,7 +58,7 @@ def main(argv: list[str]) -> int:
     layout_model_dir = args.layout_model or Path(
         str(config.get("PDF2MD_LAYOUT_MODEL_DIR") or config.get("PDF2MD_LAYOUT_MODEL") or DEFAULT_LAYOUT_MODEL_DIR)
     )
-    layout_device = args.layout_device or str(config.get("PDF2MD_LAYOUT_DEVICE") or "cpu")
+    layout_device = args.layout_device or str(config.get("PDF2MD_LAYOUT_DEVICE") or "auto")
     enable_ocr = str(config.get("PDF2MD_ENABLE_OCR") or "auto").strip().lower()
     pdf_path = args.pdf.expanduser().resolve()
     if not pdf_path.is_file():
@@ -200,8 +200,9 @@ def convert_pdf(
     config: dict[str, Any],
 ) -> dict[str, Any]:
     doc = fitz.open(pdf_path)
-    layout_detector, layout_warning = load_layout_detector(layout_model_name, layout_model_dir, layout_device)
-    ocr_engine, ocr_warning = load_ocr_engine(enable_ocr, config)
+    resolved_layout_device = resolve_paddle_device(layout_device)
+    layout_detector, layout_warning = load_layout_detector(layout_model_name, layout_model_dir, resolved_layout_device)
+    ocr_engine, ocr_warning = load_ocr_engine(enable_ocr, config, fallback_device=resolved_layout_device)
     warnings = [warning for warning in (layout_warning, ocr_warning) if warning]
     all_blocks: list[Block] = []
     image_assets = 0
@@ -211,7 +212,7 @@ def convert_pdf(
     for page_index, page in enumerate(doc, start=1):
         page_png = render_page(page, page_index, pages_dir, dpi)
         native_blocks = native_text_blocks(page, page_index)
-        layout_blocks = detect_layout(layout_detector, page_png, page_index, layout_dir, dpi, layout_device)
+        layout_blocks = detect_layout(layout_detector, page_png, page_index, layout_dir, dpi, resolved_layout_device)
         page_blocks = assign_layout_text(layout_blocks, native_blocks) if layout_blocks else native_blocks
         if not reliable_text(page_blocks):
             scanned_pages += 1
@@ -253,6 +254,8 @@ def convert_pdf(
             "dpi": dpi,
             "layout_model": layout_model_name if layout_detector else "",
             "layout_model_dir": str(layout_model_dir) if layout_detector else "",
+            "layout_device": resolved_layout_device,
+            "ocr_device": getattr(ocr_engine, "_bamboo_device", None),
             "ocr_enabled": ocr_engine is not None,
             "assets": {"layout_crops": layout_assets, "pdf_images": image_assets},
             "warnings": warnings,
@@ -447,7 +450,7 @@ def assign_layout_text(layout_blocks: list[Block], native_blocks: list[Block]) -
     return assigned
 
 
-def load_ocr_engine(enable_ocr: str, config: dict[str, Any]) -> tuple[Any | None, str]:
+def load_ocr_engine(enable_ocr: str, config: dict[str, Any], *, fallback_device: str = "auto") -> tuple[Any | None, str]:
     if enable_ocr in {"0", "false", "no", "off", "disabled"}:
         return None, "OCR is disabled by workflows_buildin.yaml."
     try:
@@ -455,6 +458,7 @@ def load_ocr_engine(enable_ocr: str, config: dict[str, Any]) -> tuple[Any | None
     except ImportError:
         return None, "PaddleOCR is not installed; scanned pages may not contain OCR text."
     kwargs: dict[str, Any] = {
+        "device": resolve_paddle_device(str(config.get("PDF2MD_OCR_DEVICE") or fallback_device)),
         "use_doc_orientation_classify": False,
         "use_doc_unwarping": False,
         "use_textline_orientation": False,
@@ -470,11 +474,15 @@ def load_ocr_engine(enable_ocr: str, config: dict[str, Any]) -> tuple[Any | None
     if recognition_dir:
         kwargs["text_recognition_model_dir"] = str(recognition_dir)
     try:
-        return PaddleOCR(**kwargs), ""
+        engine = PaddleOCR(**kwargs)
+        engine._bamboo_device = kwargs["device"]
+        return engine, ""
     except ValueError:
         kwargs.pop("text_detection_model_dir", None)
         kwargs.pop("text_recognition_model_dir", None)
-        return PaddleOCR(**kwargs), ""
+        engine = PaddleOCR(**kwargs)
+        engine._bamboo_device = kwargs["device"]
+        return engine, ""
     except Exception as exc:  # pragma: no cover - OCR runtime dependent.
         return None, f"PaddleOCR failed to initialize: {exc}"
 
@@ -484,6 +492,21 @@ def configured_model_dir(value: Any) -> Path | None:
         return None
     path = Path(str(value)).expanduser()
     return path.resolve() if path.is_dir() else None
+
+
+def resolve_paddle_device(requested: str) -> str:
+    """Resolve auto to the first CUDA device when this Paddle build supports it."""
+    value = str(requested or "auto").strip().lower()
+    if value != "auto":
+        return value
+    try:
+        import paddle
+
+        if paddle.device.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0:
+            return "gpu:0"
+    except (ImportError, AttributeError, RuntimeError):
+        pass
+    return "cpu"
 
 
 def run_ocr(ocr_engine: Any | None, image_path: Path) -> str:

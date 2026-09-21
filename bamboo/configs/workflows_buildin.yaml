@@ -29,7 +29,9 @@ workflows:
       PDF2MD_LAYOUT_MODEL_NAME: PP-DocLayout_plus-L
       PDF2MD_LAYOUT_MODEL_DIR: "${PDF2MD_LAYOUT_MODEL_DIR}"
       PDF2MD_DPI: "180"
-      PDF2MD_LAYOUT_DEVICE: cpu
+      # auto 优先使用 Paddle CUDA，GPU 版 Paddle 不可用时回退 CPU。
+      PDF2MD_LAYOUT_DEVICE: auto
+      PDF2MD_OCR_DEVICE: auto
       PDF2MD_ENABLE_OCR: "auto"
       PDF2MD_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
       PDF2MD_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
@@ -78,6 +80,8 @@ workflows:
       VIDEO_INSIGHT_ANALYSIS_LANGUAGE: zh-CN
       # PaddleOCR 配置，用于关键帧中文字识别。
       VIDEO_INSIGHT_ENABLE_OCR: auto
+      # auto 优先使用 Paddle CUDA，GPU 版 Paddle 不可用时回退 CPU。
+      VIDEO_INSIGHT_OCR_DEVICE: auto
       VIDEO_INSIGHT_OCR_DETECTION_MODEL_NAME: PP-OCRv5_mobile_det
       VIDEO_INSIGHT_OCR_RECOGNITION_MODEL_NAME: PP-OCRv5_mobile_rec
       VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR: "${VIDEO_INSIGHT_OCR_DETECTION_MODEL_DIR}"

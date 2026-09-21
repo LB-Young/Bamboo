@@ -108,6 +108,7 @@ VIDEO_INSIGHT_ANALYSIS_LANGUAGE=zh-CN
 
 # 是否启用关键帧 OCR；auto 表示能加载 PaddleOCR 就使用，disabled/false/off 可关闭。
 VIDEO_INSIGHT_ENABLE_OCR=auto
+VIDEO_INSIGHT_OCR_DEVICE=auto
 
 # PaddleOCR 检测模型名称和本地目录，用于定位画面中文字区域。
 VIDEO_INSIGHT_OCR_DETECTION_MODEL_NAME=PP-OCRv5_mobile_det
@@ -147,7 +148,7 @@ TranscriptVtt: /absolute/path/to/output-directory/transcript.vtt
 
 ## 限制
 
-- 语音转写的 `--device auto` 自动选择 CUDA 或 CPU；`--compute-type auto` 对应 float16 或 int8。Apple Silicon 的语音转写使用 CPU，视觉分析可使用 MPS。
+- 语音转写的 `--device auto` 自动选择 CUDA 或 CPU；`--compute-type auto` 对应 float16 或 int8。视觉模型的 `auto` 按 CUDA、MPS、CPU 的顺序选择设备，CUDA 可用时由 Transformers 自动分配 GPU。OCR 的 `VIDEO_INSIGHT_OCR_DEVICE=auto` 在 GPU 版 Paddle 可用时选择 `gpu:0`，否则回退 CPU。Apple Silicon 的语音转写使用 CPU，视觉分析可使用 MPS。
 - 未指定语音模型目录时会报错，不会隐式下载到默认缓存目录。
 - 视觉分析使用本地多模态模型目录，脚本通过 transformers auto class 以 `local_files_only=True` 加载，不会联网下载模型。
 - 未配置 `VIDEO_INSIGHT_VISION_MODEL_DIR` 时，基础音频和关键帧仍会产出，报告中会记录视觉分析错误。
