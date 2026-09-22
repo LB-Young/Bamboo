@@ -59,7 +59,9 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
-Bamboo currently defaults to `kimi-k3`. After `bamboo init`, configure the Kimi API key in `~/.bamboo/configs/models.yaml`:
+Bamboo's packaged configuration currently defaults to `deepseek-chat`. After `bamboo init`, set `DEEPSEEK_API_KEY` in `~/.bamboo/.env` or the launching terminal. Existing installations use their local configuration. See the [complete Chinese user guide](docs/user-guide.md) for PowerShell setup, all features, and troubleshooting.
+
+To use Kimi instead, configure `~/.bamboo/configs/models.yaml` as follows and explicitly select `kimi-k3` in the main agent configuration below:
 
 ```yaml
 default_model: kimi-k3
@@ -323,10 +325,15 @@ bamboo docs
 
 Additional repository docs:
 
+- [完整功能与使用指南（中文）](docs/user-guide.md): installation, configuration, sessions, tools, permissions, skills, workflows, subagents, MCP, plugins, cron, BKN, eval, HTTP API, and media generation
 - [Adapter guide](docs/adapters.md)
 - [BKN usage](docs/bkn.md)
 - [BKN design](docs/bkn-design.md)
 - [BKN graph design](docs/bkn-graph-design.md)
+
+The user guide is also included in `bamboo docs`. After editing it, run `python scripts/build_user_guide.py`; use `--check` to verify synchronization. Design documents describe architecture and proposals, not a guarantee that every proposed feature is implemented.
+
+Before re-running `bamboo init` on an existing installation, back up your configuration. The CLI asks before overwriting; accepting replaces packaged configuration and built-in resource directories. Declining cancels initialization.
 
 
 ## License

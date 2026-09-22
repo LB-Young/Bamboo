@@ -4,6 +4,8 @@ Bamboo adapters connect external interaction surfaces to the same `TaskRuntime`.
 Each adapter normalizes user input into `RunParams`, runs a task, and returns or
 streams the result through its own UI.
 
+For installation, command examples, permissions, and a complete API request/response guide, see the [Chinese user guide](user-guide.md#guide-api).
+
 ## Available Adapters
 
 | Adapter | Command | Main use |
@@ -49,6 +51,17 @@ and `yes_all`. `images` and `image_paths` are explicit image sources; image-like
 URLs or paths in `message` follow the same automatic parsing behavior as other
 adapters.
 
+`mode` defaults to `chat`; only the exact value `project` selects project mode.
+Responses from `/v1/chat` contain `session_id`, `task_id`, `record_dir`, `status`,
+and `message`. Send the returned session ID and record directory with the next
+request to continue the session, preserving the project mode and path.
+Streaming returns newline-delimited JSON (not SSE), beginning with `session`
+and ending with `complete`; inspect error events and task status as well.
+Paths refer to the server filesystem. The API currently has no authentication
+middleware, so external deployments need their own access control. Tools needing
+approval are denied by the default non-interactive resolver unless explicitly approved
+through the request's permission settings.
+
 ## Fancy Desktop App
 
 Start it with:
@@ -84,6 +97,7 @@ bamboo wechat --session-mode project --project /path/to/project
 Behavior:
 
 - Uses WeChat iLink QR login.
+- Defaults to `chat`. Only explicit `--session-mode project` selects project mode; `--project` alone or `--session-mode auto` still uses chat.
 - Stores token state in `~/.wxbot/token.json`.
 - Polls user text messages and replies with Bamboo task output.
 - Maintains one in-process Bamboo session per WeChat `from_user_id`.

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bamboo 命令使用说明</title>
+    <title>Bamboo 功能与使用说明</title>
     <link rel="stylesheet" href="/static/docs.css" />
   </head>
   <body>
@@ -13,7 +13,7 @@
           <div class="mark">B</div>
           <div>
             <strong>Bamboo</strong>
-            <span>命令使用说明</span>
+            <span>功能与使用说明</span>
           </div>
         </header>
         <nav aria-label="文档目录">
@@ -21,6 +21,24 @@
           <a href="#overview">功能概览</a>
           <a href="#quickstart">快速开始</a>
           <a href="#configuration">配置模型</a>
+          <!-- USER GUIDE NAV START -->
+<div class="toc-group">使用指南</div>
+<a href="#guide-install">安装、初始化与升级</a>
+<a href="#guide-entrypoints">选择入口与常用任务</a>
+<a href="#guide-config">模型、配置与用户目录</a>
+<a href="#guide-sessions">会话、恢复、回放与记忆</a>
+<a href="#guide-tools">工具、权限与沙箱</a>
+<a href="#guide-skills">Skills 与斜杠命令</a>
+<a href="#guide-workflows">工作流与内容处理</a>
+<a href="#guide-agents">子代理与提示词定制</a>
+<a href="#guide-mcp">MCP 与插件</a>
+<a href="#guide-cron">定时任务与执行历史</a>
+<a href="#guide-bkn">BKN 知识网络</a>
+<a href="#guide-eval">Eval：从会话到回归检查</a>
+<a href="#guide-api">HTTP API 集成</a>
+<a href="#guide-media">图像、视频生成与编辑</a>
+<a href="#guide-troubleshooting">排查问题与文档维护</a>
+<!-- USER GUIDE NAV END -->
           <div class="toc-group">Commands</div>
           <a href="#main">main</a>
           <a href="#run">run</a>
@@ -35,6 +53,8 @@
           <a href="#cron">cron</a>
           <a href="#plugin">plugin</a>
           <a href="#eval">eval</a>
+          <a href="#guide-api">api</a>
+          <a href="#guide-bkn">bkn</a>
           <a href="#version">version</a>
         </nav>
       </aside>
@@ -42,13 +62,13 @@
       <main class="content">
         <header class="hero">
           <p class="eyebrow">Bamboo CLI Documentation</p>
-          <h1>Bamboo 命令使用说明</h1>
+          <h1>Bamboo 功能与使用说明</h1>
           <p>
-            这份说明覆盖使用者直接接触的 <code>bamboo</code> 命令、模型配置和常见启动方式。
-            不包含内部执行流程、Web API 或运行时实现细节。
+            从安装与模型配置开始，覆盖命令行、桌面、Web、API、会话记忆、工具权限、扩展、自动化、知识网络和评测。
+            按当前仓库实现核对，更新于 2026-09-22；设计文档中的规划不等于已实现功能。
           </p>
           <div class="meta-row" aria-label="文档摘要">
-            <span class="pill">Python 3.11+</span>
+            <span class="pill">Python 3.12+</span>
             <span class="pill">CLI</span>
             <span class="pill">Web</span>
             <span class="pill">Desktop</span>
@@ -86,15 +106,14 @@
         <section id="quickstart">
           <h2>快速开始</h2>
           <p class="lead">
-            默认配置使用 <code>kimi-k3</code> 作为主模型。初始化后，只要在
-            <code>models.yaml</code> 里配置 Kimi API Key，或使用环境变量引用，就可以直接运行。
+            当前随包配置使用 <code>deepseek-chat</code> 作为主模型。初始化后配置
+            <code>DEEPSEEK_API_KEY</code> 即可运行；已有安装以本机配置为准。Windows 示例见<a href="#guide-install">安装指南</a>。
           </p>
           <pre><code>pip install -e .
 bamboo init
 
-# 编辑 ~/.bamboo/configs/models.yaml，把 kimi-k3.api_key 改成你的 key，
-# 或写成 "${MOONSHOT_API_KEY}" 后在 shell 里设置环境变量。
-export MOONSHOT_API_KEY="your-kimi-api-key"
+# 在 ~/.bamboo/.env 中填写 DEEPSEEK_API_KEY，或在 Bash 中执行：
+export DEEPSEEK_API_KEY="your-deepseek-api-key"
 
 bamboo main --msg "帮我分析这个项目"</code></pre>
           <p>
@@ -119,7 +138,7 @@ bamboo main --msg "帮我分析这个项目"</code></pre>
           <h3>1. 配置 <code>models.yaml</code></h3>
           <p>文件位置：</p>
           <pre><code>~/.bamboo/configs/models.yaml</code></pre>
-          <p>默认 Kimi 示例：</p>
+          <p>切换到 Kimi 的可选示例（当前随包默认是 deepseek-chat；同时修改下方主 Agent 配置才能完成切换）：</p>
           <pre><code>default_model: kimi-k3
 
 models:
@@ -166,7 +185,7 @@ models:
           <p>文件位置：</p>
           <pre><code>~/.bamboo/configs/bamboo_main_agent.yaml</code></pre>
           <p>默认配置：</p>
-          <pre><code>model: kimi-k3
+          <pre><code>model: deepseek-chat
 fallback_model: ""
 compaction_model: ""
 tool_call_timeout_seconds: 120
@@ -203,7 +222,7 @@ auxiliary_models:
               <tr><td><code>fallback_model</code></td><td>主模型遇到 rate limit、server error、timeout 等可重试错误时的备用模型；留空表示不启用。</td></tr>
               <tr><td><code>compaction_model</code></td><td>上下文压缩使用的模型；留空时复用 <code>model</code>。</td></tr>
               <tr><td><code>tool_call_timeout_seconds</code></td><td>单次工具调用的全局超时时间；超时后写入 tool error，让 Agent 下一轮选择其他方案。</td></tr>
-              <tr><td><code>compaction_fallback_model</code></td><td>上下文压缩的备用模型；留空表示不启用。</td></tr>
+              <tr><td><code>compaction_fallback_model</code></td><td>随包配置中的预留字段；辅助模型路由配置见使用指南。</td></tr>
               <tr><td><code>auxiliary_models</code></td><td>为 memory、skills_hub、vision 等辅助任务指定模型；未配置时默认复用主模型。</td></tr>
             </tbody>
           </table>
@@ -359,6 +378,8 @@ bamboo main --resume SESSION_ID</code></pre>
             </thead>
             <tbody>
               <tr><td><code>--msg</code>, <code>-m</code></td><td><code>null</code></td><td>初始消息；不传时进入交互式 CLI 会话。</td></tr>
+              <tr><td><code>--image</code></td><td><code>[]</code></td><td>图片来源，可重复传入；需要同时提供 --msg。</td></tr>
+              <tr><td><code>--verbosity</code></td><td><code>simple</code></td><td>CLI 展示详略：simple、medium、full。</td></tr>
               <tr><td><code>--project</code>, <code>-p</code></td><td>当前目录</td><td>项目路径，Project 模式会使用它作为上下文根目录。</td></tr>
               <tr><td><code>--model</code></td><td>主 Agent 配置</td><td>临时覆盖本轮使用的模型注册名。</td></tr>
               <tr><td><code>--provider</code></td><td>模型配置</td><td>临时覆盖 provider，例如 <code>kimi</code>、<code>deepseek</code>、<code>gpt</code>、<code>claude</code>。</td></tr>
@@ -473,7 +494,7 @@ bamboo wechat --model kimi-k3 --permission default</code></pre>
               <tr><td><code>--model</code></td><td><code>""</code></td><td>覆盖模型注册名。</td></tr>
               <tr><td><code>--provider</code></td><td><code>""</code></td><td>覆盖 provider。</td></tr>
               <tr><td><code>--permission</code></td><td><code>default</code></td><td>权限模式。非交互入口默认不会批准需要确认的工具。</td></tr>
-              <tr><td><code>--session-mode</code></td><td><code>auto</code></td><td>会话模式。</td></tr>
+              <tr><td><code>--session-mode</code></td><td><code>chat</code></td><td>仅显式指定 project 才进入项目模式；auto 或单独指定 --project 仍使用 chat。</td></tr>
               <tr><td><code>--yes</code>, <code>-y</code></td><td><code>false</code></td><td>自动批准 default 模式下需要确认的工具。</td></tr>
               <tr><td><code>--relogin</code></td><td><code>false</code></td><td>忽略已有 token，重新扫码登录。</td></tr>
             </tbody>
@@ -603,6 +624,7 @@ bamboo models discover vllm --base-url http://localhost:8000/v1 --timeout 10</co
 
         <section id="eval">
           <h2><code>bamboo eval</code></h2>
+          <p>支持离线 replay 与实际执行模型的 live 用例。完整 YAML 示例、断言和 CI 退出码见<a href="#guide-eval">Eval 使用指南</a>。</p>
           <table>
             <thead>
               <tr><th>命令</th><th>参数</th><th>说明</th></tr>
@@ -613,6 +635,685 @@ bamboo models discover vllm --base-url http://localhost:8000/v1 --timeout 10</co
             </tbody>
           </table>
         </section>
+
+        <!-- USER GUIDE CONTENT START -->
+<section id="guide-install">
+<h2>安装、初始化与升级</h2>
+<p>需要 Python 3.12+。在源码目录运行：</p>
+<pre><code class="language-bash">python -m pip install -e .
+python -m bamboo init
+python -m bamboo version
+</code></pre>
+<p>下文的 <code>bamboo</code> 都可以替换成 <code>python -m bamboo</code>。Windows 提示找不到 <code>bamboo</code> 时，先使用模块入口；可用 <code>python -c &quot;import sysconfig; print(sysconfig.get_path('scripts'))&quot;</code> 找出应加入 PATH 的 Scripts 目录。</p>
+<p>当前随包的 <code>models.yaml</code> 和 <code>bamboo_main_agent.yaml</code> 默认选择 <code>deepseek-chat</code>。初始化后，在 <code>~/.bamboo/.env</code> 中填写：</p>
+<pre><code class="language-dotenv">DEEPSEEK_API_KEY=你的密钥
+</code></pre>
+<p>也可在启动 Bamboo 的终端设置环境变量。PowerShell：</p>
+<pre><code class="language-powershell">$env:DEEPSEEK_API_KEY = &quot;你的密钥&quot;
+python -m bamboo main --msg &quot;你好，请介绍你能做什么&quot;
+</code></pre>
+<p>Linux/macOS：</p>
+<pre><code class="language-bash">export DEEPSEEK_API_KEY=&quot;你的密钥&quot;
+bamboo main --msg &quot;你好，请介绍你能做什么&quot;
+</code></pre>
+<p><code>~</code> 指用户主目录，Windows 通常为 <code>C:\Users\用户名</code>。已有用户的实际模型选择以本机配置为准。需要浏览器工具时另外运行 <code>python -m playwright install chromium</code>；桌面入口还需要操作系统可用的 PyWebView 后端。视频、OCR 等工作流的额外依赖见后文。</p>
+<p>升级代码后可重新执行 <code>python -m pip install -e .</code>。<strong>重新运行 <code>bamboo init</code> 前备份配置</strong>：已有用户目录时 CLI 会询问是否覆盖，拒绝则取消；接受会重建 <code>configs</code> 和内置资源目录，包括已有配置。底层资源同步也会刷新这些目录中与随包内容不同的文件，不能把初始化当作只创建缺失文件的操作。用户 <code>.env</code> 和已有 cron jobs 文件不会被该创建逻辑覆盖。</p>
+</section>
+<section id="guide-entrypoints">
+<h2>选择入口与常用任务</h2>
+<table>
+<thead>
+<tr>
+<th>入口</th>
+<th>用途</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>main</code></td>
+<td>交互对话；传 <code>--msg</code> 时执行一轮后退出</td>
+<td><code>bamboo main</code></td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>简化的一次性 Chat 任务</td>
+<td><code>bamboo run &quot;解释这段错误&quot;</code></td>
+</tr>
+<tr>
+<td><code>app</code> / <code>app-fancy</code></td>
+<td>原生桌面窗口</td>
+<td><code>bamboo app-fancy</code></td>
+</tr>
+<tr>
+<td><code>web</code> / <code>web-fancy</code></td>
+<td>浏览器界面，默认端口 8899</td>
+<td><code>bamboo web --no-browser</code></td>
+</tr>
+<tr>
+<td><code>api</code></td>
+<td>面向程序的 HTTP API，默认端口 8898</td>
+<td><code>bamboo api</code></td>
+</tr>
+<tr>
+<td><code>wechat</code></td>
+<td>iLink 扫码登录的微信文本入口</td>
+<td><code>bamboo wechat</code></td>
+</tr>
+<tr>
+<td><code>docs</code></td>
+<td>本机使用说明页面</td>
+<td><code>bamboo docs</code></td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-bash">bamboo main --session-mode project --project /path/to/repo
+bamboo main --msg &quot;检查项目测试失败原因&quot; --project /path/to/repo --session-mode project
+bamboo main --msg &quot;说明这张图片&quot; --model kimi-k3 --image /path/to/image.png
+bamboo main --msg &quot;列出项目入口&quot; --verbosity full --debug-events
+bamboo web --port 9000 --no-browser
+bamboo docs --port 9000 --no-server
+</code></pre>
+<p><code>main</code> 支持 <code>--model</code>、<code>--provider</code>、<code>--permission</code>、<code>--yes</code>、<code>--no-stream</code>、<code>--session-mode</code>、<code>--resume</code> 和 <code>--record-dir</code>。<code>--verbosity</code> 可选 <code>simple</code>（默认）、<code>medium</code>、<code>full</code>，影响 CLI 展示；<code>--debug-events</code> 用于诊断事件。<code>--image</code> 可重复传入，需要同时提供消息，并选择支持图像的模型。</p>
+<p><code>run</code> 只提供任务位置参数以及 <code>--image</code>、<code>--debug-events</code>、<code>--resume</code>、<code>--record-dir</code>，不能套用 <code>main</code> 的全部参数。需要指定项目、模型或权限时使用 <code>main --msg</code>。</p>
+<p>Fancy 桌面支持模型选择、日志、Context 使用率、亮暗主题和 Git Diff。Diff 来源于 Git 工作区：已跟踪、已暂存和 Git 可见的未跟踪文件可显示，忽略文件和仓库之外的文件不会显示。Context 形象按 0–39%、40–89%、90–100% 分级。</p>
+<p>微信首次运行扫码，凭据存于 <code>~/.wxbot/token.json</code>；<code>--relogin</code> 重新登录。当前仅处理文本，同一微信用户在进程内复用会话，发送 <code>/new</code> 或 <code>/reset</code> 新建会话。</p>
+<p><code>bamboo wechat</code> 默认使用 <code>chat</code>，仅启动时显式传入 <code>--session-mode project</code> 才进入项目模式，例如 <code>bamboo wechat --session-mode project --project /path/to/repo</code>。单独传 <code>--project</code> 或传 <code>--session-mode auto</code> 仍使用 chat。这里的 session-mode 是会话模式，<code>--model</code> 则用于选择模型。</p>
+</section>
+<section id="guide-config">
+<h2>模型、配置与用户目录</h2>
+<table>
+<thead>
+<tr>
+<th>路径（相对 <code>~/.bamboo</code>）</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.env</code></td>
+<td>本地密钥，供配置中的 <code>${ENV_NAME}</code> 引用</td>
+</tr>
+<tr>
+<td><code>configs/models.yaml</code></td>
+<td>模型注册、连接参数、能力、默认模型</td>
+</tr>
+<tr>
+<td><code>configs/bamboo_main_agent.yaml</code></td>
+<td>主模型、备用模型、压缩与辅助模型、工具超时</td>
+</tr>
+<tr>
+<td><code>configs/tools.yaml</code></td>
+<td>沙箱与媒体工具配置</td>
+</tr>
+<tr>
+<td><code>configs/tools_buildin.yaml</code></td>
+<td>内置工具设置，例如浏览器 profile</td>
+</tr>
+<tr>
+<td><code>configs/mcp.yaml</code>、<code>configs/mcp.d/*.yaml</code></td>
+<td>MCP 服务与插件配置片段</td>
+</tr>
+<tr>
+<td><code>configs/workflows_buildin.yaml</code></td>
+<td>内置工作流启用状态、执行参数和依赖说明</td>
+</tr>
+<tr>
+<td><code>configs/memory.yaml</code></td>
+<td>知识整理子代理配置</td>
+</tr>
+<tr>
+<td><code>prompts/</code></td>
+<td>可编辑的系统提示词模板</td>
+</tr>
+<tr>
+<td><code>skills/</code>、<code>commands/</code>、<code>workflows/</code>、<code>agents/</code></td>
+<td>用户扩展</td>
+</tr>
+<tr>
+<td><code>bkn/</code></td>
+<td>知识网络包与平台目录</td>
+</tr>
+<tr>
+<td><code>storage/</code>、<code>memory/</code></td>
+<td>会话、索引、状态与记忆</td>
+</tr>
+<tr>
+<td><code>cron/jobs.yaml</code></td>
+<td>定时任务定义</td>
+</tr>
+<tr>
+<td><code>logs/</code>、<code>workspace/</code></td>
+<td>日志与工作产物</td>
+</tr>
+</tbody>
+</table>
+<p>模型注册名是 <code>models</code> 下的键，服务端模型 ID 是其中的 <code>model</code>，二者可以不同。下面是与当前默认选择一致的最小示例，编辑已有文件时合并条目，不必删掉其他模型：</p>
+<pre><code class="language-yaml"># ~/.bamboo/configs/models.yaml
+default_model: deepseek-chat
+models:
+  deepseek-chat:
+    provider: deepseek
+    model: deepseek-chat
+    model_type: text
+    api_key: &quot;${DEEPSEEK_API_KEY}&quot;
+    base_url: https://api.deepseek.com/v1
+    timeout: 60
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      vision: false
+      max_parallel_tools: 1
+</code></pre>
+<pre><code class="language-yaml"># ~/.bamboo/configs/bamboo_main_agent.yaml
+model: deepseek-chat
+fallback_model: &quot;&quot;
+compaction_model: &quot;&quot;
+tool_call_timeout_seconds: 120
+</code></pre>
+<p><code>bamboo main --model 注册名</code> 覆盖本次模型。永久切换时修改主 Agent 的 <code>model</code>；同时让 <code>default_model</code> 指向希望的默认注册名。仅修改 API Key 不会切换模型。<code>fallback_model</code> 用于可重试的限流、服务错误或超时，留空不启用；<code>compaction_model</code> 留空复用主模型。<code>auxiliary_models</code> 可按 <code>compaction</code>、<code>memory</code>、<code>knowledge_curator</code>、<code>skills_hub</code>、<code>web_extract</code>、<code>session_search</code>、<code>vision</code> 配置 <code>model</code> 和 <code>fallbacks</code>。<code>compaction_fallback_model</code> 在随包配置中仍标注为预留项，不应当作已保证生效的独立开关。</p>
+<p>支持的 provider 包括 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>aliyun</code>、<code>openrouter</code>、<code>ollama</code>、<code>vllm</code>，以及用于专门协议的 <code>flux</code>、<code>generic_http</code>、<code>http_provider</code>。后者的请求协议不等于通用聊天协议；按随包示例选择合适的模型类型和协议。媒体模型不用于主聊天模型选择。</p>
+<p>本地模型不会在启动时自动探测。先启动本地推理服务，再执行：</p>
+<pre><code class="language-bash">bamboo models discover ollama
+bamboo models discover ollama --write --set-default
+bamboo models discover vllm --base-url http://localhost:8000/v1 --timeout 10
+</code></pre>
+<p><code>--write</code> 写入模型配置，<code>--replace</code> 替换同名注册，<code>--yes</code> 跳过写入确认。发现完成后检查主 Agent 的 <code>model</code> 是否也指向本地注册名。模型支持工具调用时，服务端仍需配套的解析器与模板；在配置中声明能力不会为模型增加能力。</p>
+</section>
+<section id="guide-sessions">
+<h2>会话、恢复、回放与记忆</h2>
+<p>Chat 用于日常对话，Project 用于明确的项目根目录和项目记忆；<code>auto</code> 由运行时根据入口信息解析。处理仓库时显式传 <code>--session-mode project --project ...</code>，避免把工作关联到错误目录。</p>
+<pre><code class="language-bash">bamboo replay
+bamboo replay list
+bamboo replay latest
+bamboo replay -2
+bamboo replay SESSION_ID --json
+bamboo main --resume latest
+bamboo main --resume SESSION_ID --msg &quot;继续上次的工作&quot;
+bamboo main --session-mode project --project /path/to/repo --resume list
+bamboo replay SESSION_ID --session-mode project --project /path/to/repo
+</code></pre>
+<p><code>replay</code> 离线读取已有记录，不调用模型或工具；<code>--resume</code> 恢复历史并继续实际执行，会产生新调用。<code>latest</code> / <code>last</code> 和负数序号可用于选择会话；<code>--record-dir</code> 用来显式定位已有记录。无参数 <code>replay</code> 默认列出最近 10 条，<code>--limit</code> 调整数量。</p>
+<p>会话保存消息、轮次、任务和事件等记录。长期记忆由 <code>memory_read</code>、<code>memory_search</code>、<code>memory_update</code> 操作；例如请求“记住本项目用 pytest 测试”，或“查找以前关于部署的决定”。长期记忆和当前上下文不同：运行时会在上下文压力下压缩对话，完整 trace 用于后续查询和回放。跨会话保留的重要信息应写入记忆或项目文件，不能只依赖当前模型上下文。</p>
+<p><code>memory_retrieve</code> 可选择 <code>knowledge</code>（整理后的知识）、<code>source_log</code>（原始会话证据）或 <code>all</code>；<code>memory_backfill</code> 从来源记录提炼带出处的内容，追加到可编辑记忆。需要核实历史结论时请求同时检索原始来源，而不只读取摘要。</p>
+</section>
+<section id="guide-tools">
+<h2>工具、权限与沙箱</h2>
+<p>工具由 Agent 根据请求调用，不是同名的 <code>bamboo</code> 子命令。</p>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>主要工具或入口</th>
+<th>使用方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文件与代码</td>
+<td><code>read</code>、<code>write</code>、<code>edit</code>、<code>glob</code>、<code>grep</code>、<code>bash</code></td>
+<td>“查找入口并修复这个错误”</td>
+</tr>
+<tr>
+<td>Python 语义查询</td>
+<td><code>lsp</code></td>
+<td>定义、引用、符号和语法诊断；当前基于 Python AST，不是通用语言服务器</td>
+</tr>
+<tr>
+<td>网页与浏览器</td>
+<td><code>web_fetch</code>、<code>browser</code></td>
+<td>获取页面、打开网站、截图、提取内容、点击与输入</td>
+</tr>
+<tr>
+<td>媒体</td>
+<td><code>text_to_image</code>、<code>image_edit</code>、<code>text_to_video</code></td>
+<td>指明内容、参考图和输出需求</td>
+</tr>
+<tr>
+<td>扩展</td>
+<td><code>skill_load</code>、<code>workflow_load</code>、<code>workflow_run</code>、<code>subagent_run</code></td>
+<td>指定技能、工作流或子代理完成任务</td>
+</tr>
+<tr>
+<td>任务跟踪</td>
+<td><code>todo_write</code>、<code>task_create</code>、<code>task_get</code>、<code>task_list</code>、<code>task_stop</code></td>
+<td>跟踪复杂任务；任务快照本身不等于启动持久后台 worker</td>
+</tr>
+<tr>
+<td>自动化</td>
+<td><code>cron_add</code>、<code>cron_list</code>、<code>cron_get</code>、<code>cron_enable</code>、<code>cron_disable</code>、<code>cron_runs</code>、<code>cron_tick</code></td>
+<td>对话中创建任务、查看执行历史</td>
+</tr>
+<tr>
+<td>记忆与知识</td>
+<td>memory 系列、BKN 系列</td>
+<td>查询和维护长期知识</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>权限模式</th>
+<th>实际行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>default</code> / <code>auto</code> / <code>strict</code></td>
+<td>读操作允许，其他操作请求确认</td>
+</tr>
+<tr>
+<td><code>read-only</code> / <code>readonly</code> / <code>deny</code></td>
+<td>允许读操作，拒绝非读操作</td>
+</tr>
+<tr>
+<td><code>bypass</code> / <code>yolo</code></td>
+<td>对通过基础风险检查的操作跳过确认</td>
+</tr>
+<tr>
+<td><code>--yes</code></td>
+<td>在默认模式族中自动批准权限提示</td>
+</tr>
+</tbody>
+</table>
+<p>风险检查先于模式处理；被判定为禁止的破坏性操作不会因 <code>yolo</code> 或 <code>--yes</code> 而放行。微信、API 等非交互入口无法通过普通终端弹窗确认，需要确认的操作默认被拒绝。<code>auto</code> 并不表示自动批准全部操作。</p>
+<pre><code class="language-bash">bamboo main --session-mode project --project /path/to/repo --permission read-only
+bamboo main --msg &quot;在项目里生成报告&quot; --project /path/to/repo --yes
+</code></pre>
+<p><code>configs/tools.yaml</code> 中的 <code>sandbox</code> 与权限策略是不同层：默认 <code>enabled: false</code>；开启后可设置 <code>writable_roots</code>、<code>network_enabled</code>、<code>env_allowlist</code>。<code>fail_open: false</code> 表示操作系统沙箱不可用时失败，设为 true 则可能无沙箱执行。是否支持取决于本机运行环境。</p>
+<p>浏览器配置位于 <code>configs/tools_buildin.yaml</code> 的 <code>browser</code> 下，默认 <code>headless: true</code>；调试登录可改为 false。<code>user_data_dir</code> 默认 <code>~/.bamboo/storage/browser/default</code>，用于保留网站登录状态。Bash 类脚本需要实际可用的 shell，Windows 上不能把 Bash 命令直接当 PowerShell 命令运行。</p>
+</section>
+<section id="guide-skills">
+<h2>Skills 与斜杠命令</h2>
+<p>Skill 是 Agent 按需读取的能力说明，入口文件为 <code>SKILL.md</code>；斜杠命令是把固定提示词模板展开为一条用户消息。内置能力包含调试、测试、代码审查、写作、内容平台访问等，实际可用列表通过 CLI 查看：</p>
+<pre><code class="language-bash">bamboo skill list
+bamboo skill list --all
+bamboo skill create project-review --description &quot;检查项目交付质量&quot;
+bamboo skill show project-review
+bamboo skill validate project-review
+bamboo skill scan /path/to/skill
+bamboo skill install /path/to/skill --trust local
+bamboo skill disable project-review
+bamboo skill enable project-review
+</code></pre>
+<p>创建后编辑用户技能目录中的 <code>SKILL.md</code>，写清适用场景、输入、步骤、产物和验证方法。安装前会扫描；<code>--force</code> 允许绕过非安全扫描结果，<code>--overwrite</code> 允许替换同名安装，二者不是正常安装的必需参数。可以对 Bamboo 说“使用 project-review 检查这个项目”，由 <code>skill_load</code> 读取说明。</p>
+<p>也可在对话中指定技能来源，让 Agent 使用 <code>skill_installer</code> 安装；安装完成后用 <code>skill show</code> 和 <code>skill validate</code> 检查定义及状态。</p>
+<p>内置斜杠模板包括 <code>/commit</code>、<code>/changelog</code>、<code>/learn</code>、<code>/rmslop</code>。例如：</p>
+<pre><code class="language-bash">bamboo main --msg &quot;/rmslop 请润色这段文字：……&quot;
+</code></pre>
+<p>自定义模板保存为 <code>~/.bamboo/commands/review.md</code>，或项目 <code>.bamboo/commands/review.md</code>：</p>
+<pre><code class="language-markdown">---
+name: review
+description: 检查指定模块
+---
+请检查 $ARGUMENTS 的正确性，说明问题所在文件，并给出验证方法。
+</code></pre>
+<p>发送 <code>/review bamboo/eval</code> 时会替换 <code>$ARGUMENTS</code>。同名模板按项目、用户、内置的优先级覆盖。斜杠命令执行的是展开后的提示词，是否调用工具仍受模型决策与权限策略约束。</p>
+</section>
+<section id="guide-workflows">
+<h2>工作流与内容处理</h2>
+<p>Workflow 把说明与可执行脚本组合起来。当前没有 <code>bamboo workflow</code> CLI 命令组；在对话中要求使用某个工作流，Agent 先调用 <code>workflow_load</code>，再调用 <code>workflow_run</code>。也可以通过 <code>workflow_installer</code> 或插件安装工作流。</p>
+<table>
+<thead>
+<tr>
+<th>内置工作流</th>
+<th>输入与产物</th>
+<th>依赖提示</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>daily-review</code></td>
+<td>项目状态快照</td>
+<td>Bash</td>
+</tr>
+<tr>
+<td><code>local-pdf-to-markdown</code></td>
+<td>本地 PDF → Markdown、JSON 中间结果和图片资源</td>
+<td>PyMuPDF、Pillow、PaddleOCR/Paddle；布局/OCR 模型</td>
+</tr>
+<tr>
+<td><code>video-insight</code></td>
+<td>本地视频 → 音频、转写、关键帧、OCR、视觉描述</td>
+<td>ffmpeg、ffprobe；转写、OCR、视觉步骤各自的模型与依赖</td>
+</tr>
+<tr>
+<td><code>extracted-content-to-wechat-article</code></td>
+<td>提取后的内容目录＋文章 Markdown＋封面 → DOCX、规范化 Markdown、资源清单和检查报告</td>
+<td>python-docx、Pillow；可选 matplotlib</td>
+</tr>
+</tbody>
+</table>
+<p>示例请求：“使用 local-pdf-to-markdown，把 /path/to/input.pdf 转为 /path/to/output.md。”视频示例：“使用 video-insight 分析 /path/to/video.mp4，提取转写和关键帧。”默认视频产物放在 <code>VIDEO_INSIGHT_OUTPUT_DIR</code> 下的视频子目录，未设置时使用 <code>~/.bamboo/workspace/video-insight</code>。</p>
+<p>在 <code>configs/workflows_buildin.yaml</code> 查看各工作流的 <code>requirements</code>、<code>variables</code>、<code>run.timeout</code> 和 <code>enabled</code>。视频转写通过 <code>VIDEO_INSIGHT_MODEL_DIR</code> 指向本地模型，可选 <code>VIDEO_INSIGHT_VISION_MODEL_DIR</code> 提供视觉模型；支持 <code>--skip-transcript</code>、<code>--skip-vision</code>、<code>--skip-ocr</code> 等参数，具体以 WORKFLOW.md 为准。长任务还要检查全局工具超时。声明依赖不会自动保证依赖已经安装。</p>
+<p>自定义目录为 <code>~/.bamboo/workflows/&lt;name&gt;/WORKFLOW.md</code> 或项目 <code>.bamboo/workflows/&lt;name&gt;/WORKFLOW.md</code>，同名时项目优先于用户，用户优先于内置。最小模板：</p>
+<pre><code class="language-markdown">---
+name: project-summary
+description: 生成项目摘要
+run:
+  script: scripts/summary.py
+  cwd: .
+  timeout: 60
+  risk: read
+---
+先读取工作流说明，再运行脚本。脚本应输出摘要；输入参数通过 arguments 传入。
+</code></pre>
+<p>将脚本放在同目录的 <code>scripts/summary.py</code>。按脚本实际行为声明风险，产生文件时使用 <code>write</code>，不要给写入或联网脚本标注只读。</p>
+</section>
+<section id="guide-agents">
+<h2>子代理与提示词定制</h2>
+<p>内置 <code>explorer</code>、<code>planner</code>、<code>reviewer</code>、<code>verifier</code>、<code>knowledge-curator</code> 等角色，由主 Agent 的 <code>subagent_run</code> 工具调用。例如：“让 reviewer 审查本次改动，然后汇总问题。”子代理配置可以限制工具、指定模型和工作区方式。</p>
+<p>用户定义实际扫描路径是 <code>~/.bamboo/agents/*.yaml</code>，项目路径是 <code>.bamboo/agents/*.yaml</code>，并非初始化目录列表中的 <code>subagents/</code>。项目定义覆盖同名用户和内置定义。</p>
+<pre><code class="language-yaml">name: project-reviewer
+description: 检查代码正确性
+model: &quot;&quot;
+permission: read-only
+workspace_mode: read_only
+tools:
+  read: true
+  grep: true
+  glob: true
+  bash: false
+  write: false
+  edit: false
+</code></pre>
+<p>模型留空时使用运行时的默认路由。提示词模板在用户 <code>prompts/</code> 中，按 shared、chat/project、platform、provider 等组织。修改提示词用于定制语言、风格和工作方式；工具权限仍由运行时执行，不能通过提示词替代权限配置。</p>
+<p><code>workspace_mode</code> 支持 <code>shared</code>、<code>read_only</code>、<code>tempdir</code>、<code>worktree</code>。共享模式使用同一工作区；临时目录或 Git worktree 用于隔离改动，结果中的差异、保留路径与 <code>merge_required</code> 用来提示是否还需合并，不能把子代理完成当作改动已自动进入主工作区。实际可用性取决于项目和 Git 环境。</p>
+</section>
+<section id="guide-mcp">
+<h2>MCP 与插件</h2>
+<p>当前 MCP 管理器启动本地 <strong>stdio</strong> 服务。先独立验证服务程序能运行，再在 <code>~/.bamboo/configs/mcp.yaml</code> 配置（将示例路径替换为真实服务）：</p>
+<pre><code class="language-yaml">mcp:
+  auto_start: true
+  servers:
+    my-service:
+      command: python
+      args: [&quot;/absolute/path/to/mcp_server.py&quot;]
+      env:
+        SERVICE_API_KEY: &quot;${SERVICE_API_KEY}&quot;
+      connect_timeout: 60
+      timeout: 120
+</code></pre>
+<p>密钥放在 <code>.env</code> 或启动环境中。默认 <code>auto_start: false</code>，只填写 servers 不会启用。启动成功后发现的工具进入 Bamboo 的工具系统，仍受权限控制。不要把远程 HTTP URL 填成 <code>command</code>；当前这个配置解析器以 command/args 启动进程。</p>
+<p>Plugin 把 Skills、commands、workflows 和 MCP 配置组合成可安装包。目录中必须有 <code>bamboo-plugin.yaml</code> 或 <code>.yml</code>：</p>
+<pre><code class="language-yaml">name: project-kit
+version: &quot;1.0.0&quot;
+description: 项目检查工具包
+commands:
+  - commands/review.md
+</code></pre>
+<p>把上节的 review 模板放入该目录的 <code>commands/review.md</code>，然后执行：</p>
+<pre><code class="language-bash">bamboo plugin validate /path/to/project-kit
+bamboo plugin install /path/to/project-kit
+bamboo plugin list
+bamboo plugin show project-kit
+bamboo plugin remove project-kit
+</code></pre>
+<p>可额外声明 <code>skills</code>、<code>workflows</code> 路径列表和 <code>mcp: configs/mcp.yaml</code>；所有引用文件须在包内。安装经过扫描和隔离区，再复制组件到用户空间；MCP 片段安装到 <code>configs/mcp.d/</code>。<code>install --overwrite</code> 替换组件；<code>--force</code> 允许危险扫描结果。卸载默认保留用户修改过的文件，<code>remove --force</code> 才删除这些修改。安装 MCP 组件后仍需检查自动启动配置与服务依赖。</p>
+</section>
+<section id="guide-cron">
+<h2>定时任务与执行历史</h2>
+<pre><code class="language-bash">bamboo cron add daily-report --schedule &quot;0 1 * * *&quot; --prompt &quot;总结项目进展&quot; --project /path/to/repo
+bamboo cron list
+bamboo cron start --interval 30
+</code></pre>
+<p><strong>当前调度器使用 UTC</strong>：上例为 UTC 01:00，即北京时间 09:00。表达式为五段：分钟、小时、日、月、星期。<code>--interval</code> 是检查间隔秒数，不是任务执行周期。<code>cron start</code> 持续运行；<code>cron tick</code> 仅检查一次到期任务，并不是强制运行所有任务。</p>
+<pre><code class="language-bash">bamboo cron disable daily-report
+bamboo cron enable daily-report
+bamboo cron add follow-up --schedule &quot;0 1 * * *&quot; --prompt &quot;继续检查昨日任务&quot; --delivery main --session-id SESSION_ID --record-dir /path/to/session
+</code></pre>
+<p><code>--session</code> 和 <code>--delivery</code> 支持 <code>isolated</code> / <code>main</code>，未指定 delivery 时跟随 session；main 投递需要目标会话信息。已有同名任务要用 <code>--replace</code> 更新。任务持久化在 <code>~/.bamboo/cron/jobs.yaml</code>，更多权限和重试字段可在文件中配置。CLI add 没有 <code>--yes</code> 参数；无人值守任务的权限须在任务配置中明确设置。</p>
+<p>常用交互入口会启动进程内调度器，退出进程后不会继续常驻；需要长期运行时启动独立 <code>cron start</code>。可在对话中要求“查看 daily-report 最近执行记录”，使用 <code>cron_runs</code> 查询成功、失败等历史。注册成功只代表任务已保存，不代表已经执行成功。</p>
+<p>可在启动环境设置 <code>BAMBOO_AUTO_CRON=0</code> 关闭入口的内嵌调度器；已有独立调度进程时尤其应明确由哪个进程负责调度。</p>
+</section>
+<section id="guide-bkn">
+<h2>BKN 知识网络</h2>
+<p>BKN 用来组织业务对象、关系、来源与动作，使 Agent 可以沿关系检索知识。当前同时包含兼容的 <code>bkn.yaml</code> 包以及 <code>bkn/platforms/&lt;platform_id&gt;/</code> 平台结构。平台结构使用 <code>manifest.yaml</code>、<code>schema.json</code> 和图数据；旧格式最小包见仓库 <code>docs/bkn.md</code>。</p>
+<pre><code class="language-bash">bamboo bkn list
+bamboo bkn list --all
+bamboo bkn validate
+bamboo bkn validate /path/to/network
+bamboo bkn index
+bamboo bkn search &quot;项目知识&quot; --network auto --limit 5 --max-hops 2
+bamboo bkn export NETWORK --format mermaid
+bamboo bkn export NETWORK --format markdown --node NODE_ID --depth 1
+</code></pre>
+<p><code>validate</code> 检查格式，<code>index</code> 刷新索引，<code>search</code> 检索并扩展关系，<code>export</code> 输出 Mermaid、DOT 或 Markdown。搜索 limit 限制为 1–20，max-hops 为 0–5；导出邻域 depth 为 0–5。输出不自动创建文件，需要时由 shell 重定向保存。</p>
+<p>对话示例：“查询 BKN 中这个项目关联的平台和资料，说明引用来源。”Agent 可用 <code>bkn_retrieval</code> 查询、<code>bkn_export</code> 导图，也可通过 <code>bkn_ingest</code> 创建平台草稿、<code>bkn_ingest_submit</code> 提交，经权限检查使用 <code>bkn_update_topology</code> 更新节点和边。拓扑更新要求 evidence。草稿阶段不等于已进入活动知识库。</p>
+<p>当前已包含 <code>bkn_action_prepare</code> 和 <code>bkn_action_execute</code>：前者只准备执行计划，后者执行平台私有动作脚本并受执行权限控制。因此“BKN 全部只读、动作仅为元数据”是早期设计描述，已经不适用于当前全部功能。执行前应查看准备结果和参数。</p>
+<p><code>bkn_list_actions</code> 可列出平台动作，<code>bkn_update_manifest</code> 可在权限控制下更新平台 manifest。应先查看已有动作与元数据，再准备具体调用。</p>
+</section>
+<section id="guide-eval">
+<h2>Eval：从会话到回归检查</h2>
+<p><code>bamboo eval</code> 是基于明确断言的检查工具，不包含自动评审回答质量的模型裁判。一个用例目录至少包含 <code>input.yaml</code> 和 <code>expected.yaml</code>。</p>
+<h3>导出并离线检查</h3>
+<pre><code class="language-bash">bamboo replay list
+bamboo eval export SESSION_ID ./cases/demo
+bamboo eval run ./cases/demo
+bamboo eval run ./cases/demo --json
+</code></pre>
+<p>项目会话导出时追加 <code>--session-mode project --project /path/to/repo</code>，或用 <code>--record-dir</code> 定位。非空目标目录默认拒绝覆盖，确实需要替换时使用 <code>--overwrite</code>。导出结果包含 <code>fixtures/session/</code> 中的会话记录；分享用例前检查其中的对话和工具数据。</p>
+<pre><code class="language-yaml"># cases/demo/input.yaml
+mode: replay
+fixture: fixtures/session
+</code></pre>
+<pre><code class="language-yaml"># cases/demo/expected.yaml
+min_events: 1
+min_turns: 1
+min_messages: 1
+output_contains:
+  - &quot;需要在回答中出现的文字&quot;
+max_errors: 0
+</code></pre>
+<p>导出默认只按原记录生成事件、消息、轮次数量和事件类型条件；请按任务要求修改 expected。<code>output_contains</code> 检查回答文本是否包含指定字符串；所有条目都需满足。replay 只读取记录，既不重新运行任务，也不能证明新模型能重复完成旧任务。</p>
+<h3>实际运行模型</h3>
+<p>手工创建目录及两个 YAML 文件：</p>
+<pre><code class="language-yaml"># input.yaml
+mode: live
+message: &quot;请只回答 BAMBOO_OK&quot;
+model: deepseek-chat
+session_mode: chat
+permission: read-only
+</code></pre>
+<pre><code class="language-yaml"># expected.yaml
+output_contains: [BAMBOO_OK]
+final_task_status: completed
+max_errors: 0
+</code></pre>
+<p>运行 <code>bamboo eval run 用例目录</code>。live 会真正调用模型，也可能执行获准的工具；模型和密钥必须配置好。input 还支持 <code>project</code>、<code>provider</code>、<code>session_id</code>、<code>yes_all</code>、<code>no_stream</code>、<code>debug_events</code>；项目模式使用 <code>session_mode: project</code>。</p>
+<table>
+<thead>
+<tr>
+<th>断言</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>min_events</code>、<code>min_turns</code>、<code>min_messages</code></td>
+<td>对应数量的下限，默认 0</td>
+</tr>
+<tr>
+<td><code>event_types</code></td>
+<td>每种指定事件都需在记录中出现</td>
+</tr>
+<tr>
+<td><code>output_contains</code></td>
+<td>每个字符串都需包含于输出</td>
+</tr>
+<tr>
+<td><code>max_errors</code></td>
+<td>事件、轮次、任务中的错误计数上限；同一故障可能出现在多个层级</td>
+</tr>
+<tr>
+<td><code>final_task_status</code></td>
+<td>仅 live 检查最终任务状态</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>默认 passed；基于前面检查结果追加状态检查</td>
+</tr>
+</tbody>
+</table>
+<p>当前 <code>status: failed</code> 不会把前面失败的断言转换为整体通过，因此不要用它实现“预期失败即成功”的负例测试。所有检查通过退出码为 0，失败为 1，适合 CI。<code>--json</code> 便于检查报告结构；报告包含用例、模式、各项检查、计数、记录目录和输出。</p>
+</section>
+<section id="guide-api">
+<h2>HTTP API 集成</h2>
+<pre><code class="language-bash">bamboo api --host 127.0.0.1 --port 8898
+</code></pre>
+<p>参数包括 <code>--host</code>、<code>--port</code> / <code>-p</code>、<code>--reload</code>。以下接口由独立 API 入口提供：</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>返回</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /health</code></td>
+<td><code>{&quot;status&quot;:&quot;ok&quot;}</code></td>
+</tr>
+<tr>
+<td><code>POST /v1/chat</code></td>
+<td>最终文本与 session/task ID、记录目录、状态</td>
+</tr>
+<tr>
+<td><code>POST /v1/chat/stream</code></td>
+<td>JSONL 事件流，不是 SSE</td>
+</tr>
+</tbody>
+</table>
+<p>PowerShell 调用示例：</p>
+<pre><code class="language-powershell">$body = @{ message = &quot;你好&quot;; mode = &quot;chat&quot;; permission = &quot;read-only&quot; } | ConvertTo-Json
+$result = Invoke-RestMethod -Uri http://127.0.0.1:8898/v1/chat -Method Post -ContentType &quot;application/json; charset=utf-8&quot; -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+$result.message
+</code></pre>
+<p>curl 示例（Bash）：</p>
+<pre><code class="language-bash">curl http://127.0.0.1:8898/health
+curl -N http://127.0.0.1:8898/v1/chat/stream -H 'Content-Type: application/json' -d '{&quot;message&quot;:&quot;你好&quot;,&quot;mode&quot;:&quot;chat&quot;,&quot;permission&quot;:&quot;read-only&quot;}'
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>请求字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message</code></td>
+<td>必填，非空文本；可使用斜杠模板</td>
+</tr>
+<tr>
+<td><code>images</code>、<code>image_paths</code></td>
+<td>图像来源字符串列表，默认空</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>chat</code> 默认；传 <code>project</code> 使用项目模式，其他值当前归一化为 chat</td>
+</tr>
+<tr>
+<td><code>project_path</code></td>
+<td>服务端存在的项目目录</td>
+</tr>
+<tr>
+<td><code>session_id</code>、<code>record_dir</code></td>
+<td>恢复会话；后续请求沿用前一次返回值</td>
+</tr>
+<tr>
+<td><code>model</code>、<code>provider</code></td>
+<td>覆盖模型注册名或 provider</td>
+</tr>
+<tr>
+<td><code>permission</code>、<code>yes_all</code></td>
+<td>权限模式与自动确认，默认 default / false</td>
+</tr>
+<tr>
+<td><code>debug_events</code></td>
+<td>流式接口是否包含调试事件</td>
+</tr>
+</tbody>
+</table>
+<p>普通响应字段为 <code>session_id</code>、<code>task_id</code>、<code>record_dir</code>、<code>status</code>、<code>message</code>。续聊时将返回的会话 ID 和记录目录放入下一次请求，并保持正确的 mode/project_path。流式接口先返回 <code>session</code>，随后逐行返回事件，末尾为 <code>complete</code>；客户端仍需检查任务状态或错误事件，不能仅凭 complete 认定成功。空消息、无效项目路径等会返回 HTTP 400。</p>
+<p>当前 API 应用未配置身份认证；默认仅监听本机。绑定 <code>0.0.0.0</code> 会扩大访问范围，面向外部服务部署时需要自行提供访问控制。请求中的文件路径都相对于服务端环境，不是调用方电脑。</p>
+</section>
+<section id="guide-media">
+<h2>图像、视频生成与编辑</h2>
+<p>在 <code>models.yaml</code> 注册 <code>image_generation</code>、<code>image_edit</code>、<code>video_generation</code> 类型模型，按协议填写 <code>extra_body.protocol</code>；在 <code>configs/tools.yaml</code> 选择工具对应的注册名：</p>
+<pre><code class="language-yaml">media_generation:
+  text_to_image_model: aliyun-wanx-t2i
+  image_edit_model: aliyun-wanx-image-edit
+  text_to_video_model: aliyun-wanx-t2v
+  output_dir: ~/.bamboo/workspace/media-generation
+  poll_interval_seconds: 2
+  timeout_seconds: 600
+  tool_call_timeout_seconds: 600
+</code></pre>
+<p>这些名称对应随包示例，使用前填好对应 provider 的凭据，并确认服务端模型可用。示例请求：“生成一张竹林插画并保存文件”“把这张参考图改成水彩风格”“生成五秒的竹林视频”。工具会按注册协议发起请求、必要时轮询，并保存产物。图像理解使用聊天视觉模型；生成和编辑使用媒体工具，这两类配置应分别完成。</p>
+</section>
+<section id="guide-troubleshooting">
+<h2>排查问题与文档维护</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>检查方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>找不到 bamboo 命令</td>
+<td>使用同一 Python 的 <code>python -m bamboo</code>，检查 Scripts/PATH</td>
+</tr>
+<tr>
+<td>缺少密钥或模型不存在</td>
+<td>检查主 Agent 注册名、models 条目、<code>.env</code> 和启动环境</td>
+</tr>
+<tr>
+<td>修改模型配置后仍用旧模型</td>
+<td>检查主 Agent <code>model</code>、CLI 覆盖和界面模型选择；重启入口</td>
+</tr>
+<tr>
+<td>工具不执行</td>
+<td>检查权限拒绝事件、模型工具能力、MCP 启动错误和依赖</td>
+</tr>
+<tr>
+<td>浏览器无法启动</td>
+<td>安装 Playwright Chromium，检查 profile 与运行环境</td>
+</tr>
+<tr>
+<td>工作流超时</td>
+<td>检查工作流 timeout、主 Agent 工具超时、模型和外部程序</td>
+</tr>
+<tr>
+<td>恢复找不到会话</td>
+<td>先 replay list，核对 chat/project 和项目路径，显式指定 record-dir</td>
+</tr>
+<tr>
+<td>定时任务时间不对</td>
+<td>当前调度按 UTC；确保调度进程持续运行</td>
+</tr>
+<tr>
+<td>桌面 Diff 为空</td>
+<td>项目是否 Git 仓库、文件是否被忽略、是否选中正确目录</td>
+</tr>
+<tr>
+<td>BKN 不可用</td>
+<td>先 bkn validate，再 index，检查 enabled/status 和错误输出</td>
+</tr>
+<tr>
+<td>eval 总是不通过</td>
+<td>查看每项 expected/actual，区分历史记录检查和 live 执行</td>
+</tr>
+</tbody>
+</table>
+<p>先使用 <code>bamboo main --verbosity full --debug-events</code> 或 <code>bamboo replay SESSION_ID --json</code> 定位问题，再检查 <code>~/.bamboo/logs/</code>。提交故障说明时附版本、入口、复现命令、相关错误，移除密钥和不适合公开的会话内容。</p>
+<p>本文是网页“使用指南”章节的源文件。修改后在仓库根目录运行 <code>python scripts/build_user_guide.py</code> 同步到 <code>bamboo docs</code>；<code>python scripts/build_user_guide.py --check</code> 检查是否同步。网页命令参数表位于 <code>bamboo/adapters/web/static/docs.html</code>，新增命令时同时维护参数表与本指南。渲染脚本使用 Rich 依赖的 markdown-it-py，不启动 Bamboo 或调用模型。</p>
+</section>
+<!-- USER GUIDE CONTENT END -->
 
         <section id="version">
           <h2>其他命令</h2>

@@ -537,7 +537,11 @@ def wechat(
     model: str | None = MODEL_OPTION,
     provider: str | None = PROVIDER_OPTION,
     permission: str | None = PERMISSION_OPTION,
-    session_mode: SessionMode = SESSION_MODE_OPTION,
+    session_mode: SessionMode = typer.Option(
+        SessionMode.chat,
+        "--session-mode",
+        help="Session mode: chat (default), project (explicit opt-in), or auto (uses chat)",
+    ),
     yes_all: bool = YES_ALL_OPTION,
     relogin: bool = typer.Option(False, "--relogin", help="Ignore stored token and scan a fresh WeChat QR code"),
 ) -> None:
@@ -553,7 +557,7 @@ def wechat(
         model=model or "",
         provider=provider or "",
         permission=permission_mode,
-        session_mode=session_mode,
+        session_mode=SessionMode.project if session_mode == SessionMode.project else SessionMode.chat,
         yes_all=yes_all,
         relogin=relogin,
     )
