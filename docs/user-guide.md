@@ -131,7 +131,7 @@ tool_call_timeout_seconds: 120
 models:
   zhipu-glm:
     provider: zhipu
-    model: glm-5.3
+    model: glm-5.3-flash
     model_type: text
     prompt_profile: gpt
     api_key: "${ZHIPU_API_KEY}"

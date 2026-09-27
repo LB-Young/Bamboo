@@ -17,7 +17,7 @@ def test_zhipu_provider_is_registered(monkeypatch: pytest.MonkeyPatch) -> None:
             "models": {
                 "zhipu-glm": {
                     "provider": "zhipu",
-                    "model": "glm-5.3",
+                    "model": "glm-5.3-flash",
                     "model_type": "text",
                     "prompt_profile": "gpt",
                     "api_key": "${ZHIPU_API_KEY}",
@@ -46,7 +46,7 @@ async def test_zhipu_uses_official_chat_completions_endpoint() -> None:
             200,
             json={
                 "id": "chatcmpl-test",
-                "model": "glm-5.3",
+                "model": "glm-5.3-flash",
                 "choices": [
                     {
                         "index": 0,
@@ -64,7 +64,7 @@ async def test_zhipu_uses_official_chat_completions_endpoint() -> None:
             "models": {
                 "zhipu-glm": {
                     "provider": "zhipu",
-                    "model": "glm-5.3",
+                    "model": "glm-5.3-flash",
                     "model_type": "text",
                     "prompt_profile": "gpt",
                     "api_key": "test-key",
@@ -82,6 +82,6 @@ async def test_zhipu_uses_official_chat_completions_endpoint() -> None:
     assert seen["url"] == "https://open.bigmodel.cn/api/paas/v4/chat/completions"
     assert seen["authorization"] == "Bearer test-key"
     payload = json.loads(str(seen["payload"]))
-    assert payload["model"] == "glm-5.3"
+    assert payload["model"] == "glm-5.3-flash"
     assert response.content == "hello from glm"
     assert response.provider == "zhipu"
