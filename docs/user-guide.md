@@ -16,23 +16,23 @@ python -m bamboo version
 
 下文的 `bamboo` 都可以替换成 `python -m bamboo`。Windows 提示找不到 `bamboo` 时，先使用模块入口；可用 `python -c "import sysconfig; print(sysconfig.get_path('scripts'))"` 找出应加入 PATH 的 Scripts 目录。
 
-当前随包的 `models.yaml` 和 `bamboo_main_agent.yaml` 默认选择 `deepseek-chat`。初始化后，在 `~/.bamboo/.env` 中填写：
+当前随包的 `models.yaml` 和 `bamboo_main_agent.yaml` 默认选择 `minimax-m3`。初始化后，在 `~/.bamboo/.env` 中填写：
 
 ```dotenv
-DEEPSEEK_API_KEY=你的密钥
+MINIMAX_API_KEY=你的密钥
 ```
 
 也可在启动 Bamboo 的终端设置环境变量。PowerShell：
 
 ```powershell
-$env:DEEPSEEK_API_KEY = "你的密钥"
+$env:MINIMAX_API_KEY = "你的密钥"
 python -m bamboo main --msg "你好，请介绍你能做什么"
 ```
 
 Linux/macOS：
 
 ```bash
-export DEEPSEEK_API_KEY="你的密钥"
+export MINIMAX_API_KEY="你的密钥"
 bamboo main --msg "你好，请介绍你能做什么"
 ```
 
@@ -98,26 +98,29 @@ Fancy 桌面支持模型选择、日志、Context 使用率、亮暗主题和 Gi
 
 ```yaml
 # ~/.bamboo/configs/models.yaml
-default_model: deepseek-chat
+default_model: minimax-m3
 models:
-  deepseek-chat:
-    provider: deepseek
-    model: deepseek-chat
+  minimax-m3:
+    provider: minimax
+    model: MiniMax-M3
     model_type: text
-    api_key: "${DEEPSEEK_API_KEY}"
-    base_url: https://api.deepseek.com/v1
+    prompt_profile: minimax
+    api_key: "${MINIMAX_API_KEY}"
+    base_url: https://api.minimaxi.com/v1
     timeout: 60
-    context_window: 128000
+    temperature: 0.2
+    context_window: 1000000
     max_tokens: 4096
     capabilities:
       tool_calling: true
+      json_schema: false
       vision: false
       max_parallel_tools: 1
 ```
 
 ```yaml
 # ~/.bamboo/configs/bamboo_main_agent.yaml
-model: deepseek-chat
+model: minimax-m3
 fallback_model: ""
 compaction_model: ""
 tool_call_timeout_seconds: 120
@@ -454,7 +457,7 @@ max_errors: 0
 # input.yaml
 mode: live
 message: "请只回答 BAMBOO_OK"
-model: deepseek-chat
+model: minimax-m3
 session_mode: chat
 permission: read-only
 ```

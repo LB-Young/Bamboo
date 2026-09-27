@@ -59,7 +59,7 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
-Bamboo's packaged configuration currently defaults to `deepseek-chat`. After `bamboo init`, set `DEEPSEEK_API_KEY` in `~/.bamboo/.env` or the launching terminal. Existing installations use their local configuration. See the [complete Chinese user guide](docs/user-guide.md) for PowerShell setup, all features, and troubleshooting.
+Bamboo's packaged configuration currently defaults to `minimax-m3`. After `bamboo init`, set `MINIMAX_API_KEY` in `~/.bamboo/.env` or the launching terminal. Existing installations use their local configuration. See the [complete Chinese user guide](docs/user-guide.md) for PowerShell setup, all features, and troubleshooting.
 
 To use Kimi instead, configure `~/.bamboo/configs/models.yaml` as follows and explicitly select `kimi-k3` in the main agent configuration below:
 

@@ -106,14 +106,14 @@
         <section id="quickstart">
           <h2>快速开始</h2>
           <p class="lead">
-            当前随包配置使用 <code>deepseek-chat</code> 作为主模型。初始化后配置
-            <code>DEEPSEEK_API_KEY</code> 即可运行；已有安装以本机配置为准。Windows 示例见<a href="#guide-install">安装指南</a>。
+            当前随包配置使用 <code>minimax-m3</code> 作为主模型。初始化后配置
+            <code>MINIMAX_API_KEY</code> 即可运行；已有安装以本机配置为准。Windows 示例见<a href="#guide-install">安装指南</a>。
           </p>
           <pre><code>pip install -e .
 bamboo init
 
-# 在 ~/.bamboo/.env 中填写 DEEPSEEK_API_KEY，或在 Bash 中执行：
-export DEEPSEEK_API_KEY="your-deepseek-api-key"
+# 在 ~/.bamboo/.env 中填写 MINIMAX_API_KEY，或在 Bash 中执行：
+export MINIMAX_API_KEY="your-minimax-api-key"
 
 bamboo main --msg "帮我分析这个项目"</code></pre>
           <p>
@@ -138,7 +138,7 @@ bamboo main --msg "帮我分析这个项目"</code></pre>
           <h3>1. 配置 <code>models.yaml</code></h3>
           <p>文件位置：</p>
           <pre><code>~/.bamboo/configs/models.yaml</code></pre>
-          <p>切换到 Kimi 的可选示例（当前随包默认是 deepseek-chat；同时修改下方主 Agent 配置才能完成切换）：</p>
+          <p>切换到 Kimi 的可选示例（当前随包默认是 minimax-m3；同时修改下方主 Agent 配置才能完成切换）：</p>
           <pre><code>default_model: kimi-k3
 
 models:
@@ -166,7 +166,7 @@ models:
             </thead>
             <tbody>
               <tr><td><code>default_model</code></td><td>默认模型注册名，必须存在于 <code>models</code> 下。</td></tr>
-              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>aliyun</code>、<code>openrouter</code>、<code>flux</code>、<code>generic_http</code>、<code>http_provider</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
+              <tr><td><code>provider</code></td><td>模型供应商。支持 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>aliyun</code>、<code>zhipu</code>、<code>openrouter</code>、<code>flux</code>、<code>generic_http</code>、<code>http_provider</code>、<code>ollama</code>、<code>vllm</code>。</td></tr>
               <tr><td><code>model</code></td><td>供应商侧的真实模型 ID。</td></tr>
               <tr><td><code>model_type</code></td><td>模型类型。聊天模型填 <code>text</code> 或 <code>vision</code>；媒体工具模型可填 <code>image_generation</code>、<code>image_edit</code> 或 <code>video_generation</code>。</td></tr>
               <tr><td><code>prompt_profile</code></td><td>提示词适配配置，通常和 provider 同名。</td></tr>
@@ -185,7 +185,7 @@ models:
           <p>文件位置：</p>
           <pre><code>~/.bamboo/configs/bamboo_main_agent.yaml</code></pre>
           <p>默认配置：</p>
-          <pre><code>model: deepseek-chat
+          <pre><code>model: minimax-m3
 fallback_model: ""
 compaction_model: ""
 tool_call_timeout_seconds: 120
@@ -645,15 +645,15 @@ python -m bamboo init
 python -m bamboo version
 </code></pre>
 <p>下文的 <code>bamboo</code> 都可以替换成 <code>python -m bamboo</code>。Windows 提示找不到 <code>bamboo</code> 时，先使用模块入口；可用 <code>python -c &quot;import sysconfig; print(sysconfig.get_path('scripts'))&quot;</code> 找出应加入 PATH 的 Scripts 目录。</p>
-<p>当前随包的 <code>models.yaml</code> 和 <code>bamboo_main_agent.yaml</code> 默认选择 <code>deepseek-chat</code>。初始化后，在 <code>~/.bamboo/.env</code> 中填写：</p>
-<pre><code class="language-dotenv">DEEPSEEK_API_KEY=你的密钥
+<p>当前随包的 <code>models.yaml</code> 和 <code>bamboo_main_agent.yaml</code> 默认选择 <code>minimax-m3</code>。初始化后，在 <code>~/.bamboo/.env</code> 中填写：</p>
+<pre><code class="language-dotenv">MINIMAX_API_KEY=你的密钥
 </code></pre>
 <p>也可在启动 Bamboo 的终端设置环境变量。PowerShell：</p>
-<pre><code class="language-powershell">$env:DEEPSEEK_API_KEY = &quot;你的密钥&quot;
+<pre><code class="language-powershell">$env:MINIMAX_API_KEY = &quot;你的密钥&quot;
 python -m bamboo main --msg &quot;你好，请介绍你能做什么&quot;
 </code></pre>
 <p>Linux/macOS：</p>
-<pre><code class="language-bash">export DEEPSEEK_API_KEY=&quot;你的密钥&quot;
+<pre><code class="language-bash">export MINIMAX_API_KEY=&quot;你的密钥&quot;
 bamboo main --msg &quot;你好，请介绍你能做什么&quot;
 </code></pre>
 <p><code>~</code> 指用户主目录，Windows 通常为 <code>C:\Users\用户名</code>。已有用户的实际模型选择以本机配置为准。需要浏览器工具时另外运行 <code>python -m playwright install chromium</code>；桌面入口还需要操作系统可用的 PyWebView 后端。视频、OCR 等工作流的额外依赖见后文。</p>
@@ -790,24 +790,27 @@ bamboo docs --port 9000 --no-server
 </table>
 <p>模型注册名是 <code>models</code> 下的键，服务端模型 ID 是其中的 <code>model</code>，二者可以不同。下面是与当前默认选择一致的最小示例，编辑已有文件时合并条目，不必删掉其他模型：</p>
 <pre><code class="language-yaml"># ~/.bamboo/configs/models.yaml
-default_model: deepseek-chat
+default_model: minimax-m3
 models:
-  deepseek-chat:
-    provider: deepseek
-    model: deepseek-chat
+  minimax-m3:
+    provider: minimax
+    model: MiniMax-M3
     model_type: text
-    api_key: &quot;${DEEPSEEK_API_KEY}&quot;
-    base_url: https://api.deepseek.com/v1
+    prompt_profile: minimax
+    api_key: &quot;${MINIMAX_API_KEY}&quot;
+    base_url: https://api.minimaxi.com/v1
     timeout: 60
-    context_window: 128000
+    temperature: 0.2
+    context_window: 1000000
     max_tokens: 4096
     capabilities:
       tool_calling: true
+      json_schema: false
       vision: false
       max_parallel_tools: 1
 </code></pre>
 <pre><code class="language-yaml"># ~/.bamboo/configs/bamboo_main_agent.yaml
-model: deepseek-chat
+model: minimax-m3
 fallback_model: &quot;&quot;
 compaction_model: &quot;&quot;
 tool_call_timeout_seconds: 120
@@ -1132,7 +1135,7 @@ max_errors: 0
 <pre><code class="language-yaml"># input.yaml
 mode: live
 message: &quot;请只回答 BAMBOO_OK&quot;
-model: deepseek-chat
+model: minimax-m3
 session_mode: chat
 permission: read-only
 </code></pre>
