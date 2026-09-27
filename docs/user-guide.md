@@ -196,7 +196,7 @@ bamboo replay SESSION_ID --session-mode project --project /path/to/repo
 | --- | --- | --- |
 | 文件与代码 | `read`、`write`、`edit`、`glob`、`grep`、`bash` | “查找入口并修复这个错误” |
 | Python 语义查询 | `lsp` | 定义、引用、符号和语法诊断；当前基于 Python AST，不是通用语言服务器 |
-| 网页与浏览器 | `web_fetch`、`browser` | 获取页面、打开网站、截图、提取内容、点击与输入 |
+| 网页与浏览器 | `web_fetch`、`url_to_md`、`browser` | 获取页面、保存博客 Markdown、打开网站、截图、提取内容、点击与输入 |
 | 媒体 | `text_to_image`、`image_edit`、`text_to_video` | 指明内容、参考图和输出需求 |
 | 扩展 | `skill_load`、`workflow_load`、`workflow_run`、`subagent_run` | 指定技能、工作流或子代理完成任务 |
 | 任务跟踪 | `todo_write`、`task_create`、`task_get`、`task_list`、`task_stop` | 跟踪复杂任务；任务快照本身不等于启动持久后台 worker |

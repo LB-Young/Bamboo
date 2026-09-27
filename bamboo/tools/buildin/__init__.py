@@ -38,6 +38,7 @@ def create_builtin_tools() -> list[Tool]:
     from bamboo.tools.buildin.subagent_run import SubagentRunTool
     from bamboo.tools.buildin.task import TaskCreateTool, TaskGetTool, TaskListTool, TaskStopTool
     from bamboo.tools.buildin.todo import TodoWriteTool
+    from bamboo.tools.buildin.url_to_md import UrlToMarkdownTool
     from bamboo.tools.buildin.web_fetch import WebFetchTool
     from bamboo.tools.buildin.workflow import WorkflowLoadTool, WorkflowRunTool
     from bamboo.tools.buildin.write import WriteTool
@@ -82,6 +83,7 @@ def create_builtin_tools() -> list[Tool]:
         TextToImageTool(),
         TextToVideoTool(),
         TodoWriteTool(),
+        UrlToMarkdownTool(),
         WebFetchTool(),
         WorkflowInstallTool(),
         WorkflowLoadTool(),
