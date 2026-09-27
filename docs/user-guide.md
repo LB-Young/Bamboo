@@ -125,7 +125,29 @@ tool_call_timeout_seconds: 120
 
 `bamboo main --model 注册名` 覆盖本次模型。永久切换时修改主 Agent 的 `model`；同时让 `default_model` 指向希望的默认注册名。仅修改 API Key 不会切换模型。`fallback_model` 用于可重试的限流、服务错误或超时，留空不启用；`compaction_model` 留空复用主模型。`auxiliary_models` 可按 `compaction`、`memory`、`knowledge_curator`、`skills_hub`、`web_extract`、`session_search`、`vision` 配置 `model` 和 `fallbacks`。`compaction_fallback_model` 在随包配置中仍标注为预留项，不应当作已保证生效的独立开关。
 
-支持的 provider 包括 `kimi`、`deepseek`、`minimax`、`mimo`、`gpt`、`claude`、`aliyun`、`openrouter`、`ollama`、`vllm`，以及用于专门协议的 `flux`、`generic_http`、`http_provider`。后者的请求协议不等于通用聊天协议；按随包示例选择合适的模型类型和协议。媒体模型不用于主聊天模型选择。
+智谱 GLM 可通过官方 OpenAI-compatible 接口注册：
+
+```yaml
+models:
+  zhipu-glm:
+    provider: zhipu
+    model: glm-5.3
+    model_type: text
+    prompt_profile: gpt
+    api_key: "${ZHIPU_API_KEY}"
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    timeout: 60
+    temperature: 0.2
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+```
+
+支持的 provider 包括 `kimi`、`deepseek`、`minimax`、`mimo`、`gpt`、`claude`、`aliyun`、`zhipu`、`openrouter`、`ollama`、`vllm`，以及用于专门协议的 `flux`、`generic_http`、`http_provider`。后者的请求协议不等于通用聊天协议；按随包示例选择合适的模型类型和协议。媒体模型不用于主聊天模型选择。
 
 本地模型不会在启动时自动探测。先启动本地推理服务，再执行：
 

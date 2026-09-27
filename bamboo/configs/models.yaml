@@ -181,6 +181,23 @@ models:
       vision: false
       max_parallel_tools: 1
 
+  zhipu-glm:
+    provider: zhipu
+    model: glm-5.3
+    model_type: text
+    prompt_profile: gpt
+    api_key: "${ZHIPU_API_KEY}"
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    timeout: 60
+    temperature: 0.2
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+
   aliyun-wanx-t2i:
     provider: aliyun
     model: wanx2.1-t2i-turbo

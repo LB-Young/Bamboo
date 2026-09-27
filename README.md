@@ -163,7 +163,7 @@ The WeChat adapter uses iLink QR login and stores the token in `~/.wxbot/token.j
 
 ## Other Models
 
-Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `aliyun`, `openrouter`, `flux`, `generic_http`, `http_provider`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set chat models to `model_type: text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
+Bamboo also supports `deepseek`, `gpt`, `claude`, `minimax`, `mimo`, `aliyun`, `zhipu`, `openrouter`, `flux`, `generic_http`, `http_provider`, `ollama`, and `vllm`. Register the model in `~/.bamboo/configs/models.yaml`, set chat models to `model_type: text` or `vision`, then set the selected registration name in `~/.bamboo/configs/bamboo_main_agent.yaml`.
 
 Aliyun Bailian / DashScope text models can be used as the main Bamboo model through the OpenAI-compatible endpoint:
 
@@ -177,6 +177,28 @@ models:
     api_key: "${DASHSCOPE_API_KEY}"
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     timeout: 60
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+```
+
+Zhipu GLM models can be used through the official OpenAI-compatible endpoint:
+
+```yaml
+models:
+  zhipu-glm:
+    provider: zhipu
+    model: glm-5.3
+    model_type: text
+    prompt_profile: gpt
+    api_key: "${ZHIPU_API_KEY}"
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    timeout: 60
+    temperature: 0.2
     context_window: 128000
     max_tokens: 4096
     capabilities:

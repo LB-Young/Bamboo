@@ -6,11 +6,12 @@ from bamboo.llms.providers.deepseek import DeepSeekClient
 from bamboo.llms.providers.gpt import GPTClient
 from bamboo.llms.providers.http_provider import HttpProviderClient
 from bamboo.llms.providers.kimi import KimiClient
-from bamboo.llms.providers.minimax import MiniMaxClient
 from bamboo.llms.providers.mimo import MimoClient
+from bamboo.llms.providers.minimax import MiniMaxClient
 from bamboo.llms.providers.ollama import OllamaClient
 from bamboo.llms.providers.openrouter import OpenRouterClient
 from bamboo.llms.providers.vllm import VLLMClient
+from bamboo.llms.providers.zhipu import ZhipuClient
 
 __all__ = [
     "AliyunClient",
@@ -24,4 +25,5 @@ __all__ = [
     "OllamaClient",
     "OpenRouterClient",
     "VLLMClient",
+    "ZhipuClient",
 ]

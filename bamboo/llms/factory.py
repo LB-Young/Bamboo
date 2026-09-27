@@ -16,11 +16,12 @@ from bamboo.llms.providers import (
     GPTClient,
     HttpProviderClient,
     KimiClient,
-    MiniMaxClient,
     MimoClient,
+    MiniMaxClient,
     OllamaClient,
     OpenRouterClient,
     VLLMClient,
+    ZhipuClient,
 )
 
 ProviderBuilder = Callable[[ModelConfig], LLMClient]
@@ -46,6 +47,7 @@ class LLMFactory:
         self.register_provider("ollama", OllamaClient)
         self.register_provider("openrouter", OpenRouterClient)
         self.register_provider("vllm", VLLMClient)
+        self.register_provider("zhipu", ZhipuClient)
 
     @classmethod
     def from_mapping(cls, document: Mapping[str, Any]) -> LLMFactory:

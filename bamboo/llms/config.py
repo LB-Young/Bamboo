@@ -22,6 +22,7 @@ SUPPORTED_PROVIDERS = frozenset(
         "vllm",
         "aliyun",
         "openrouter",
+        "zhipu",
         "flux",
         "generic_http",
         "http_provider",

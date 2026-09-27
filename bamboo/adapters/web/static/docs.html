@@ -813,7 +813,26 @@ compaction_model: &quot;&quot;
 tool_call_timeout_seconds: 120
 </code></pre>
 <p><code>bamboo main --model 注册名</code> 覆盖本次模型。永久切换时修改主 Agent 的 <code>model</code>；同时让 <code>default_model</code> 指向希望的默认注册名。仅修改 API Key 不会切换模型。<code>fallback_model</code> 用于可重试的限流、服务错误或超时，留空不启用；<code>compaction_model</code> 留空复用主模型。<code>auxiliary_models</code> 可按 <code>compaction</code>、<code>memory</code>、<code>knowledge_curator</code>、<code>skills_hub</code>、<code>web_extract</code>、<code>session_search</code>、<code>vision</code> 配置 <code>model</code> 和 <code>fallbacks</code>。<code>compaction_fallback_model</code> 在随包配置中仍标注为预留项，不应当作已保证生效的独立开关。</p>
-<p>支持的 provider 包括 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>aliyun</code>、<code>openrouter</code>、<code>ollama</code>、<code>vllm</code>，以及用于专门协议的 <code>flux</code>、<code>generic_http</code>、<code>http_provider</code>。后者的请求协议不等于通用聊天协议；按随包示例选择合适的模型类型和协议。媒体模型不用于主聊天模型选择。</p>
+<p>智谱 GLM 可通过官方 OpenAI-compatible 接口注册：</p>
+<pre><code class="language-yaml">models:
+  zhipu-glm:
+    provider: zhipu
+    model: glm-5.3
+    model_type: text
+    prompt_profile: gpt
+    api_key: &quot;${ZHIPU_API_KEY}&quot;
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    timeout: 60
+    temperature: 0.2
+    context_window: 128000
+    max_tokens: 4096
+    capabilities:
+      tool_calling: true
+      json_schema: false
+      vision: false
+      max_parallel_tools: 1
+</code></pre>
+<p>支持的 provider 包括 <code>kimi</code>、<code>deepseek</code>、<code>minimax</code>、<code>mimo</code>、<code>gpt</code>、<code>claude</code>、<code>aliyun</code>、<code>zhipu</code>、<code>openrouter</code>、<code>ollama</code>、<code>vllm</code>，以及用于专门协议的 <code>flux</code>、<code>generic_http</code>、<code>http_provider</code>。后者的请求协议不等于通用聊天协议；按随包示例选择合适的模型类型和协议。媒体模型不用于主聊天模型选择。</p>
 <p>本地模型不会在启动时自动探测。先启动本地推理服务，再执行：</p>
 <pre><code class="language-bash">bamboo models discover ollama
 bamboo models discover ollama --write --set-default
